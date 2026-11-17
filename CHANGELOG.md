@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.28
 
 - **For site projects:** every setting Domus reads from `data/site.toml` and `options/_site.toml` is declared in one place, with its default and a line on what it is, and [docs/site-format.md](docs/site-format.md#settings) lists them all from there. A key Domus doesn't know gets a warning naming the nearest one it does, such as `house.boards_m isn't a setting Domus knows: did you mean board_m?`, where it used to do nothing without a word. Settings only your own tools read go under `[local]`, which Domus leaves alone.
 - `build.json` says which Domus built the model, and the model's format. A model an older Domus built is built again the first time its site is opened, one build at a time, and the old model shows until the new one is ready, so there's no `domus build` to run after an upgrade. If that build fails, the old model stays, `.domus/build.log` says why, and the server tries again only when it's restarted.
