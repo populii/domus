@@ -47,7 +47,7 @@ Everything is on the site's own grid (`[crs] epsg` in `data/site.toml`), with he
 | `site.evaluate(option)` | What an option comes to, as the viewer's comparison shows it: walls, cut and fill, flat lawn and checks. `option` is one of `options()`, or its id |
 | `site.build()` | Builds the model, as `domus build` does, and gives the folder it's in |
 | `site.output` | The folder the model is built into |
-| `site.check(checks=None, tags=None, plots=False)` | Runs the adversarial checks, as `domus prep check` does (sanity, roof, plumb, clouds, and for the wall options through, fixes and blocks), and gives their report: `failures` by check, and `findings` |
+| `site.check(checks=None, tags=None, plots=False)` | Runs the adversarial checks, as `domus prep check` does (sanity, roof, plumb, clouds, and for the wall options through, fixes and blocks), and gives their report: `failures` by check, `findings`, and `skipped`, why a check the site has nothing for was skipped. It writes it to `.domus/checks/check_model.json` |
 
 ## Helpers
 

@@ -179,3 +179,14 @@ def test_a_folder_that_is_not_a_site_is_never_built(tmp_path, monkeypatch):
 def test_a_name_it_does_not_know_gets_nothing(server):
     assert call(server, "GET", "/healthz", headers={"Host": "evil.example"})[0] == 403
     assert call(server, "GET", "/healthz", headers={"Host": "localhost:8765"})[0] == 200
+
+
+def test_a_job_runs_one_domus_command_and_keeps_its_log(tmp_path):
+    from domus import __version__
+
+    job = serve.Job(tmp_path, "version", tail=1)
+    assert job.status() == {"state": "idle", "log": ""}
+    job.run("--version")
+    job.proc.wait(timeout=120)
+    assert job.status() == {"state": "done", "log": __version__}
+    assert (tmp_path / ".domus" / "version.log").exists()

@@ -27,8 +27,11 @@ Checks:
   block or half of one, the top course of a bay ends at a step down with a whole block, and the caps are whole.
   The sizes are each wall's own block's (`unit_m`).
 
-Prints the findings, writes docs/checks/adversarial/check_model.json (and with --plots, JPEGs in
-the same folder) and exits 1 if a check fails its tolerance.
+A check skips what the site doesn't have, with a note saying so: the roof without a house or a surface model, plumb
+and clouds without placed videos, the option checks without wall options.
+
+Prints the findings and the notes, writes .domus/checks/check_model.json in the site (and with --plots, JPEGs in the
+same folder) and exits 1 if a check fails its tolerance.
 """
 
 import argparse
@@ -52,7 +55,7 @@ from ..sfm_georef import load
 from ..video.georef_sfm import consensus_up, frame_path, frame_ups, tilt_of
 
 VID = ROOT / "data" / "video"
-OUT = ROOT / "docs" / "checks" / "adversarial"
+OUT = ROOT / ".domus" / "checks"
 
 TOL_BASE = 0.10          # m, a base off the drawn ground
 TOL_ROOF_SHIFT = 0.30    # m, best-fit plan shift of the roof against the DSM
@@ -79,14 +82,17 @@ class Model:
         wall_feats = geojson.read_optional(ROOT / "data" / "site" / "walls-existing.geojson")
         self.walls = [walls.from_feature(f) for f in wall_feats]
         self.tin = terrain.build(self.extent, cfg["model"]["terrain_step_m"], self.walls)
-        hfc = geojson.read(ROOT / "data" / "site" / "house.geojson")["features"]
+        hfc = geojson.read_optional(ROOT / "data" / "site" / "house.geojson")
         self.hf = {f["properties"]["id"]: f for f in hfc}
         self.parts = lambda *kinds: [f for f in hfc if f["properties"].get("part") in kinds]
-        h = cfg["house"]   # the checks are of a site with a house
-        self.hm = house.build(hfc, h["fl_upper"], h["roof_pitch_deg"], h["roof_plane_at_wall"],
-                              h["eaves_overhang_m"], self.ground, **house.roof_options(h))
-        self.ring = np.asarray(self.hf["house-walls"]["geometry"]["coordinates"][0], float)[:-1, :2]
-        self.house_poly = Polygon(self.ring)
+        self.has_house = "house-walls" in self.hf
+        self.hm, self.ring, self.house_poly = None, None, Polygon()
+        if self.has_house:
+            h = cfg["house"]
+            self.hm = house.build(hfc, h["fl_upper"], h["roof_pitch_deg"], h["roof_plane_at_wall"],
+                                  h["eaves_overhang_m"], self.ground, **house.roof_options(h))
+            self.ring = np.asarray(self.hf["house-walls"]["geometry"]["coordinates"][0], float)[:-1, :2]
+            self.house_poly = Polygon(self.ring)
         self.site_features = features.read_all(ROOT)
         self.feature_meshes = {}
         for items in features.build(self.site_features, self.ground).values():
@@ -103,7 +109,7 @@ class Model:
     def raised_footprint(self):
         """Plan area under modelled objects and vegetation, where a camera need not see ground."""
         polys = [self.house_poly.buffer(0.4)]
-        for p in self.hm.solids.values():
+        for p in (self.hm.solids.values() if self.hm else ()):
             for m, _ in p:
                 polys.append(shapely.MultiPoint(m.vertices[:, :2]).convex_hull.buffer(0.1))
         for ms in self.feature_meshes.values():
@@ -315,10 +321,10 @@ def check_plumb(tags, findings):
 def check_clouds(m, tags, findings, plots):
     fails = 0
     raised = m.raised_footprint()
-    planes = [(a, b) for a, b in house.outward_edges(m.ring)]
+    planes = [(a, b) for a, b in house.outward_edges(m.ring)] if m.has_house else []
     fronts = shapely.union_all([Polygon(f["geometry"]["coordinates"][0]).buffer(0.35)
                                 for f in m.parts("porch", "bay", "steps") if f["geometry"]["type"] == "Polygon"])
-    names = m.hf["house-walls"]["properties"].get("faces") or [f"wall-{i}" for i in range(len(planes))]
+    names = (m.hf["house-walls"]["properties"].get("faces") if m.has_house else None) or [f"wall-{i}" for i in range(len(planes))]
     for tag in tags:
         for kind in ("dense", "site"):
             path = VID / f"{tag}-{kind}.npz"
@@ -361,7 +367,7 @@ def check_clouds(m, tags, findings, plots):
                        f"{share:.0%} beyond {TOL_GROUND} m")
                 findings.append(("clouds", level, f"{tag}-{kind}", msg))
             # house walls
-            soffit = m.hf["house-walls"]["properties"]["soffit"]
+            soffit = m.hf["house-walls"]["properties"]["soffit"] if m.has_house else None
             g = m.tin_z(xyz[:, 0], xyz[:, 1])
             out_front = ~shapely.contains_xy(fronts, xyz[:, 0], xyz[:, 1])    # not on the porch or bay
             rows = []
@@ -382,7 +388,8 @@ def check_clouds(m, tags, findings, plots):
                 e0, n0 = c[:, 0].min() - 1, c[:, 1].min() - 1
                 img = PlanImage((e0, n0, c[:, 0].max() + 1, c[:, 1].max() + 1), 0.03)
                 img.cells(c[open_, 0], c[open_, 1], diverging(r[open_], 0.3), 0.25)
-                img.ring(np.vstack([m.ring, m.ring[:1]]), (200, 30, 30))
+                if m.has_house:
+                    img.ring(np.vstack([m.ring, m.ring[:1]]), (200, 30, 30))
                 img.title(f"{tag}: cloud's lowest flat surface - drawn ground, open cells (blue -0.3 .. red +0.3 m)")
                 img.save(OUT / f"check-cloud-{tag}.jpg")
     return fails
@@ -687,27 +694,49 @@ def placed_tags():
 CHECKS = ("sanity", "roof", "plumb", "clouds", "through", "fixes", "blocks")
 
 
+def options_there():
+    """Whether the site has wall options: options/_site.toml and an option file beside it."""
+    from .. import options
+
+    return (ROOT / "options" / "_site.toml").exists() and bool(options.load_all())
+
+
 def run(checks=CHECKS, tags=None, plots=False):
-    """Runs the checks and writes check_model.json. Returns its contents: `failures` (check: how many failed) and
-    `findings` (each a dict of check, level, object and detail). `tags` are the placed reconstructions for plumb and
-    clouds, all of them unless given; `plots` also writes JPEGs."""
+    """Runs the checks and writes check_model.json. Returns its contents: `failures` (check: how many failed),
+    `findings` (each a dict of check, level, object and detail) and `skipped` (check: why, for those the site has
+    nothing for). `tags` are the placed reconstructions for plumb and clouds, all of them unless given; `plots` also
+    writes JPEGs."""
     OUT.mkdir(parents=True, exist_ok=True)
     tags = tags or placed_tags()
     m = Model()
-    findings, fails = [], {}
+    findings, fails, skipped = [], {}, {}
     if "sanity" in checks:
         fails["sanity"] = check_sanity(m, findings)
     if "roof" in checks:
-        fails["roof"] = check_roof(m, findings, plots)
-    if "plumb" in checks:
+        if not m.has_house:
+            skipped["roof"] = "the site has no house (house-walls in data/site/house.geojson)"
+        elif not raster.DSM.exists():
+            skipped["roof"] = f"the site has no surface model ({raster.DSM.relative_to(ROOT).as_posix()})"
+        else:
+            fails["roof"] = check_roof(m, findings, plots)
+    for name in ("plumb", "clouds"):
+        if name in checks and not tags:
+            skipped[name] = "the site has no placed videos (data/video/<tag>-georef.json)"
+    if "plumb" in checks and tags:
         fails["plumb"] = check_plumb(tags, findings)
-    if "clouds" in checks:
+    if "clouds" in checks and tags:
         fails["clouds"] = check_clouds(m, tags, findings, plots)
+    opts = [name for name in ("through", "fixes", "blocks") if name in checks]
+    if opts and not options_there():
+        for name in opts:
+            skipped[name] = "the site has no wall options (options/*.toml)"
+        opts = []
     for name, check in (("through", check_through), ("fixes", check_fixes), ("blocks", check_blocks)):
-        if name in checks:
+        if name in opts:
             fails[name] = check(findings)
     report = {"run": time.strftime("%Y-%m-%d %H:%M"), "failures": fails,
-              "findings": [dict(zip(("check", "level", "object", "detail"), f)) for f in findings]}
+              "findings": [dict(zip(("check", "level", "object", "detail"), f)) for f in findings],
+              "skipped": skipped}
     (OUT / "check_model.json").write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
     return report
 
@@ -721,6 +750,8 @@ def main():
     report = run(args.checks, args.tags, args.plots)
     for f in report["findings"]:
         print(f"{f['check']:7s} {f['level']:9s} {f['object']:40s} {f['detail']}")
+    for name, why in report["skipped"].items():
+        print(f"{name:7s} skipped   {why}")
     log(f"failures by check: {report['failures']}; wrote {OUT.relative_to(ROOT) / 'check_model.json'}")
     sys.exit(1 if any(report["failures"].values()) else 0)
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** `domus prep check` and `site.check()` write their report to the site's `.domus/checks/` (it was `docs/checks/adversarial/`), beside the build cache and out of the site's own documents. A check the site has nothing for is skipped with a note saying why, in the report's `skipped` and in what the command prints: the roof without a house or a surface model, plumb and clouds without placed videos, and through, fixes and blocks without wall options. A site with no house couldn't be checked at all before.
+
 ## 2026.11.34
 
 - **For site projects:** the parts of the model that draw the house's looks, the walls and the small features read no site of their own now, and the import rules hold them to it: the build gives them the ground, the settings and the folders of the site's pictures. A site's own code that calls them gives them too. `walls.mesh(wall, ground)` and `walls.set_out(walls, ground)` take the ground (`terrain.ground()`), `walls.texture_file` and `features.texture_file` the folder of the site's pictures, `features.read_all` the site's folder, and the house's drawing a `house_texture.Looks`. `terrain.wall_levels(wall)` reads the site's ground as before, and the models built are unchanged.

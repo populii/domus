@@ -174,3 +174,26 @@ def test_a_profile_reads_the_ground_along_a_line_and_either_side(site):
     assert east[0][2][1.0] == pytest.approx(z([e - 1, n - 1]), abs=1e-9)                       # east's right is south
     with pytest.raises(DomusError, match="two points or more"):
         profile.profile([[0, 0]])
+
+
+def test_the_checks_skip_what_a_site_doesnt_have(tmp_path):
+    """A site with no house, no placed videos and no wall options: the checks that need them say why they're skipped,
+    and the rest run. On its own copy of the demo, in a process of its own."""
+    import os
+    import subprocess
+    import sys
+
+    root = tmp_path / "bare"
+    env = {k: v for k, v in os.environ.items() if k not in ("DOMUS_OUTPUT", "DOMUS_SITE")}
+    subprocess.run([sys.executable, "-m", "domus.cli", "demo", str(root)], check=True, env=env, capture_output=True)
+    (root / "data" / "site" / "house.geojson").unlink()
+    for option in (root / "options").glob("[!_]*.toml"):
+        option.unlink()
+    out = subprocess.run([sys.executable, "-m", "domus.cli", "--site", str(root), "prep", "check", "sanity", "roof",
+                          "plumb", "clouds", "through", "blocks"], env=env, capture_output=True, text=True, encoding="utf-8",
+                         check=False)                  # exits 1 if a check fails; the report says what ran
+    report = json.loads((root / ".domus" / "checks" / "check_model.json").read_text(encoding="utf-8"))
+    assert set(report["failures"]) == {"sanity"}, out.stderr
+    assert set(report["skipped"]) == {"roof", "plumb", "clouds", "through", "blocks"}
+    assert "no house" in report["skipped"]["roof"] and "no placed videos" in report["skipped"]["clouds"]
+    assert "no wall options" in report["skipped"]["blocks"] and "roof    skipped" in out.stdout

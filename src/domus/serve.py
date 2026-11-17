@@ -283,14 +283,41 @@ def job_env(root, own_output):
     return env
 
 
-class Creator:
-    """One `domus create` at a time, for the address box, and only into an empty site."""
+class Job:
+    """One Domus command at a time on a site, in a process of its own (the server imports no site's code), its output
+    in the site's .domus/<name>.log. `status()` gives its state (idle, running, done or failed) and its log's last
+    `tail` lines."""
 
-    def __init__(self, root, own_output=False):
+    def __init__(self, root, name, own_output=False, tail=10):
         self.root = Path(root)
         self.own_output = own_output    # one of many sites: its build goes in its own folder, whatever the environment says
         self.proc = None
-        self.log = self.root / ".domus" / "create.log"
+        self.log = self.root / ".domus" / f"{name}.log"
+        self.tail = tail
+
+    def run(self, *args):
+        """Starts `domus ARGS` on the site."""
+        self.log.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.log, "wb") as fh:
+            self.proc = subprocess.Popen([sys.executable, "-m", "domus.cli", *args], stdout=fh, stderr=subprocess.STDOUT,
+                                         env=job_env(self.root, self.own_output))
+
+    def text(self):
+        return self.log.read_text(encoding="utf-8", errors="replace") if self.log.exists() else ""
+
+    def state(self):
+        code = self.proc.poll() if self.proc else None
+        return "idle" if self.proc is None else "running" if code is None else "done" if code == 0 else "failed"
+
+    def status(self):
+        return {"state": self.state(), "log": "\n".join(self.text().splitlines()[-self.tail:])}
+
+
+class Creator(Job):
+    """One `domus create` at a time, for the address box, and only into an empty site."""
+
+    def __init__(self, root, own_output=False):
+        super().__init__(root, "create", own_output, tail=12)
 
     def allowed(self):
         """An empty site, or one whose build from an address stopped short (running it again carries on)."""
@@ -303,63 +330,35 @@ class Creator:
         return (self.root / out / "model.json").exists()
 
     def start(self, address):
-        self.log.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.log, "wb") as fh:
-            self.proc = subprocess.Popen([sys.executable, "-m", "domus.cli", "create", address, str(self.root)],
-                                         stdout=fh, stderr=subprocess.STDOUT, env=job_env(self.root, self.own_output))
+        self.run("create", address, str(self.root))
 
     def status(self):
-        text = self.log.read_text(encoding="utf-8", errors="replace") if self.log.exists() else ""
-        code = self.proc.poll() if self.proc else None
-        state = "idle" if self.proc is None else "running" if code is None else "done" if code == 0 else "failed"
-        which = next((ln[len("WHICH: "):] for ln in reversed(text.splitlines()) if ln.startswith("WHICH: ")), None)
-        if state == "failed" and which:
+        """As a Job's, or `choose` with the places to choose from when the address named more than one."""
+        which = next((ln[len("WHICH: "):] for ln in reversed(self.text().splitlines()) if ln.startswith("WHICH: ")), None)
+        if self.state() == "failed" and which:
             return {"state": "choose", **json.loads(which)}
-        return {"state": state, "log": "\n".join(text.splitlines()[-12:])}
+        return super().status()
 
 
-class ScanJob:
+class ScanJob(Job):
     """One `domus video auto` at a time, for the scan page."""
 
     def __init__(self, root, own_output=False):
-        self.root = Path(root)
-        self.own_output = own_output
-        self.proc = None
-        self.log = self.root / ".domus" / "scan.log"
+        super().__init__(root, "scan", own_output, tail=10)
 
     def start(self, rel):
-        self.log.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.log, "wb") as fh:
-            self.proc = subprocess.Popen([sys.executable, "-m", "domus.cli", "video", "auto", rel], stdout=fh, stderr=subprocess.STDOUT,
-                                         env=job_env(self.root, self.own_output))
-
-    def status(self):
-        text = self.log.read_text(encoding="utf-8", errors="replace") if self.log.exists() else ""
-        code = self.proc.poll() if self.proc else None
-        state = "idle" if self.proc is None else "running" if code is None else "done" if code == 0 else "failed"
-        return {"state": state, "log": "\n".join(text.splitlines()[-10:])}
+        self.run("video", "auto", rel)
 
 
-class BuildJob:
+class BuildJob(Job):
     """One `domus build` at a time, after a sketch is saved as an option."""
 
     def __init__(self, root, own_output=False):
-        self.root = Path(root)
-        self.own_output = own_output
-        self.proc = None
-        self.log = self.root / ".domus" / "build.log"
+        super().__init__(root, "build", own_output, tail=6)
         self.tried = None       # the Domus a stale model was last rebuilt for: a failed rebuild waits for the next one
 
     def start(self):
-        self.log.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.log, "wb") as fh:
-            self.proc = subprocess.Popen([sys.executable, "-m", "domus.cli", "build"], stdout=fh, stderr=subprocess.STDOUT, env=job_env(self.root, self.own_output))
-
-    def status(self):
-        text = self.log.read_text(encoding="utf-8", errors="replace") if self.log.exists() else ""
-        code = self.proc.poll() if self.proc else None
-        state = "idle" if self.proc is None else "running" if code is None else "done" if code == 0 else "failed"
-        return {"state": state, "log": "\n".join(text.splitlines()[-6:])}
+        self.run("build")
 
 
 class SketchWorker:

@@ -67,7 +67,7 @@ def test_the_frame_goes_both_ways(site):
 def test_the_checks_report_what_they_found(site):
     report = api.open_site().check(["sanity"])
     assert set(report["failures"]) == {"sanity"} and isinstance(report["findings"], list)
-    assert json.loads((site / "docs" / "checks" / "adversarial" / "check_model.json").read_text(encoding="utf-8")) == report
+    assert json.loads((site / ".domus" / "checks" / "check_model.json").read_text(encoding="utf-8")) == report
 
 
 def test_one_site_per_process(site, tmp_path):

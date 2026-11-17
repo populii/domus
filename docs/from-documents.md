@@ -85,6 +85,7 @@ the LiDAR, placed clouds that are tilted or off the ground, and duplicate ids. F
 that comes through a wall or a flight of steps, or stands over a tread's edge (`through`, in the built model), ground-fix
 points inside an option's wall at or over its top (`fixes`), and block walls that aren't set out in whole units: cut
 pieces at a stretch's ends or a step, and cut caps (`blocks`, with each wall's own block size). It exits 1 if a check
-fails its tolerance.
-It expects a site with a `house.geojson`. `sections` needs a `"sections"` entry naming a reference line, and `canopy-plot`
+fails its tolerance, and writes its report to `.domus/checks/check_model.json`. A check the site has nothing for is
+skipped with a note saying why: the roof without a house or a surface model, plumb and clouds without placed videos, and
+the option checks without wall options. `sections` needs a `"sections"` entry naming a reference line, and `canopy-plot`
 draws candidate tree crowns to help you write `trees.geojson`.
