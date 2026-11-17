@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.37
 
 - **For site projects:** a process can open several sites. `api.open_site` no longer refuses a second one: each `Site`
   reads its own folder, and what Domus reads of a site (its settings, rasters, ground and options) is kept with that
