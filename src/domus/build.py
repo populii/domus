@@ -25,6 +25,7 @@ from shapely.ops import unary_union
 from . import (
     __version__,
     buildcache,
+    canopy,
     crs,
     design,
     features,
@@ -718,7 +719,7 @@ def add_options(b):
     summary["options"] = []
     b.removed_features = {}     # site feature id -> the options that take it out
     b.lawns_redrawn = {}        # lawn id -> the options that draw it themselves, on their own ground
-    lawns = vegetation.lawns(vegetation.read())
+    lawns = vegetation.lawns(canopy.read())
     found = [(opt, design.evaluate(opt)) for opt in options.load_all()]
     # Each lawn that is there has a plain picture, its grass without its bare patches: the options draw the lawn
     # with it where they keep it, and the new lawns beside it, which it reaches.
@@ -822,8 +823,8 @@ def add_marks(b):
 def add_vegetation(b):
     """Vegetation (data/site/trees.geojson, domus.vegetation): trees, shrubs and hedges with their crowns from the LiDAR, planted beds, the lawns and the stumps, drawn with leaf cards, bark and cut-face textures written to viewer/data/."""
     frame, ground, layers, summary, tin = b.frame, b.ground, b.layers, b.summary, b.tin
-    veg_feats = vegetation.read()
-    veg_layers, summary["vegetation"] = vegetation.layers(veg_feats, frame, ground, tin, OUT)
+    veg_feats = canopy.read()
+    veg_layers, summary["vegetation"] = vegetation.layers(veg_feats, frame, ground, tin, OUT, **canopy.drawn_from())
     for layer in veg_layers:        # an option that draws a lawn on its own ground has the viewer hide this one
         redrawn = getattr(b, "lawns_redrawn", {}).get(layer["id"].removeprefix("veg-"))
         if redrawn and "drape" in layer:

@@ -233,7 +233,7 @@ def clockwise(ring):
 
 def draft_layers(root, found, lot, source):
     """Run in a process with DOMUS_SITE set to the project, once its rasters are there."""
-    from . import points, raster, terrain, vegetation
+    from . import canopy, points, raster, terrain, vegetation
     from .crs import ROOT
 
     site = ROOT / "data" / "site"
@@ -280,7 +280,7 @@ def draft_layers(root, found, lot, source):
         with open(ROOT / "data" / "site.toml", "a", encoding="utf-8", newline="\n") as fh:
             fh.write("".join(settings))
     if raster.DSM.exists() and raster.AERIAL.exists():
-        draft_trees(site, vegetation)
+        draft_trees(site, canopy, vegetation)
 
 
 def _extent():
@@ -289,9 +289,9 @@ def _extent():
     return crs.settings()["model"]["extent"]
 
 
-def draft_trees(site, vegetation):
+def draft_trees(site, canopy, vegetation):
     """Crowns the LiDAR and aerial agree are plants, drawn as trees and shrubs."""
-    cands, _ = vegetation.map_canopy(_extent())
+    cands, _ = canopy.map_canopy(_extent())
     feats = []
     for k, c in enumerate(cands):
         kind = vegetation.guess_kind(c)

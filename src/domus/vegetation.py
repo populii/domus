@@ -1,6 +1,6 @@
 """Vegetation: trees, shrubs, hedges, planted beds, the lawns and stumps.
 
-Mapping (tools/segment_canopy.py). The LiDAR surface model less the ground model (with the
+Mapping (`domus canopy`, domus.canopy). The LiDAR surface model less the ground model (with the
 curated fixes) is the canopy height. Cells count as vegetation where the canopy stands above
 0.5 m and there are living leaves: NDVI from LINZ's near-infrared photo where it has one, else
 the aerial photo green there (or dark and not grey: foliage in shade). That leaves out roofs,
@@ -35,6 +35,8 @@ leaf cards (small textured squares), dense in a shell under the top and round th
 colour the plant's own varied with the aerial's light and dark, darker deeper in, and lit with a
 normal pointing out of the crown. Trunks and branches are tapered tubes, stumps have their cut
 face on top, and the lawns and the soil under the beds are drapes on the ground's triangles.
+
+A pure part of the model: it reads no site. domus.canopy reads the site's trees, rasters and lot for it.
 """
 
 import heapq
@@ -46,14 +48,9 @@ import scipy.ndimage as nd
 import shapely
 from shapely.geometry import MultiPolygon, Polygon
 
-from . import geojson, raster, terrain
-from .crs import ROOT, settings, site_epsg
+from . import geojson
+from .errors import DomusError
 
-TREES = ROOT / "data" / "site" / "trees.geojson"
-
-
-def LIDAR_NAME():
-    return settings().get("labels", {}).get("lidar", "LiDAR")
 STEP = 0.25                 # m, mapping grid
 NDVI_MIN = 0.2              # living leaves, against roofs and paving (LINZ's 2025 urban photos: about 0.4 against 0.04)
 
@@ -68,36 +65,22 @@ def grid(extent, step=STEP):
     return np.meshgrid(e0 + (np.arange(w) + 0.5) * step, n1 - (np.arange(h) + 0.5) * step)
 
 
-def canopy_height(E, N, ground=None, surface=None):
-    """LiDAR surface less the ground at the grid points (NaN outside the clip set to 0)."""
-    g = (ground or terrain.ground()).sample(E, N)
-    s = (surface or raster.dsm()).sample(E, N)
+def canopy_height(E, N, ground, surface):
+    """The surface model (`surface`, the LiDAR's) less the ground model (`ground`) at the grid points (NaN outside the
+    clip set to 0)."""
+    g = ground.sample(E, N)
+    s = surface.sample(E, N)
     return np.nan_to_num(s - g, nan=0.0)
 
 
-def aerial_rgb(E, N, step=STEP, aerial=None):
-    """Mean aerial colour over each cell (3 x 3 samples), float RGB 0-255."""
-    a = aerial or raster.aerial()
+def aerial_rgb(E, N, aerial, step=STEP):
+    """Mean colour of the aerial photo (`aerial`) over each cell (3 x 3 samples), float RGB 0-255."""
+    a = aerial
     acc = np.zeros(E.shape + (3,))
     for dx in (-step / 3, 0.0, step / 3):
         for dy in (-step / 3, 0.0, step / 3):
             acc += np.stack([a.sample(E + dx, N + dy, band=b) for b in range(3)], -1)
     return np.nan_to_num(acc / 9, nan=128.0)
-
-
-def aerial_ndvi(E, N, step=STEP):
-    """Mean NDVI, (NIR - red) / (NIR + red), over each cell from the near-infrared photo; NaN where there is none.
-    Leaves about 0.3-0.5; roofs, paint, paving and bare ground below 0.1, green or not."""
-    if not raster.NIR.exists():
-        return np.full(E.shape, np.nan)
-    a = raster.nir()
-    red, nir = np.zeros(E.shape), np.zeros(E.shape)
-    for dx in (-step / 3, 0.0, step / 3):
-        for dy in (-step / 3, 0.0, step / 3):
-            red += a.sample(E + dx, N + dy, band=0)
-            nir += a.sample(E + dx, N + dy, band=1)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        return np.where(red + nir > 0, (nir - red) / (nir + red), np.nan)
 
 
 def greenness(rgb):
@@ -282,21 +265,6 @@ def guess_kind(c):
     return "shrub"
 
 
-def house_mask(E, N, buffer=1.0):
-    """Cells under the house (its walls, bay windows and porches from data/site/house.geojson), widened by
-    `buffer`: the eaves (0.35 m) and the half-diagonal of a 1 m LiDAR cell that takes the roof's
-    height where it overlaps the eaves."""
-    feats = geojson.read_optional(ROOT / "data" / "site" / "house.geojson")
-    polys = [Polygon(f["geometry"]["coordinates"][0]) for f in feats
-             if f["geometry"]["type"] == "Polygon" and (f["properties"]["id"] == "house-walls"
-                                                         or f["properties"].get("part") in ("bay", "porch"))]
-    return shapely.contains_xy(shapely.union_all(polys).buffer(buffer), E, N)
-
-
-def read(path=TREES):
-    return geojson.read_optional(path)
-
-
 def removed_areas(feats):
     """Polygons of canopy that has gone since the LiDAR: a felled tree's crown (a stump with
     `felled_since_lidar`: a circle of `crown_radius_m`, default 3.5 m, about `crown_centre` or
@@ -319,31 +287,6 @@ def removed_mask(feats, E, N):
     for poly in removed_areas(feats):
         out |= shapely.contains_xy(poly, E, N)
     return out
-
-
-def map_canopy(extent, removed=(), ground=None):
-    """Crown candidates over `extent` from the LiDAR and the aerial.
-
-    Canopy inside the `removed` polygons (gone since the survey) is cut out before the crowns
-    are found, and reported as crowns of its own with `removed` set. Returns the candidates
-    (dicts from crowns()) and the grids {E, N, chm, rgb, veg, labels}."""
-    E, N = grid(extent)
-    ground = ground or terrain.ground()
-    gh = ground.sample(E, N)
-    chm = canopy_height(E, N, ground)
-    rgb = aerial_rgb(E, N)
-    veg = vegetation_mask(chm, rgb, exclude=house_mask(E, N), ndvi=aerial_ndvi(E, N))
-    gone = [shapely.contains_xy(poly, E, N) for poly in removed]
-    lab = segment(chm, veg & ~np.any(gone, axis=0) if gone else veg)
-    cands = crowns(lab, chm, rgb, E, N, gh)
-    for m in gone:
-        m = m & veg & (lab == 0)
-        for c in crowns(m.astype(int), chm, rgb, E, N, gh) if m.any() else []:
-            c["segment"] = int(lab.max() + 1)
-            c["removed"] = True
-            lab[m] = c["segment"]
-            cands.append(c)
-    return cands, {"E": E, "N": N, "chm": chm, "rgb": rgb, "veg": veg, "labels": lab}
 
 
 def as_json(c):
@@ -944,9 +887,11 @@ class Cards:
 
 
 class Plant:
-    """A curated feature ready to draw: its outline, ground, top and bottom of its foliage."""
+    """A curated feature ready to draw: its outline, ground, top and bottom of its foliage. `surface` is the surface
+    model a `top: lidar` is read from, `aerial` the aerial photo its colours are varied with (anything with
+    sample(e, n), or None), and `lidar` what the viewer calls the LiDAR."""
 
-    def __init__(self, feature, ground, lot):
+    def __init__(self, feature, ground, lot, surface=None, aerial=None, lidar="LiDAR"):
         p = feature["properties"]
         self.props = p
         self.id, self.kind, self.look = p["id"], p["kind"], p.get("look", "broadleaf")
@@ -957,13 +902,16 @@ class Plant:
         self.context = not p.get("colour") and (self.poly is None or not self.poly.intersects(lot))
         self.colour = np.array(_rgb(p["colour"]), float) if p.get("colour") else None
         self.height = float(p.get("height_m", 2.0))
+        self.surface, self.aerial, self.lidar = surface, aerial, lidar
 
     def top(self, e, n, g):
         """Top of the foliage (absolute): the LiDAR surface for `top: lidar` (no lower than
         `top_min_m` above the ground, 0.4 m unless given, and no higher than 0.5 m over `height_m`),
         else ground + height."""
         if self.props.get("top") == "lidar":
-            s = raster.dsm().sample(e, n)
+            if self.surface is None:
+                raise DomusError(f"{self.id}: `top: lidar` is read from the surface model, and none was given")
+            s = self.surface.sample(e, n)
             s = np.where(np.isfinite(s), s, g + self.height)
             return np.clip(s, g + float(self.props.get("top_min_m", 0.4)), g + self.height + 0.5)
         return g + self.height
@@ -982,7 +930,7 @@ class Plant:
         bits = [p["species"]] if p.get("species") else []
         if self.kind in ("tree", "shrub", "hedge", "bed"):
             word = "top about" if p.get("top") == "lidar" else "about"
-            bits.append(f"{word} {self.height:.1f} m above the ground" + (f" ({LIDAR_NAME()})" if p.get("top") == "lidar" else ""))
+            bits.append(f"{word} {self.height:.1f} m above the ground" + (f" ({self.lidar})" if p.get("top") == "lidar" else ""))
         if p.get("note"):
             bits.append(p["note"])
         out = {"note": "; ".join(bits)} if bits else {}
@@ -992,9 +940,11 @@ class Plant:
         return out
 
 
-def _aerial_rgb(e, n):
-    a = raster.aerial()
-    rgb = np.stack([a.sample(e, n, band=b) for b in range(3)], -1)
+def _aerial_rgb(aerial, e, n):
+    """The aerial photo's colour at the points (`e`, `n`), a neutral grey where it has none, or with no photo."""
+    if aerial is None:
+        return np.full((len(e), 3), 110.0)
+    rgb = np.stack([aerial.sample(e, n, band=b) for b in range(3)], -1)
     return np.nan_to_num(rgb, nan=110.0)
 
 
@@ -1060,7 +1010,7 @@ def crown_cards(plant, k, cards, rng):
     n = len(p)
     # Colour: the plant's own (from the photos) or the aerial's, varied with the aerial's light
     # and dark within the crown, darker deeper inside.
-    air = _aerial_rgb(p[:, 0], p[:, 1])
+    air = _aerial_rgb(plant.aerial, p[:, 0], p[:, 1])
     lum = air.mean(-1)
     base = plant.colour if plant.colour is not None else _context_colour(air)
     rgb = base[None, :] * np.clip((lum / max(np.median(lum), 1.0)) ** 0.5, 0.8, 1.2)[:, None]
@@ -1290,14 +1240,18 @@ def _r(a, nd=3):
     return [round(float(v), nd) for v in np.ravel(a)]
 
 
-def layers(feats, frame, ground, tin, out_dir, seed=1):
+def layers(feats, frame, ground, tin, out_dir, lot, surface=None, aerial=None, lidar="LiDAR", looks_from_videos=False,
+           bed_floor_source="Outlines as the beds in data/site/trees.geojson", seed=1):
     """Viewer layers for the vegetation in `feats` (data/site/trees.geojson) and the textures
-    they use, written to `out_dir`. Returns (layers, summary)."""
-    lot = Polygon(geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0])
+    they use, written to `out_dir`. Returns (layers, summary).
+
+    `lot` is the site's lot (a Polygon): plants outside it with no colour of their own are drawn as context. `surface`
+    and `aerial` are the surface model and the aerial photo (Plant), and the rest are the viewer's words: what it calls
+    the LiDAR, whether the trees' looks came from the photos and videos, and where the beds' outlines came from."""
     gains = foliage_atlas(out_dir / "foliage.png")
     bark_texture(out_dir / "bark.jpg")
     stump_texture(out_dir / "stumps.jpg")
-    groups = {"trees": ("veg-trees", f"Trees: crowns from the {LIDAR_NAME()}" + (", looks from the photos and videos" if settings().get("video", {}).get("clouds") else ""), "#4f6e3b"),
+    groups = {"trees": ("veg-trees", f"Trees: crowns from the {lidar}" + (", looks from the photos and videos" if looks_from_videos else ""), "#4f6e3b"),
               "shrubs": ("veg-shrubs", "Shrubs and hedges", "#5d7a3a"),
               "beds": ("veg-beds", "Planted beds, ground cover and weeds", "#6d8f3c")}
     out = {key: {"plants": [], "cards": Cards(), "limbs": []} for key in groups}
@@ -1310,7 +1264,7 @@ def layers(feats, frame, ground, tin, out_dir, seed=1):
         counts[kind] = counts.get(kind, 0) + 1
         if kind in ("stump", "lawn") or (kind == "patch" and p.get("look") != "weeds") or p.get("removed"):
             continue
-        plant = Plant(f, ground, lot)
+        plant = Plant(f, ground, lot, surface, aerial, lidar)
         if plant.poly is None:
             continue
         key = "trees" if kind == "tree" else "shrubs" if kind in ("shrub", "hedge") else "beds"
@@ -1397,7 +1351,7 @@ def layers(feats, frame, ground, tin, out_dir, seed=1):
                        "group": "Vegetation", "colour": "#5a4a38",
                        "plants": [{"name": "Soil and leaf litter under the beds and hedge",
                                    "info": {"note": "; ".join(names),
-                                            "source": settings().get("labels", {}).get("bed_floor_source", "Outlines as the beds in data/site/trees.geojson")}}],
+                                            "source": bed_floor_source}}],
                        "drape": {"texture": "litter.jpg", "repeat": True, "positions": _r(frame.xyz(v)),
                                  "indices": I, "uv": _r(uv, 3)}})
         summary["bed_floor_triangles"] = len(I) // 3
@@ -1407,19 +1361,3 @@ def layers(feats, frame, ground, tin, out_dir, seed=1):
 def zlib_crc(text):
     """A stable seed from a feature id."""
     return zlib.crc32(text.encode())
-
-
-def map_site():
-    """`domus canopy`: candidate crowns from the LiDAR, written for curating into data/site/trees.geojson."""
-    extent = settings()["model"]["extent"]
-    cands, grids = map_canopy(extent, removed_areas(read()))
-    fc = geojson.collection([as_json(c) for c in cands], "canopy",
-                            "Candidate crowns from the LiDAR canopy (surface less ground) and the aerial; "
-                            "data/site/trees.geojson holds the curated features", epsg=site_epsg())
-    out = ROOT / settings().get("rasters", {}).get("canopy", "data/sources/canopy.geojson")
-    geojson.write(out, fc)
-    kinds = {}
-    for c in cands:
-        k = "removed" if c.get("removed") else guess_kind(c)
-        kinds[k] = kinds.get(k, 0) + 1
-    print(f"{len(cands)} crowns over {grids['veg'].sum() * STEP ** 2:.0f} m2 of canopy: {kinds}; wrote {out}")

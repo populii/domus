@@ -46,7 +46,7 @@ from PIL import Image, ImageDraw
 from scipy.spatial import cKDTree
 from shapely.geometry import LineString, Polygon
 
-from .. import crs, features, geojson, house, mesh, raster, terrain, vegetation, walls
+from .. import canopy, crs, features, geojson, house, mesh, raster, terrain, vegetation, walls
 from ..crs import ROOT
 from ..sfm_georef import load
 from ..video.georef_sfm import consensus_up, frame_path, frame_ups, tilt_of
@@ -92,7 +92,7 @@ class Model:
         for items in features.build(self.site_features, self.ground).values():
             for m, _, p in items:
                 self.feature_meshes.setdefault(p["id"], []).append(m)
-        self.veg = vegetation.read()
+        self.veg = canopy.read()
         lot = geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"][0]
         self.lot = Polygon(lot["geometry"]["coordinates"][0])
 

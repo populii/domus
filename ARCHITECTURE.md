@@ -48,7 +48,10 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 Every setting a site can hold is declared once, with its default and a line of help, in `domus.project.schema`, and the
 code reads settings through it. The tests fail on a setting the code reads that the schema doesn't declare, or reads
 with another default, and docs/site-format.md's tables are written from it. Import rules in pyproject.toml, checked in CI, keep the server on
-the standard library, the model's pure parts free of the site and the app, and the command line on top.
+the standard library, the model's pure parts free of the site and the app, and the command line on top. The pure parts
+are the house and its looks, the walls and their looks, the small features, the plants (`vegetation`), the ground's
+triangulation (`tin`), the mesh helpers and the drains: the build, a workflow, reads the site (`terrain`, `canopy`) and
+hands them what they draw from.
 
 ## The build
 

@@ -73,8 +73,8 @@ def run(command, rest):
         from . import importers
         return importers.fetch()
     if command == "canopy":
-        from . import vegetation
-        return vegetation.map_site()
+        from . import canopy
+        return canopy.map_site()
     if command == "sketch-worker":
         from . import sketch
         return sketch.main()

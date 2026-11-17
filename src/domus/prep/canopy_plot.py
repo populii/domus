@@ -9,13 +9,13 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from .. import crs, geojson, raster, vegetation
+from .. import canopy, crs, geojson, raster, vegetation
 from ..crs import ROOT
 
 
 def main():
     extent = crs.settings()["model"]["extent"]
-    cands, _ = vegetation.map_canopy(extent, vegetation.removed_areas(vegetation.read()))
+    cands, _ = canopy.map_canopy(extent, vegetation.removed_areas(canopy.read()))
     out = sys.argv[1] if len(sys.argv) > 1 else "data/sources/canopy.jpg"
     plot(extent, cands, ROOT / out)
     print(f"wrote {ROOT / out}")

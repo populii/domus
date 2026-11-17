@@ -132,6 +132,30 @@ def test_a_grid_cell_is_cut_along_its_corners_closer_in_height():
     assert (cut_cells(with_off, cell, h) == with_off).all()
 
 
+def test_the_ground_is_triangulated_from_what_it_is_given():
+    from domus import tin
+
+    # tin reads no site: the ground model (a plane rising 1 in 10 to the north), a wall across it and the model's
+    # origin come from the caller, and the same ground far along a grid, about an origin moved with it, gives the
+    # same triangles.
+    class Plane:
+        def __init__(self, n0):
+            self.n0 = n0
+
+        def sample(self, e, n):
+            return 40.0 + 0.1 * (np.asarray(n, float) - self.n0)
+
+    built = []
+    for e0, n0 in ((0.0, 0.0), (612345.0, 5412345.0)):
+        wall = {"line": np.array([[e0 + 2.0, n0 + 4.0], [e0 + 8.0, n0 + 4.0]]), "side": 1, "thickness": 0.2,
+                "batter": 0.0, "toe": [40.2, 40.2], "toe_chain": [0.0, 6.0], "top": [41.0, 41.0], "top_chain": [0.0, 6.0]}
+        m = tin.build((e0, n0, e0 + 10.0, n0 + 8.0), 0.5, tin.Ground(Plane(n0)), (e0, n0), [wall])
+        built.append((m.vertices - [e0, n0, 0.0], m.faces))
+    (v0, f0), (v1, f1) = built
+    assert np.allclose(v0, v1, atol=1e-6) and np.array_equal(f0, f1)
+    assert np.isclose(v0[:, 2], 40.2).sum() >= 20 and np.isclose(v0[:, 2], 41.0).sum() >= 20    # the wall's toe and top
+
+
 def test_a_surface_is_read_in_its_own_triangles():
     from domus.mesh import surface_z
 

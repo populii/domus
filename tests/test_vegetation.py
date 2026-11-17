@@ -14,3 +14,27 @@ def test_ndvi_tells_a_green_roof_from_a_tree():
     veg = vegetation.vegetation_mask(chm, rgb, ndvi=ndvi)
     assert veg[3:9, 2:6].all() and not veg[:, 9:15].any() and veg[3:9, 18:22].all()
     assert vegetation.vegetation_mask(chm, rgb)[3:9, 9:15].all()
+
+
+def test_plants_are_drawn_from_what_they_are_given():
+    # vegetation reads no site: a tree whose top is read off the LiDAR needs the surface model it's given, and the
+    # viewer calls the LiDAR what it's told.
+    import pytest
+    from shapely.geometry import Polygon
+
+    from domus.errors import DomusError
+
+    ring = [[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0], [0.0, 0.0]]
+    f = {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [ring]},
+         "properties": {"id": "t", "kind": "tree", "top": "lidar", "height_m": 5.0}}
+    flat = lambda e, n: np.zeros(np.shape(e))
+    at = (np.array([1.0]), np.array([1.0]), np.array([0.0]))
+    with pytest.raises(DomusError, match="surface model"):
+        vegetation.Plant(f, flat, Polygon(ring)).top(*at)
+
+    class Surface:
+        def sample(self, e, n):
+            return np.full(np.shape(e), 4.0)
+
+    plant = vegetation.Plant(f, flat, Polygon(ring), surface=Surface(), lidar="the 2025 LiDAR")
+    assert plant.top(*at)[0] == 4.0 and "(the 2025 LiDAR)" in plant.info()["note"]

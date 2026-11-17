@@ -424,11 +424,11 @@ def test_an_option_keeps_the_lawns_it_leaves_alone(built):
     from shapely.geometry import Polygon
     from shapely.ops import unary_union
 
-    from domus import design, options, vegetation
+    from domus import canopy, design, options, vegetation
 
     model = json.loads((built / "model.json").read_text(encoding="utf-8"))
     by_id = {x["id"]: x for x in model["layers"]}
-    lawn = vegetation.lawns(vegetation.read())[0]
+    lawn = vegetation.lawns(canopy.read())[0]
     assert by_id[f"veg-{lawn['id']}"]["redrawn_by"] == [o["id"] for o in model["summary"]["options"]]
     assert "hide_with" not in by_id[f"veg-{lawn['id']}"]            # that is for a feature an option takes out
     e0, n0 = model["origin"][:2]
