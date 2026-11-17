@@ -997,6 +997,21 @@ def add_site_layers(b):
             b.layers.append(layer)
 
 
+def add_extensions(b):
+    """The layers the site's own code draws ([domus] extensions, checked as trusted when the build started)."""
+    from . import api
+    from .project import extensions
+
+    seen = {layer.get("id") for layer in b.layers}
+    for rel, sha, specs in extensions.run(b.extensions, api.open_site()):
+        for spec in specs:
+            layer = site_layer(spec, b.frame, f"the extension {rel}")
+            if layer["id"] in seen:
+                raise DomusError(f"The extension {rel}: layer {layer['id']} is in the model already")
+            seen.add(layer["id"])
+            b.layers.append(layer)
+
+
 def add_enrich(b):
     """What would improve this model: the viewer's checklist, and the route to film as a hidden layer."""
     cfg, frame, ground = b.cfg, b.frame, b.ground
@@ -1034,7 +1049,10 @@ def main(argv=None):
     """`domus build [--fresh]`: --fresh draws everything again, taking nothing from the last build."""
     if "--fresh" in (argv or []):
         os.environ["DOMUS_BUILD_CACHE"] = "0"
+    from .project import extensions
+
     cfg = crs.settings()
+    checked = extensions.check(ROOT, cfg)       # a site's own code runs only where it's trusted, or nothing is built
     extent = cfg["model"]["extent"]
     OUT.mkdir(parents=True, exist_ok=True)
     dem = terrain.ground()  # LiDAR ground with the curated fixes (data/site/ground-fixes.geojson)
@@ -1044,7 +1062,7 @@ def main(argv=None):
                         ground=lambda e, n: dem.sample(np.atleast_1d(e), np.atleast_1d(n)),
                         labels=cfg.get("labels", {}), vertical=cfg.get("crs", {}).get("vertical", ""),
                         wall_defs=[walls.from_feature(f) for f in wall_feats], layers=[], summary={},
-                        cache=buildcache.Cache(ROOT, OUT))
+                        cache=buildcache.Cache(ROOT, OUT), extensions=checked)
     add_ground(b)
     add_contours(b)
     add_boundaries(b)
@@ -1060,6 +1078,7 @@ def main(argv=None):
     add_open_questions(b)
     add_surface(b)
     add_site_layers(b)
+    add_extensions(b)
     add_enrich(b)
     write_model(b)
     b.cache.prune()
@@ -1121,8 +1140,10 @@ def write_model(b):
     }
     (OUT / "model.json").write_text(json.dumps(model, separators=(",", ":")), encoding="utf-8")
     (OUT / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    ran = {rel: sha for rel, _, sha in b.extensions}
     (OUT / "build.json").write_text(json.dumps({**{k: model[k] for k in ("title", "built", "commit")}, "domus": __version__,
-                                                "model_format": MODEL_FORMAT}), encoding="utf-8")
+                                                "model_format": MODEL_FORMAT, **({"extensions": ran} if ran else {})}),
+                                    encoding="utf-8")
     size = (OUT / "model.json").stat().st_size / 1e6
     print(f"ground: {len(tin.vertices)} points, {len(tin)} triangles")
     if "house" in summary:

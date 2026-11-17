@@ -58,6 +58,13 @@ built from (the Domus code, the site's files, and for an option its own file and
 part whose key hasn't changed is taken whole, so a cached build is byte for byte a fresh one; proofs use
 `domus build --fresh` anyway.
 
+## A site's own code
+
+A site's tools and tests write data the build reads: layers, settings, rasters. A tool can also run in the build, as
+an extension (`[domus] extensions`, [docs/api.md](docs/api.md)), drawing layers of the site's own, but only on a
+machine that trusts it as it is (`domus site trust`). A build with an untrusted extension stops; the container image
+trusts none, and the server never imports a site's code.
+
 ## The public API
 
 Site tools, a site's own tests and agents use `domus.api` and `domus.testing` ([docs/api.md](docs/api.md)): open a site,

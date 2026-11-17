@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** a site's own code can draw in its builds. `[domus] extensions = ["tools/pegs.py"]` names Python files that define `layers(site)`, which gets the site through `domus.api` and returns layers of the site's own. A build runs them only on a machine that trusts them as they are: `domus site trust` records each file's SHA-256 (`--revoke` drops them), a file changed since is untrusted again, and a build whose extensions aren't all trusted stops and says so. The container image trusts none, the server never imports a site's code, and `build.json` records what ran.
+
 ## 2026.11.31
 
 - **Faster rebuilds:** a build takes from the last one what hasn't changed: the ground's pictures (the aerial photo, the scanned sheets, the relief) and each wall option's layers, each kept with a key made of everything it's built from, the Domus code included. Saving a sketch as an option, or changing one option, rebuilds that option rather than the whole model. The cache is the site's `.domus/build-cache/`, and a cached build is byte for byte the build it saves. `domus build --fresh` takes nothing from it, and a site folder Domus can't write to builds without it.

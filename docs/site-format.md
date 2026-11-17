@@ -36,6 +36,7 @@ only your own tools read under `[local]`.
 | `[domus]` | | The site folder itself |
 | `domus.format` | `1` | The site folder's format. `domus new` and `domus create` write it; every Domus reads older ones, and `domus site upgrade` writes a site up to its own |
 | `domus.requires` |  | The oldest Domus that builds the site, such as ">=2026.12.0" |
+| `domus.extensions` | `[]` | Python files of the site's own that its builds run, each with layers(site), once trusted on this machine with `domus site trust` |
 | `domus.importer` |  | Where the place came in from: nz (LINZ's data), osm (OpenStreetMap's and the Copernicus ground model) or manual (its own boundary and rasters) |
 | `[site]` | | The viewer's text |
 | `site.title` | `"Site model"` | The site's name |

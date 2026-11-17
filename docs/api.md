@@ -58,6 +58,29 @@ Everything is on the site's own grid (`[crs] epsg` in `data/site.toml`), with he
 | `api.linz_query(layer, cql=None, bbox=None, count=20)` | Features of a LINZ Data Service layer on NZTM, by its number (`50820`) or name (`"layer-50820"`), within a box on NZTM, a CQL filter or both. It uses `DOMUS_LINZ_KEY` |
 | `api.clip(name, urls, bounds, out_path, bands=None)` | The window covering `bounds` from cloud-optimised GeoTIFFs, such as LINZ's survey tiles, as one file |
 
+## A site's own layers, drawn in its builds
+
+A site's tool can write layers as data, in `data/layers/*.json` ([model-format.md](model-format.md)). To have them
+drawn at build time instead, declare the tool as an extension in `data/site.toml`:
+
+```toml
+[domus]
+extensions = ["tools/pegs.py"]
+```
+
+It defines `layers(site)`, which gets the `Site` above and returns layers as `data/layers/*.json` holds them:
+
+```python
+def layers(site):
+    e0, n0 = site.settings()["model"]["origin"][:2]
+    return [{"id": "site-peg", "type": "labels", "name": "Pegs", "items": [{"text": "Peg", "at": [e0, n0, 45.0]}]}]
+```
+
+Running a site's code is trusting it, so a build runs it only once it's trusted on that machine, as it is:
+`domus site trust` shows each file's SHA-256 and records it, and a file changed since is untrusted again. A build
+whose extensions aren't all trusted stops and says so. The container image trusts none (`DOMUS_NO_EXTENSIONS=1`),
+and the server never imports a site's code; `build.json` records what ran.
+
 ## A site's own tests
 
 In the site's `tests/conftest.py`:

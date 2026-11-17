@@ -109,7 +109,20 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="action", required=True)
     up = sub.add_parser("upgrade", help="write the site's migrations into its files, so they say what this Domus reads")
     up.add_argument("--dry-run", action="store_true", help="say what would change, and write nothing")
+    tr = sub.add_parser("trust", help="let this machine's builds run the site's extensions, as they are now")
+    tr.add_argument("--revoke", action="store_true", help="stop trusting them")
     args = ap.parse_args(argv)
     from .. import crs
 
+    if args.action == "trust":
+        from . import extensions
+
+        done = extensions.trust(crs.ROOT, crs.settings(), args.revoke)
+        if not done:
+            print("This site declares no extensions ([domus] extensions in data/site.toml).")
+        for rel, sha in done:
+            print(f"{'No longer trusted' if args.revoke else 'Trusted'}: {rel}" + (f" (SHA-256 {sha})" if sha else ""))
+        if done and not args.revoke:
+            print(f"Builds on this machine will run them until they change. Recorded in {extensions.trust_file()}.")
+        return 0
     return upgrade(crs.ROOT, args.dry_run)

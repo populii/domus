@@ -19,7 +19,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     DOMUS_DB=/site/.domus/viewer.db \
     DOMUS_DEMO_DATA=/opt/domus-demo \
     DOMUS_HOST=0.0.0.0 \
-    DOMUS_PORT=8765
+    DOMUS_PORT=8765 \
+    DOMUS_NO_EXTENSIONS=1
 # The made-up demo is built into the image: an empty /site shows it until a site of your own is built.
 RUN DOMUS_SITE=/tmp/demo DOMUS_OUTPUT=/opt/domus-demo sh -c 'domus demo /tmp/demo && domus build' \
     && rm -rf /tmp/demo \

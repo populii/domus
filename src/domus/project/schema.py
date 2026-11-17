@@ -48,6 +48,8 @@ SITE = Table("data/site.toml", {
         "format": Key("The site folder's format. `domus new` and `domus create` write it; every Domus reads older ones, "
                       "and `domus site upgrade` writes a site up to its own", 1),
         "requires": Key('The oldest Domus that builds the site, such as ">=2026.12.0"'),
+        "extensions": Key("Python files of the site's own that its builds run, each with layers(site), once trusted "
+                          "on this machine with `domus site trust`", []),
         "importer": Key("Where the place came in from: nz (LINZ's data), osm (OpenStreetMap's and the Copernicus "
                         "ground model) or manual (its own boundary and rasters)"),
     }),
