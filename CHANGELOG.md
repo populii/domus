@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.29
 
 - **Sites anywhere:** Domus reads each raster on its own grid, the one its file names, so a site's ground model, surface model and photos can come on any grid. A file that names none is taken to be on the site's, and heights in a band that says it's in feet are read in metres. Domus used to take every raster to be on NZTM2000.
 - `domus new` puts a site on a grid in metres. A boundary on one stays on it; one in longitude and latitude goes on NZTM2000 in New Zealand and on its UTM zone anywhere else; one on a grid in feet goes on the UTM zone. `--epsg` names another grid in metres. Away from New Zealand it leaves the height datum and the credit line for the site's own data to fill in, and `domus fetch` says that LINZ covers New Zealand only and what to bring instead. A site can leave its height datum unnamed: the viewer then calls its heights the model's.
