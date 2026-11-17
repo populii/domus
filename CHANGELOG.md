@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.27
 
 - **For site projects:** sites have a format, now 2: `[domus] format` in `data/site.toml`, which `domus new` and `domus create` write. Domus reads an older site as it is, migrating it in memory, and always will, so nothing has to be run in a container. `domus site upgrade` writes the migration into the site's files, keeping their comments, after copying them to `.domus/upgrade/`. `[domus] requires`, such as `">=2026.12.0"`, names the oldest Domus that builds a site, and a site in a newer format than Domus reads is refused with a message saying so.
 - **For site projects:** in format 2 a compass word in an option means the site grid's north, as it already did in sketches and house parts, and a lawn's `fall_to` can be a bearing in degrees too. In format 1 the words ran along the options' frame; an older site's are read that way still, and `domus site upgrade` writes them as words or bearings on the grid. `[front_garden]` in `options/_site.toml` is `[regrade]`, and `[house] fl_lower` is written down rather than worked out from `fl_upper_rel` and `fl_lower_rel`.
