@@ -630,8 +630,9 @@ def add_house(b):
         hm = house.build(hfc, hcfg["fl_upper"], hcfg["roof_pitch_deg"], hcfg["roof_plane_at_wall"],
                          hcfg["eaves_overhang_m"], ground, **house.roof_options(hcfg))
         extra = [k for parts in hm.solids.values() for _, k in parts if k.startswith("#")]
-        pal_uv, house_photos = house_texture.build_atlas(hm.faces, OUT / "house-atlas.jpg", extra=extra)
-        tile_m = house_texture.roof_texture(OUT / "house-roof.jpg")
+        looks = house_texture.Looks(hcfg, ROOT / "data" / "house")
+        pal_uv, house_photos = house_texture.build_atlas(hm.faces, OUT / "house-atlas.jpg", looks, extra=extra)
+        tile_m = house_texture.roof_texture(OUT / "house-roof.jpg", looks)
         hparts, first = {"walls": house.UVMesh(), "eaves": house.UVMesh()}, {}
         for f in hm.faces:
             hparts.setdefault(f.spec.get("layer", "walls"), house.UVMesh()).extend(f.mesh)
@@ -658,7 +659,7 @@ def add_house(b):
                 continue
             name, colour = HOUSE_LAYERS.get(k, (k, None))
             name = named.get(k, {}).get("name", name)
-            colour = named.get(k, {}).get("colour") or colour or "#" + "".join(f"{v:02x}" for v in house_texture.rgb(first.get(k, "concrete")))
+            colour = named.get(k, {}).get("colour") or colour or "#" + "".join(f"{v:02x}" for v in looks.rgb(first.get(k, "concrete")))
             src = "; ".join(dict.fromkeys(sources.get(k, [])))
             if k == "walls":
                 src += hcfg.get("walls_source_note", "")
@@ -666,7 +667,7 @@ def add_house(b):
             layers.append({**mesh_json(m, frame, colour, f"House: {label}"), "id": f"house-{k}", "group": "House",
                            "uv": r(m.uv, 5), "texture": "house-atlas.jpg", "info": {"source": src}})
             if k == "walls":
-                roof_hex = "#" + "".join(f"{v:02x}" for v in house_texture.rgb(house_texture.roof_colour()))
+                roof_hex = "#" + "".join(f"{v:02x}" for v in looks.rgb(looks.roof_colour()))
                 layers.append({**mesh_json(hm.roof, frame, roof_hex,
                                            f"House: roof ({ROOF_NAMES[hcfg.get('roof_form', 'hip')]}, {hcfg['roof_pitch_deg']:g} degrees"
                                            + hcfg.get("roof_name_note", "") + ")"),

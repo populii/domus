@@ -11,16 +11,16 @@ shows where no photo covers the face (behind the car, the far side of the deck, 
 import json
 import math
 import zlib
+from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-from .crs import ROOT, settings
+from .errors import DomusError
 
 PPM = 80                     # atlas pixels per metre of wall
 ATLAS_W = 2048
 PAD = 4
-HOUSE_DATA = ROOT / "data" / "house"
 
 # Colours of a house. Hex RGB.
 PALETTE = {
@@ -50,13 +50,49 @@ CLADDINGS = ("boards", "plaster", "brick", "panel")      # how a wall's cladding
 ROOFS = ("tiles", "metal", "membrane")                    # how the roof is drawn: [house] roof
 
 
-def colours():
-    """The palette and the site's own colours ([house.palette] in data/site.toml), which can add to it or change it."""
-    try:
-        own = settings().get("house", {}).get("palette", {})
-    except OSError:             # no site to read: the palette alone
-        own = {}
-    return {**PALETTE, **own}
+class Looks:
+    """How a site's house looks: its settings (`house`, [house] in data/site.toml, as read) and the folder of its
+    rectified photos (`photos`, data/house/). The model's drawing takes one from the build, and reads no site itself."""
+
+    def __init__(self, house=None, photos=None):
+        self.house = house if house is not None else {}
+        self.photos = Path(photos) if photos else None
+
+    def colours(self):
+        """The palette and the site's own colours ([house.palette]), which can add to it or change it."""
+        return {**PALETTE, **self.house.get("palette", {})}
+
+    def rgb(self, key):
+        return rgb(key, self.colours())
+
+    # Which cladding each wall shows where no photo covers it, from [house.cladding]: face = [above the floor line,
+    # below it], or [[from u, above, below], ...] along the face; `default` for the rest.
+    def cladding(self, face_id):
+        given = self.house.get("cladding", {})
+        zones = given.get(face_id, given.get("default", ["boards-beige", "boards-beige"]))
+        return [tuple(z) for z in zones] if isinstance(zones[0], list) else [(0.0, *zones)]
+
+    def trim(self, face_id):
+        """The colour of the band at the floor line and of the facings round the windows below it, on the faces
+        [house.trim] lists, or None."""
+        t = self.house.get("trim", {})
+        return t.get("colour") if face_id in t.get("faces", []) else None
+
+    def boards(self):
+        """The weatherboards' exposure, lap to lap in metres, and whether their laps are drawn over the faces' photos
+        too: [house] board_m and boards_on_photos."""
+        return float(self.house.get("board_m", 0.15)), bool(self.house.get("boards_on_photos", False))
+
+    def roof_kind(self):
+        """How the roof is drawn: [house] roof, concrete tiles unless given."""
+        kind = self.house.get("roof", "tiles")
+        if kind not in ROOFS:
+            raise DomusError(f"[house] roof = {kind!r}: give one of {', '.join(ROOFS)}")
+        return kind
+
+    def roof_colour(self):
+        """The roof's colour: [house] roof_colour (a palette key, one of the site's own or hex), else dark charcoal."""
+        return self.house.get("roof_colour", "roof")
 
 
 def material(zone):
@@ -68,28 +104,6 @@ def material(zone):
     return "boards", zone
 
 
-# Which cladding each wall shows where no photo covers it, from [house.cladding] in data/site.toml:
-# face = [above the floor line, below it], or [[from u, above, below], ...] along the face; `default` for the rest.
-def cladding(face_id):
-    given = settings().get("house", {}).get("cladding", {})
-    zones = given.get(face_id, given.get("default", ["boards-beige", "boards-beige"]))
-    return [tuple(z) for z in zones] if isinstance(zones[0], list) else [(0.0, *zones)]
-
-
-def trim(face_id):
-    """The colour of the band at the floor line and of the facings round the windows below it, on the faces
-    [house.trim] lists in data/site.toml, or None."""
-    t = settings().get("house", {}).get("trim", {})
-    return t.get("colour") if face_id in t.get("faces", []) else None
-
-
-def boards():
-    """The weatherboards' exposure, lap to lap in metres, and whether their laps are drawn over the faces' photos
-    too: [house] board_m and boards_on_photos in data/site.toml."""
-    house = settings().get("house", {})
-    return float(house.get("board_m", 0.15)), bool(house.get("boards_on_photos", False))
-
-
 def lap_shade(zc, datum, board, ppm):
     """How bright each pixel row of lapped boards is, for rows at heights `zc`: the boards are counted up from
     `datum`, each darker towards its bottom edge, with a shadow line under each lap that is at least a pixel thick."""
@@ -97,15 +111,13 @@ def lap_shade(zc, datum, board, ppm):
     return np.where(phase < max(0.06, 1.2 / (board * ppm)), 0.62, 0.86 + 0.14 * phase)
 
 
-def rgb(key):
-    """A colour by its name in the palette or the site's own colours, or given as hex ("#rrggbb"); a cladding such
+def rgb(key, named=None):
+    """A colour by its name among `named` (the palette unless given), or given as hex ("#rrggbb"); a cladding such
     as `brick:#9c4a3a` gives its colour's."""
     key = material(key)[1]
     if not key.startswith("#"):
-        named = colours()
+        named = PALETTE if named is None else named
         if key not in named:
-            from .errors import DomusError
-
             raise DomusError(f"{key!r} isn't a colour Domus knows: name one of {', '.join(sorted(named))}, add it to "
                              "[house.palette] in data/site.toml, or give it as #rrggbb")
         key = named[key]
@@ -138,19 +150,20 @@ def shade(c, f):
 
 # --------------------------------------------------------------------------- drawn faces
 
-def draw_face(width, z0, z1, spec, face_id, ppm=PPM, seed=0):
+def draw_face(width, z0, z1, spec, face_id, looks, ppm=PPM, seed=0):
     """Weatherboards, plaster base, joinery: an image of the face, u to the right, height up, and where on it the
     boards show (an array, True on the boards and False on the plaster, the joinery and the trims)."""
     W, H = max(int(math.ceil(width * ppm)), 1), max(int(math.ceil((z1 - z0) * ppm)), 1)
     rng = np.random.default_rng(seed)
-    zones = cladding(face_id)
-    band = trim(face_id)
+    zones = looks.cladding(face_id)
+    band = looks.trim(face_id)
+    rgb = looks.rgb
     fl = spec.get("fl", z0 + 2.5)
     plinth = spec.get("plinth_top")
     row = lambda z: (z1 - z) * ppm
     img = np.zeros((H, W, 3), np.float32)
     zc = z1 - (np.arange(H) + 0.5) / ppm                   # height of each pixel row
-    datum, board = board_datum(spec, z0), boards()[0]
+    datum, board = board_datum(spec, z0), looks.boards()[0]
     lap = lap_shade(zc, datum, board, ppm)
     clad = Image.new("L", (W, H), 255)
     cd = ImageDraw.Draw(clad)
@@ -219,17 +232,17 @@ def draw_face(width, z0, z1, spec, face_id, ppm=PPM, seed=0):
     return out.filter(ImageFilter.SMOOTH), np.asarray(clad) > 127
 
 
-def photo_layer(group, width, z0, z1, ppm=PPM):
-    """A rectified photo texture for a face group from data/house/, resampled onto the face's
+def photo_layer(group, width, z0, z1, photos, ppm=PPM):
+    """A rectified photo texture for a face group from the folder `photos` (data/house/), resampled onto the face's
     raster (W x H at ppm), and its mask (255 where the photo covers the face), or None."""
-    index = HOUSE_DATA / "faces.json"
-    if not index.exists():
+    index = photos / "faces.json" if photos else None
+    if index is None or not index.exists():
         return None
     rec = json.loads(index.read_text(encoding="utf-8")).get(group)
     if not rec:
         return None
-    src = Image.open(HOUSE_DATA / rec["file"]).convert("RGB")
-    mask = Image.open(HOUSE_DATA / rec["mask"]).convert("L") if rec.get("mask") else \
+    src = Image.open(photos / rec["file"]).convert("RGB")
+    mask = Image.open(photos / rec["mask"]).convert("L") if rec.get("mask") else \
         Image.new("L", src.size, 255)
     W, H = max(int(math.ceil(width * ppm)), 1), max(int(math.ceil((z1 - z0) * ppm)), 1)
     s = rec["ppm"]
@@ -250,11 +263,10 @@ def board_datum(spec, z0):
     return plinth if plinth is not None and plinth > z0 else spec.get("fl", z0 + 2.5)
 
 
-def boards_on_photo(img, clad, z0, z1, spec, ppm):
+def boards_on_photo(img, clad, z0, z1, spec, ppm, board):
     """A face's photo with the boards drawn on it. Where the boards show (`clad`), the photo's own lap lines are
     smoothed away up the wall, a board high, and the laps are drawn in their place at the site's board size, counted
     up from the plinth. The photo keeps its colours, its light and everything that is not boards."""
-    board = boards()[0]
     a = np.asarray(img, np.float32)
     H = a.shape[0]
     k = max(int(round(board * ppm)), 1)
@@ -269,21 +281,22 @@ def boards_on_photo(img, clad, z0, z1, spec, ppm):
     return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
 
 
-def face_image(group, width, z0, z1, spec, ppm=PPM):
-    drawn, clad = draw_face(width, z0, z1, spec, group, ppm, seed=zlib.crc32(group.encode()))
-    photo = photo_layer(group, width, z0, z1, ppm)
+def face_image(group, width, z0, z1, spec, looks, ppm=PPM):
+    drawn, clad = draw_face(width, z0, z1, spec, group, looks, ppm, seed=zlib.crc32(group.encode()))
+    photo = photo_layer(group, width, z0, z1, looks.photos, ppm)
     if photo is None:
         return drawn, False
     img, m = photo
-    if boards()[1] and spec.get("kind") == "wall":         # a wall's joinery is known; a bay's or a porch's is in its photo
-        img = boards_on_photo(img, clad & (np.asarray(m) > 200), z0, z1, spec, ppm)
+    board, on_photos = looks.boards()
+    if on_photos and spec.get("kind") == "wall":           # a wall's joinery is known; a bay's or a porch's is in its photo
+        img = boards_on_photo(img, clad & (np.asarray(m) > 200), z0, z1, spec, ppm, board)
     m = m.filter(ImageFilter.GaussianBlur(1.5))
     return Image.composite(img, drawn, m), True
 
 
 # --------------------------------------------------------------------------- atlas
 
-def build_atlas(faces, out_path, ppm=PPM, extra=()):
+def build_atlas(faces, out_path, looks, ppm=PPM, extra=()):
     """Pack every face group and the palette (with any `extra` hex colours) into one image; set the faces' UVs
     into it. Returns (colour -> uv lookup, list of groups that carry a photo)."""
     groups = {}
@@ -296,7 +309,7 @@ def build_atlas(faces, out_path, ppm=PPM, extra=()):
     images = {}
     photos = []
     for key, g in groups.items():
-        img, has_photo = face_image(key, g["width"], g["z0"], g["z1"], g["spec"], ppm)
+        img, has_photo = face_image(key, g["width"], g["z0"], g["z1"], g["spec"], looks, ppm)
         images[key] = img
         if has_photo:
             photos.append(key)
@@ -325,7 +338,7 @@ def build_atlas(faces, out_path, ppm=PPM, extra=()):
     pal_uv = {}
     for i, key in enumerate(colours):
         px, py = (i * sw) % ATLAS_W, pal_y + (i * sw) // ATLAS_W * sw
-        atlas.paste(Image.new("RGB", (sw, sw), rgb(key)), (px, py))
+        atlas.paste(Image.new("RGB", (sw, sw), looks.rgb(key)), (px, py))
         pal_uv[key] = ((px + sw / 2) / ATLAS_W, 1 - (py + sw / 2) / H)
     for key, g in groups.items():
         sx, sy = slots[key]
@@ -338,24 +351,14 @@ def build_atlas(faces, out_path, ppm=PPM, extra=()):
     return pal_uv, sorted(photos)
 
 
-def roof_kind():
-    """How the roof is drawn: [house] roof in data/site.toml, concrete tiles unless given."""
-    kind = settings().get("house", {}).get("roof", "tiles")
-    if kind not in ROOFS:
-        from .errors import DomusError
-
-        raise DomusError(f"[house] roof = {kind!r}: give one of {', '.join(ROOFS)}")
-    return kind
-
-
-def roof_texture(out_path, size=512, metres=2.0):
+def roof_texture(out_path, looks, size=512, metres=2.0):
     """The roof's repeating texture, as [house] roof names it: returns the metres it covers."""
-    kind = roof_kind()
+    kind = looks.roof_kind()
     if kind == "tiles":
-        return roof_tiles(out_path, size, metres)
+        return roof_tiles(out_path, looks, size, metres)
     rng = np.random.default_rng(7)
     ppm = size / metres
-    base = np.asarray(rgb(roof_colour()), np.float32)
+    base = np.asarray(looks.rgb(looks.roof_colour()), np.float32)
     _, xx = np.mgrid[0:size, 0:size] / ppm
     if kind == "metal":                                     # long-run iron: a rib every 0.2 m down the slope
         across = (xx % 0.2) / 0.2
@@ -368,18 +371,13 @@ def roof_texture(out_path, size=512, metres=2.0):
     return metres
 
 
-def roof_colour():
-    """The roof's colour: [house] roof_colour in data/site.toml (a palette key or hex), else dark charcoal."""
-    return settings().get("house", {}).get("roof_colour", "roof")
-
-
-def roof_tiles(out_path, size=512, metres=2.0):
+def roof_tiles(out_path, looks, size=512, metres=2.0):
     """Repeating concrete-tile texture covering `metres` x `metres` of roof: six courses up the
     slope and six tiles across (about 0.33 m each, so it tiles seamlessly), laid in straight
     columns as on the roof, with weathering."""
     rng = np.random.default_rng(7)
     ppm = size / metres
-    base = np.asarray(rgb(roof_colour()), np.float32)
+    base = np.asarray(looks.rgb(looks.roof_colour()), np.float32)
     gauge = wid = metres / 6
     yy, xx = np.mgrid[0:size, 0:size] / ppm
     course = np.floor(yy / gauge)
