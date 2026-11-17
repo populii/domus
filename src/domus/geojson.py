@@ -53,3 +53,17 @@ def read_optional(path):
     """The features of a site layer, or none if the site does not have that layer."""
     path = Path(path)
     return read(path)["features"] if path.exists() else []
+
+
+def main_lot(features, settings):
+    """The lot among boundary.geojson's `features`: the one `[boundary] main` in data/site.toml (`settings`) names,
+    else the first. The others are neighbours, rights of way and the like."""
+    from .errors import DomusError
+
+    main = settings.get("boundary", {}).get("main")
+    if main is None:
+        return features[0]
+    found = [f for f in features if f["properties"].get("id") == main]
+    if not found:
+        raise DomusError(f"[boundary] main in data/site.toml is {main!r}, but no feature in boundary.geojson has that id")
+    return found[0]

@@ -30,6 +30,7 @@ from shapely.ops import unary_union
 
 from . import crs, geojson, terrain
 from .crs import ROOT
+from .errors import DomusError
 from .mesh import Mesh, prism
 
 OPTIONS = ROOT / "options"
@@ -114,7 +115,7 @@ def regrade_settings():
         return cfg["regrade"]
     if "front_garden" in cfg:
         return cfg["front_garden"]
-    raise SystemExit(f"{SITE} has no [regrade] section, which says where options may regrade the ground. See docs/options.md.")
+    raise DomusError(f"{SITE} has no [regrade] section, which says where options may regrade the ground. See docs/options.md.")
 
 
 @lru_cache

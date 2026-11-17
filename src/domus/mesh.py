@@ -3,6 +3,18 @@
 import numpy as np
 
 
+def resample_line(line, spacing):
+    """Points about every `spacing` metres along a polyline and at each of its own vertices (its
+    corners and steps), and their distances along it."""
+    pts = np.asarray(line, float)
+    seg = np.hypot(*np.diff(pts[:, :2], axis=0).T)
+    s = np.concatenate([[0], np.cumsum(seg)])
+    t = np.linspace(0, s[-1], max(int(np.ceil(s[-1] / spacing)) + 1, 2))
+    t = np.union1d(t[np.abs(t[:, None] - s[None, :]).min(axis=1) > 0.1 * spacing], s)
+    out = np.column_stack([np.interp(t, s, pts[:, k]) for k in range(pts.shape[1])])
+    return out, t
+
+
 def cross2(a, b):
     """z-component of the cross product of 2D vectors (array-friendly)."""
     a = np.asarray(a)

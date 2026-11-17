@@ -48,43 +48,50 @@ def main(argv=None):
     args, rest = ap.parse_args(argv[:k + 1]), argv[k + 1:]
     if args.site:
         choose_site(args.site)
-    if args.command == "create":
+    from .errors import as_command
+
+    return as_command(lambda: run(args.command, rest))
+
+
+def run(command, rest):
+    """One command, on the site already chosen. Modules are imported here, once the site is known."""
+    if command == "create":
         from . import create
         return create.main(rest)
-    if args.command == "new":
+    if command == "new":
         from . import newsite
         return newsite.main(rest)
-    if args.command == "demo":
+    if command == "demo":
         from . import demo
         return demo.main(rest)
-    if args.command == "serve":
+    if command == "serve":
         from . import serve
         return serve.main(rest)
-    if args.command == "fetch":
+    if command == "fetch":
         from . import linz
         return linz.main()
-    if args.command == "canopy":
+    if command == "canopy":
         from . import vegetation
         return vegetation.map_site()
-    if args.command == "sketch-worker":
+    if command == "sketch-worker":
         from . import sketch
         return sketch.main()
-    if args.command == "marks":
+    if command == "marks":
         from . import marks
         return marks.main(rest)
-    if args.command == "title":
+    if command == "title":
         from . import title
         return title.main(rest)
-    if args.command == "points":
+    if command == "points":
         from . import points
         return points.main(rest)
-    if args.command == "video":
+    if command == "video":
         from . import video
         return video.main(rest)
-    if args.command == "prep":
+    if command == "prep":
         from . import prep
         return prep.main(rest)
-    if args.command == "scan":
+    if command == "scan":
         from . import scan
         return scan.main(rest)
     from . import build

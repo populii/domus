@@ -12,6 +12,7 @@ import sys
 import numpy as np
 
 from . import design
+from .errors import DomusError
 
 DEFAULT_BACK_M = 3.0
 GRID_STEP_M = 0.5
@@ -140,6 +141,8 @@ def main(argv=None):
     for line in sys.stdin:
         try:
             answer = evaluate(json.loads(line)["items"])
+        except DomusError as e:     # the site's settings or data need putting right: the message says what
+            answer = {"error": str(e)}
         except Exception as e:      # noqa: BLE001 - a sketch that can't be worked out is an answer, not the end of the worker
             answer = {"error": f"{type(e).__name__}: {e}"}
         print(json.dumps(answer, default=float), flush=True)

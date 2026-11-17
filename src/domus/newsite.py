@@ -19,6 +19,8 @@ from pathlib import Path
 import numpy as np
 from pyproj import Transformer
 
+from .errors import DomusError
+
 TEMPLATES = Path(__file__).resolve().parent / "templates"
 NZTM = 2193
 MARGIN_M = 15.0
@@ -34,7 +36,7 @@ def read_boundary(path):
     elif geom["type"] == "Polygon":
         ring = geom["coordinates"][0]
     else:
-        raise SystemExit(f"{path}: the boundary must be a Polygon, not a {geom['type']}")
+        raise DomusError(f"{path}: the boundary must be a Polygon, not a {geom['type']}")
     name = gj.get("crs", {}).get("properties", {}).get("name", "")
     m = re.search(r"EPSG:+(\d+)", name)
     src = int(m.group(1)) if m else 4326
@@ -73,7 +75,7 @@ def toml_str(s):
 def write_project(path, name, ring, note="", about=""):
     root = Path(path)
     if (root / "data" / "site.toml").exists():
-        raise SystemExit(f"{root} already has a site project")
+        raise DomusError(f"{root} already has a site project")
     (root / "data" / "site").mkdir(parents=True, exist_ok=True)
     (root / "options").mkdir(exist_ok=True)
     ext = extent_of(ring)

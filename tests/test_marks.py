@@ -8,6 +8,7 @@ import sys
 import pytest
 
 from domus import crs, marks, publicdata
+from domus.errors import DomusError
 
 LOT = [[1000.0, 2000.0], [1020.0, 2000.0], [1020.0, 2020.0], [1000.0, 2020.0], [1000.0, 2000.0]]
 
@@ -61,6 +62,21 @@ def test_height_marks_come_nearest_first_and_join_the_layer_only_by_name(nztm_si
     assert last["id"] == "linz-height-mark" and last["name"] == "NEAR (35.3 m)"
     with pytest.raises(SystemExit, match="No height mark"):
         marks.main(["--height-mark", "NOPE"])
+
+
+def test_marks_and_title_search_round_the_main_lot_not_the_first(nztm_site, monkeypatch, tmp_path):
+    (tmp_path / "data" / "site").mkdir(parents=True)
+    way = [[1020.0, 2000.0], [1023.0, 2000.0], [1023.0, 2020.0], [1020.0, 2020.0], [1020.0, 2000.0]]
+    feats = [{"type": "Feature", "properties": {"id": "right-of-way"}, "geometry": {"type": "Polygon", "coordinates": [way]}},
+             {"type": "Feature", "properties": {"id": "lot"}, "geometry": {"type": "Polygon", "coordinates": [LOT]}}]
+    (tmp_path / "data" / "site" / "boundary.geojson").write_text(json.dumps({"type": "FeatureCollection", "features": feats}),
+                                                                 encoding="utf-8")
+    monkeypatch.setattr(marks, "ROOT", tmp_path)
+    monkeypatch.setattr(crs, "settings", lambda: {"boundary": {"main": "lot"}})
+    assert marks.lot_on_nztm().equals(marks.Polygon(LOT))
+    monkeypatch.setattr(crs, "settings", lambda: {"boundary": {"main": "gone"}})
+    with pytest.raises(DomusError, match="'gone'"):
+        marks.lot_on_nztm()
 
 
 def test_it_asks_for_the_key(monkeypatch):

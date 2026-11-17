@@ -37,6 +37,14 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 4. **Nothing about one property is built into common:** no names, coordinates, documents or one house's looks.
 5. **Real sites stay out of git.**
 
+## The public API
+
+Site tools, a site's own tests and agents use `domus.api` and `domus.testing` ([docs/api.md](docs/api.md)): open a site,
+read its lot, house, layers, ground and options, evaluate an option, build and check. What they offer changes only
+after a deprecation in an earlier release and a "For site projects" note in the changelog. The rest of the package is
+internal, so common can change behind the API without breaking a site's tools. For now the API is a thin layer over
+one site per process; later phases replace what's behind it.
+
 ## Where it's heading
 
 The agreed plan takes Domus there in phases, each proved by identical builds of made-up and real sites before the

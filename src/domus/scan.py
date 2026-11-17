@@ -26,6 +26,7 @@ from pyproj import Transformer
 
 from . import crs
 from .crs import ROOT
+from .errors import DomusError
 
 UP_TO_Z = {"z": np.eye(3), "y": np.array([[1.0, 0, 0], [0, 0, -1.0], [0, 1.0, 0]])}
 PLY_TYPES = {"char": "i1", "int8": "i1", "uchar": "u1", "uint8": "u1", "short": "i2", "int16": "i2", "ushort": "u2",
@@ -49,7 +50,7 @@ def read_ply(path):
     raw = Path(path).read_bytes()
     end = raw.find(b"end_header")
     if not raw.startswith(b"ply") or end < 0:
-        raise SystemExit(f"{path}: not a PLY file")
+        raise DomusError(f"{path}: not a PLY file")
     body_at = raw.index(b"\n", end) + 1
     fmt, count, props, element = None, 0, [], None
     before = 0
@@ -67,10 +68,10 @@ def read_ply(path):
                 before += 1
         elif w[0] == "property" and element == "vertex":
             if w[1] == "list":
-                raise SystemExit(f"{path}: list properties on vertices aren't supported")
+                raise DomusError(f"{path}: list properties on vertices aren't supported")
             props.append((w[2], PLY_TYPES[w[1]]))
     if before:
-        raise SystemExit(f"{path}: other elements come before the vertices; export a plain point cloud")
+        raise DomusError(f"{path}: other elements come before the vertices; export a plain point cloud")
     names = [p[0] for p in props]
     if fmt == "ascii":
         rows = raw[body_at:].decode("ascii").split("\n")[:count]
@@ -97,14 +98,14 @@ LAS_RGB = {0: None, 1: None, 2: 20, 3: 28, 5: 28, 6: None, 7: 30, 8: 30}
 def read_las(path):
     raw = Path(path).read_bytes()
     if raw[:4] != b"LASF":
-        raise SystemExit(f"{path}: not a LAS file")
+        raise DomusError(f"{path}: not a LAS file")
     at = int(np.frombuffer(raw, "<u4", 1, 96)[0])
     fmt_raw = raw[104]
     if fmt_raw >= 128:
-        raise SystemExit(f"{path}: a compressed LAZ file; export LAS or PLY instead")
+        raise DomusError(f"{path}: a compressed LAZ file; export LAS or PLY instead")
     fmt = fmt_raw & 0x3f
     if fmt not in LAS_RGB:
-        raise SystemExit(f"{path}: LAS point format {fmt} isn't supported")
+        raise DomusError(f"{path}: LAS point format {fmt} isn't supported")
     length = int(np.frombuffer(raw, "<u2", 1, 105)[0])
     n = int(np.frombuffer(raw, "<u4", 1, 107)[0])
     if n == 0 and raw[25] >= 4:     # LAS 1.4 keeps large counts in its own field
@@ -128,7 +129,7 @@ def read_obj(path):
         if line.startswith("v "):
             pts.append([float(v) for v in line.split()[1:]])
     if not pts:
-        raise SystemExit(f"{path}: no vertices")
+        raise DomusError(f"{path}: no vertices")
     width = min(len(p) for p in pts)
     a = np.array([p[:width] for p in pts])
     return a[:, :3], _colours(len(a), *(a[:, k] for k in (3, 4, 5))) if width >= 6 else _colours(len(a))
@@ -144,7 +145,7 @@ def read_text(path):
             continue
     rows = [r for r in rows if len(r) >= 3]
     if not rows:
-        raise SystemExit(f"{path}: no x y z rows")
+        raise DomusError(f"{path}: no x y z rows")
     width = min(len(r) for r in rows)
     a = np.array([r[:width] for r in rows])
     # x y z r g b, or x y z intensity r g b as PTS has it
@@ -162,7 +163,7 @@ READERS = {".ply": read_ply, ".las": read_las, ".obj": read_obj, ".xyz": read_te
 def read_cloud(path):
     suffix = Path(path).suffix.lower()
     if suffix not in READERS:
-        raise SystemExit(f"{path}: can't read {suffix or 'this'} files. Export the scan from its app as PLY or LAS "
+        raise DomusError(f"{path}: can't read {suffix or 'this'} files. Export the scan from its app as PLY or LAS "
                          "(a point cloud, or a mesh in PLY or OBJ).")
     return READERS[suffix](path)
 
@@ -174,14 +175,14 @@ def read_control(path):
         return (np.array([[float(r[k]) for k in ("x", "y", "z")] for r in rows]),
                 np.array([[float(r[k]) for k in ("E", "N", "H")] for r in rows]))
     except KeyError as e:
-        raise SystemExit(f"{path}: needs columns x,y,z,E,N,H; missing {e}") from e
+        raise DomusError(f"{path}: needs columns x,y,z,E,N,H; missing {e}") from e
 
 
 def fit_rigid_3d(src, dst):
     """Rotation R and shift t (no scale, no mirroring) with dst = src @ R.T + t, by Kabsch."""
     ms, md = src.mean(0), dst.mean(0)
     if np.linalg.matrix_rank(src - ms, tol=0.05) < 2:
-        raise SystemExit("The control points lie in a line, so they can't fix the scan's rotation: spread them out, "
+        raise DomusError("The control points lie in a line, so they can't fix the scan's rotation: spread them out, "
                          "or give --up.")
     u, _, vt = np.linalg.svd((src - ms).T @ (dst - md))
     d = np.sign(np.linalg.det(vt.T @ u.T))
@@ -206,11 +207,11 @@ def place(xyz, control, up=None):
         pre = UP_TO_Z[up]
         src2 = src @ pre.T
         if len(src2) < 2 or np.hypot(*np.ptp(src2[:, :2], axis=0)) < 0.5:
-            raise SystemExit("With --up, give at least two control points at least 0.5 m apart.")
+            raise DomusError("With --up, give at least two control points at least 0.5 m apart.")
         R, t = fit_about_vertical(src2, dst)
         return (xyz @ pre.T) @ R.T + t, np.linalg.norm(src2 @ R.T + t - dst, axis=1)
     if len(src) < 3:
-        raise SystemExit("Without --up, give at least three control points.")
+        raise DomusError("Without --up, give at least three control points.")
     R, t = fit_rigid_3d(src, dst)
     return xyz @ R.T + t, np.linalg.norm(src @ R.T + t - dst, axis=1)
 

@@ -25,6 +25,7 @@ import numpy as np
 import shapely
 from shapely.geometry import Polygon, box
 
+from .errors import DomusError
 from .mesh import Mesh, signed_area, triangulate_polygon
 
 # --------------------------------------------------------------------------- frame and meshes
@@ -420,7 +421,7 @@ def _porch(f, p, ring, fr, walls_poly, fl_upper, gmin, put, faces, openings_on, 
         d = rot(_compass(word, fr))
         side_of[word] = "x1" if d[0] > 0.7 else "y1" if d[1] > 0.7 else "y0" if d[1] < -0.7 else None
         if side_of[word] is None:
-            raise SystemExit(f"house.geojson: {p['id']} has a wall on its {word} side, which is the house")
+            raise DomusError(f"house.geojson: {p['id']} has a wall on its {word} side, which is the house")
     walled = set(side_of.values())
     names = {v: k for k, v in side_of.items()}
     prefix = p.get("faces", p["id"])
@@ -590,7 +591,7 @@ def build(features, fl_upper, roof_pitch_deg, roof_plane_at_wall, overhang, grou
         if kind is None:
             continue
         if kind not in PARTS:
-            raise SystemExit(f"house.geojson: {p.get('id')} has part = {kind!r}; the parts are {', '.join(PARTS)}")
+            raise DomusError(f"house.geojson: {p.get('id')} has part = {kind!r}; the parts are {', '.join(PARTS)}")
         if PARTS[kind] is None:                            # read by the checks, not drawn here
             continue
         layer = p.get("layer", PARTS[kind])

@@ -6,6 +6,8 @@ import struct
 import numpy as np
 import pytest
 
+from domus.errors import DomusError
+
 PTS = np.array([[0.0, 0.0, 0.0], [1.5, 0.25, -0.5], [2.0, 1.0, 0.75], [-1.0, 2.0, 0.5]])
 RGB = np.array([[255, 0, 0], [0, 255, 0], [0, 0, 255], [10, 20, 30]], np.uint8)
 
@@ -88,7 +90,7 @@ def test_formats_it_cannot_read_say_what_to_do(site, tmp_path, name):
     from domus import scan
 
     (tmp_path / name).write_bytes(b"x")
-    with pytest.raises(SystemExit, match="PLY"):
+    with pytest.raises(DomusError, match="PLY"):
         scan.read_cloud(tmp_path / name)
 
 
@@ -99,7 +101,7 @@ def test_compressed_las_is_refused(site, tmp_path):
     raw = bytearray((tmp_path / "x.las").read_bytes())
     raw[104] |= 0x80
     (tmp_path / "x.las").write_bytes(raw)
-    with pytest.raises(SystemExit, match="LAZ"):
+    with pytest.raises(DomusError, match="LAZ"):
         scan.read_cloud(tmp_path / "x.las")
 
 
@@ -128,9 +130,9 @@ def test_place_in_3d_needs_points_off_a_line(site):
     site_pts, res = scan.place(src, (src, dst))
     assert res.max() < 1e-6 and site_pts == pytest.approx(dst)
     line = np.array([[0.0, 0, 0], [1, 0, 0], [2, 0, 0]])
-    with pytest.raises(SystemExit, match="line"):
+    with pytest.raises(DomusError, match="line"):
         scan.place(line, (line, line))
-    with pytest.raises(SystemExit, match="three"):
+    with pytest.raises(DomusError, match="three"):
         scan.place(src, (src[:2], dst[:2]))
 
 

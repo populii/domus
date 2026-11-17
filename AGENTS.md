@@ -15,8 +15,12 @@ property's site.
 - `site/` provides generic templates to start a property from: a README, notes for agents, an example tool and
   example tests. Git ignores everything you add there, so customisations for one property or structure stay out of
   the public repo. Copy an example before changing it. `sites/<name>/` is ignored too, for more than one property.
+- Site tools, a site's own tests and agents use the public API, `domus.api` and `domus.testing`
+  ([docs/api.md](docs/api.md)), not the package's internals. Anything in it changes only after a deprecation in an
+  earlier release and a "For site projects" note in the changelog; the rest of the package can change in any release.
 - `DOMUS_SITE` names the site project; modules read it when imported, so set it before importing them (`cli.py`,
-  `tests/conftest.py`, `site/tests/conftest.py`).
+  `tests/conftest.py`). `api.open_site` and `domus.testing.use_site` do this for site tools and tests. Library code
+  raises `DomusError` for anything a person can put right, never `SystemExit`: the command line shows the message.
 - Keep real sites' plans, photos, addresses and names out of the repo's tracked files, including comments and tests.
   Anything only one site needs goes in that site: its data, settings, tools and tests, never in common.
 - A site tool that proves general can move into common: give its numbers settings, test it on the made-up sites,
@@ -71,7 +75,8 @@ Below, `domus` means whichever of those applies, with `--site PATH` or `DOMUS_SI
 **In a one-site container,** the image already sets `DOMUS_SITE=/site` and `DOMUS_OUTPUT=/site/viewer/data`, and the server's key is in its environment, so work there rather
 than copying the key out. A build in the site's folder changes what that server shows straight away. Try anything you might not keep on a copy, with `--site`, which also moves the
 build's output: `docker exec <container> sh -c 'cp -r /site/data /site/options /tmp/try && domus --site /tmp/try build'`. Your own Python goes through
-`docker exec -i <container> /app/.venv/bin/python -`, as the host may have none. Keep working files out of `/site`, or clear them up afterwards.
+`docker exec -i <container> /app/.venv/bin/python -`, as the host may have none, and reads the site with
+`from domus import api; site = api.open_site()`. Keep working files out of `/site`, or clear them up afterwards.
 
 **Don't let one stuck step stop the run.** If a browser or other tool call doesn't come back, say so and carry on with the checks you can do without it. A
 model can be read from `viewer/data/summary.json` and `model.json`.
@@ -97,8 +102,8 @@ This looks up the address, parcel and buildings, fetches LiDAR and aerial, draft
 
 ## Stage 2: what's public beyond the base
 
-Use these when they help the purpose. All come through the same LINZ key. `src/domus/publicdata.py` has `_wfs(key, layer, cql, count)` and `_bbox_cql`, and a layer's name
-there has the `layer-` prefix, as in `layer-50820`: the bare number gets a 400.
+Use these when they help the purpose. All come through the same LINZ key. `domus.api.linz_query(layer, cql=None, bbox=None, count=20)` asks for any of them, by
+the layer's number or its name, with a box on NZTM, a CQL filter or both.
 
 | Source | Layer | Good for |
 |---|---|---|
@@ -118,7 +123,7 @@ footings near them. Check a mark's condition, and note that height marks' positi
 options flag a wall that runs into an easement. LINZ says where an easement is and what it's called, not what it allows: read that in the instrument
 on the title, and remember about 1,200 easements nationally aren't digitised yet.
 
-For an older survey, take a current tile's address from `data/linz-sources.json`, change the survey's folder, and call `domus.linz.clip(name, urls, bounds, path)`. Compare
+For an older survey, take a current tile's address from `data/linz-sources.json`, change the survey's folder, and call `domus.api.clip(name, urls, bounds, path)`. Compare
 surveys on the same grid, and keep the results out of `data/lidar/`, which the build reads. `clip` keeps a photo's first three bands unless you pass `bands`, as `domus fetch` does for the near-infrared photo.
 
 Council GIS (drains, hazards, zoning) isn't built in and varies by council. If you use it, record the source, and treat it as indicative.

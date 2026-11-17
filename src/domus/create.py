@@ -356,7 +356,9 @@ def rest():
 
 
 if __name__ == "__main__":
+    from .errors import as_command
+
     if sys.argv[1:] == ["--step", "rest"]:
-        rest()
+        as_command(rest)
     else:
-        sys.exit(main())
+        sys.exit(as_command(main))

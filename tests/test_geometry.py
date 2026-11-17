@@ -3,6 +3,8 @@
 import numpy as np
 import pytest
 
+from domus.errors import DomusError
+
 
 def test_frame_round_trip(site):
     from domus import design
@@ -56,7 +58,7 @@ def test_new_project_is_buildable_config(tmp_path):
     e0, n0, e1, n1 = cfg["model"]["extent"]
     assert e1 - e0 >= 50 and n1 - n0 >= 50
     assert tomllib.loads((root / "options" / "_site.toml").read_text(encoding="utf-8"))["frame"]["origin"]
-    with pytest.raises(SystemExit):
+    with pytest.raises(DomusError):
         newsite.write_project(tmp_path / "p", "again", ring)
 
 

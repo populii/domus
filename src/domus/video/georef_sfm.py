@@ -73,6 +73,7 @@ from shapely.ops import unary_union
 
 from .. import crs, geojson, raster, sfm, terrain
 from ..crs import ROOT
+from ..errors import DomusError
 from ..sfm_georef import apply, fit_similarity, horn_initial, load, triangulate_pixels
 
 VID = ROOT / "data" / "video"
@@ -424,7 +425,7 @@ def measure_plumb(rec, tag, cfg):
     frames = plumb_frames(rec, tag, cfg.get("frames", "auto"))
     ups = frame_ups(rec, frames, lambda n: cv2.imread(str(frame_path(tag, n)), cv2.IMREAD_GRAYSCALE))
     if len(ups) < 3:
-        raise SystemExit(f"plumb: only {len(ups)} of {len(frames)} frames show enough long near-vertical "
+        raise DomusError(f"plumb: only {len(ups)} of {len(frames)} frames show enough long near-vertical "
                          "edges; name other frames or leave the plumb out")
     names = [n for n, _ in ups]
     alpha = float(cfg.get("toward_away_weight", 1.0))
@@ -442,7 +443,7 @@ def measure_plumb(rec, tag, cfg):
     print(f"plumb: {len(frames)} frames, {len(ups)} with a vertical vanishing point, {int(keep.sum())} agree ({what})")
     limit = cfg.get("max_spread_deg", 1.0)
     if spread > limit and not cfg.get("check"):
-        raise SystemExit(f"plumb: the frames scatter ({spread:.2f} deg, more than {limit}): foliage or a "
+        raise DomusError(f"plumb: the frames scatter ({spread:.2f} deg, more than {limit}): foliage or a "
                          "grate passing for verticals, or a bent reconstruction; name the frames (and boxes) "
                          "that see true verticals")
     return {"up": m, "info": info, "alpha": alpha, "frames": [n for n, k in zip(names, keep) if k],

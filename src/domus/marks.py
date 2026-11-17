@@ -24,8 +24,9 @@ HEIGHT_MARKS_SHOWN = 5
 
 
 def lot_on_nztm():
-    ring = geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0]
-    return Polygon([crs.site_to_nztm(*p[:2]) for p in ring])
+    """The lot, [boundary] main, on NZTM. Its neighbours and rights of way in boundary.geojson aren't searched."""
+    lot = geojson.main_lot(geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"], crs.settings())
+    return Polygon([crs.site_to_nztm(*p[:2]) for p in lot["geometry"]["coordinates"][0]])
 
 
 def around(lot, margin):

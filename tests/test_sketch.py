@@ -3,6 +3,7 @@
 import http.client
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -109,6 +110,25 @@ def test_the_worker_answers_line_by_line_and_survives_a_bad_one(site):
             p.stdin.flush()
             ans = json.loads(p.stdout.readline())
             assert ans.get("empty") or "error" in ans
+    finally:
+        p.stdin.close()
+        p.wait(10)
+
+
+def test_the_worker_says_what_setting_needs_putting_right_and_stays_up(site, tmp_path):
+    root = tmp_path / "site"
+    shutil.copytree(site, root, ignore=shutil.ignore_patterns("viewer", ".domus"))
+    shared = root / "options" / "_site.toml"
+    text = shared.read_text(encoding="utf-8")
+    shared.write_text(text[:text.index("[regrade]")] + text[text.index("[defaults]"):], encoding="utf-8")
+    env = {**{k: v for k, v in os.environ.items() if k != "DOMUS_OUTPUT"}, "DOMUS_SITE": str(root)}
+    p = subprocess.Popen([sys.executable, "-m", "domus.cli", "sketch-worker"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=env)
+    wall = {"id": 1, "kind": "wall", "name": "W", "en": [[0, 0], [5, 0]], "material": "timber", "mode": "height", "height": 0.5}
+    try:
+        for _ in range(2):          # it answers, and is still there to answer again
+            p.stdin.write(json.dumps({"items": [wall]}) + "\n")
+            p.stdin.flush()
+            assert "has no [regrade] section" in json.loads(p.stdout.readline())["error"]
     finally:
         p.stdin.close()
         p.wait(10)

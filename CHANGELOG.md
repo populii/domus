@@ -13,6 +13,10 @@
 - The server sends big text files gzipped to a browser that takes them: the demo's 2.1 MB `model.json` goes as 0.5 MB, and the viewer's three.js as a fifth of its size. Each file is compressed once, and again only when it changes.
 - Every text file is read and written as UTF-8, so a name with a macron reads the same on Windows as on Linux and macOS.
 - CI builds three made-up sites with a pull request's base and with its head, and says what moved (`tools/made_up_sites.py`), so a change to the build can be proved without a real site.
+- **For site projects:** `domus.api` is Domus's public API, for site tools, a site's own tests and agents: `open_site`, and a site's `lot()`, `house_walls()`, `layer()`, `ground()`, `options()`, `frame()`, `evaluate()`, `build()` and `check()`, with `resample_line`, `fit_affine`, `linz_query` and `clip`. `domus.testing` gives a site's tests `site` and `built`, which builds the model out of the way of the one a server shows. What they offer changes only after a deprecation in an earlier release; the rest of the package can change in any release. [docs/api.md](docs/api.md) has it all, and the examples in `site/` use it.
+- **For site projects:** Domus's functions raise `DomusError` (`domus.api.DomusError`) for something a person can put right, such as a missing setting or a scan in a format it can't read, instead of ending the program. The command line shows the same messages as before. A site tool that caught `SystemExit` from one of them catches `DomusError` instead.
+- `domus marks` and `domus title` search round the lot `[boundary] main` names, as the build does. They took the first feature in `boundary.geojson`, which could be a neighbour or a right of way.
+- A sketch that can't be worked out or saved because of one of the site's settings says which. The sketch worker's own errors go to the server's log instead of being thrown away.
 
 ## 2026.11.25
 

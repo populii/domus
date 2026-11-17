@@ -7,6 +7,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from domus.errors import DomusError
+
 pytest.importorskip("pdfplumber")
 
 
@@ -99,7 +101,7 @@ def test_check_finds_a_duplicate_id_on_the_demo(site, built):
 
 def test_a_missing_settings_file_says_so(site, prep_json):
     prep_json.unlink(missing_ok=True)
-    with pytest.raises(SystemExit, match="from-documents"):
+    with pytest.raises(DomusError, match="from-documents"):
         run("plan-pages")
 
 

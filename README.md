@@ -64,7 +64,8 @@ plans and wall options, plus any tools and tests written just for it.
 In a copy of this repo, your site goes in [`site/`](site/README.md). It comes with a few generic examples to start
 from, and git ignores everything you add there, so your property can't end up in a commit by accident. Got more than
 one? Use `sites/<name>/`, which git ignores too, or keep each one wherever you like. [ARCHITECTURE.md](ARCHITECTURE.md)
-explains what belongs where, and why.
+explains what belongs where, and why. Your own tools and tests read your site through Domus's public API
+([docs/api.md](docs/api.md)).
 
 ## Model your own place
 

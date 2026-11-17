@@ -451,30 +451,41 @@ def placed_tags():
                   and (VID / p.name.replace("-georef.json", "-site.npz")).exists())
 
 
+CHECKS = ("sanity", "roof", "plumb", "clouds")
+
+
+def run(checks=CHECKS, tags=None, plots=False):
+    """Runs the checks and writes check_model.json. Returns its contents: `failures` (check: how many failed) and
+    `findings` (each a dict of check, level, object and detail). `tags` are the placed reconstructions for plumb and
+    clouds, all of them unless given; `plots` also writes JPEGs."""
+    OUT.mkdir(parents=True, exist_ok=True)
+    tags = tags or placed_tags()
+    m = Model()
+    findings, fails = [], {}
+    if "sanity" in checks:
+        fails["sanity"] = check_sanity(m, findings)
+    if "roof" in checks:
+        fails["roof"] = check_roof(m, findings, plots)
+    if "plumb" in checks:
+        fails["plumb"] = check_plumb(tags, findings)
+    if "clouds" in checks:
+        fails["clouds"] = check_clouds(m, tags, findings, plots)
+    report = {"run": time.strftime("%Y-%m-%d %H:%M"), "failures": fails,
+              "findings": [dict(zip(("check", "level", "object", "detail"), f)) for f in findings]}
+    (OUT / "check_model.json").write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
+    return report
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("checks", nargs="*", default=["sanity", "roof", "plumb", "clouds"])
+    ap.add_argument("checks", nargs="*", default=list(CHECKS))
     ap.add_argument("--tags", nargs="*", help="placed reconstructions for plumb and clouds (default: all)")
     ap.add_argument("--plots", action="store_true")
     args = ap.parse_args()
-    OUT.mkdir(parents=True, exist_ok=True)
-    tags = args.tags or placed_tags()
-    m = Model()
-    findings, fails = [], {}
-    if "sanity" in args.checks:
-        fails["sanity"] = check_sanity(m, findings)
-    if "roof" in args.checks:
-        fails["roof"] = check_roof(m, findings, args.plots)
-    if "plumb" in args.checks:
-        fails["plumb"] = check_plumb(tags, findings)
-    if "clouds" in args.checks:
-        fails["clouds"] = check_clouds(m, tags, findings, args.plots)
-    for check, level, obj, msg in findings:
-        print(f"{check:7s} {level:9s} {obj:40s} {msg}")
-    (OUT / "check_model.json").write_text(json.dumps(
-        {"run": time.strftime("%Y-%m-%d %H:%M"), "failures": fails,
-         "findings": [dict(zip(("check", "level", "object", "detail"), f)) for f in findings]}, indent=1) + "\n", encoding="utf-8")
-    log(f"failures by check: {fails}; wrote {OUT.relative_to(ROOT) / 'check_model.json'}")
-    sys.exit(1 if any(fails.values()) else 0)
+    report = run(args.checks, args.tags, args.plots)
+    for f in report["findings"]:
+        print(f"{f['check']:7s} {f['level']:9s} {f['object']:40s} {f['detail']}")
+    log(f"failures by check: {report['failures']}; wrote {OUT.relative_to(ROOT) / 'check_model.json'}")
+    sys.exit(1 if any(report["failures"].values()) else 0)
 
 

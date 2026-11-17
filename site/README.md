@@ -66,4 +66,6 @@ uv run python site/tools/example.py site
 uv run pytest site/tests
 ```
 
-Both read the site in this folder, or the one `DOMUS_SITE` names.
+Both read the site in this folder, or the one `DOMUS_SITE` names, through Domus's public API: `domus.api` for tools
+and `domus.testing` for tests. [docs/api.md](../docs/api.md) has all of it. Build your own tools and tests on it, not on
+Domus's internals, which can change in any release.

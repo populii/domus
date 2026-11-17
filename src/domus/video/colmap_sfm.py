@@ -52,6 +52,7 @@ from scipy.spatial.transform import Rotation
 
 from .. import sfm
 from ..crs import ROOT
+from ..errors import DomusError
 
 FRAMES = ROOT / "sources" / "raw" / "frames6"
 OUT = ROOT / "data" / "video"
@@ -131,7 +132,7 @@ def to_ours(rec, names, frame_of):
     """
     cams = list(rec.cameras.values())
     if len(cams) != 1 or cams[0].model_name != "SIMPLE_RADIAL":
-        raise SystemExit(f"expected one SIMPLE_RADIAL camera, got {[c.model_name for c in cams]}")
+        raise DomusError(f"expected one SIMPLE_RADIAL camera, got {[c.model_name for c in cams]}")
     f, k1, cx, cy = colmap_intrinsics(cams[0].params)
     frames = [sfm.Frame(n, np.zeros((0, 2)), None, np.zeros((0, 3), np.uint8)) for n in names]
     out = sfm.Reconstruction(frames, f=f, k1=k1, cx=cx, cy=cy)
@@ -195,7 +196,7 @@ def frame_list(clip, step, extra, extra_step):
     for c, s, main in [(clip, step, True)] + [(e, extra_step, False) for e in extra]:
         paths = sorted((FRAMES / c).glob("*.jpg"))[::s]
         if not paths:
-            raise SystemExit(f"no frames in {FRAMES / c}")
+            raise DomusError(f"no frames in {FRAMES / c}")
         images += [f"{c}/{p.name}" for p in paths]
         names += [p.stem if main else f"{c}/{p.stem}" for p in paths]
     return images, names

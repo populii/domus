@@ -8,6 +8,7 @@ import json
 import sys
 
 from ..crs import ROOT
+from ..errors import DomusError
 
 STEPS = {
     "plan-pages": ("plans", "pages", "Pull the page scans out of a PDF"),
@@ -26,10 +27,10 @@ STEPS = {
 def config(section):
     path = ROOT / "data" / "prep.json"
     if not path.exists():
-        raise SystemExit(f"This step reads its settings from {path}. See docs/from-documents.md.")
+        raise DomusError(f"This step reads its settings from {path}. See docs/from-documents.md.")
     cfg = json.loads(path.read_text(encoding="utf-8"))
     if section not in cfg:
-        raise SystemExit(f"{path} has no \"{section}\" section. See docs/from-documents.md.")
+        raise DomusError(f"{path} has no \"{section}\" section. See docs/from-documents.md.")
     return cfg[section]
 
 

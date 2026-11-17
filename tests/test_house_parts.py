@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from domus import house
+from domus.errors import DomusError
 
 # A 12 x 9 m house with its walls on the grid's axes, on flat ground at 40.
 RING = [[1005.0, 2015.0], [1017.0, 2015.0], [1017.0, 2006.0], [1005.0, 2006.0], [1005.0, 2015.0]]
@@ -48,7 +49,7 @@ def test_a_porch_on_any_side_has_its_walls_where_it_says(rect, side_walls, faces
 
 
 def test_a_porch_wall_on_the_house_side_is_refused():
-    with pytest.raises(SystemExit, match="is the house"):
+    with pytest.raises(DomusError, match="is the house"):
         build(part("Polygon", box(1017.0, 2008.0, 1019.0, 2011.0), id="p", part="porch", floor=40.6,
                    roof_at_wall=43.0, roof_at_edge=42.7, walls=["west"]))
 
@@ -84,7 +85,7 @@ def test_blocks_walls_tanks_and_chimneys_take_their_heights_and_layers():
 
 
 def test_an_unknown_part_is_named():
-    with pytest.raises(SystemExit, match="garage"):
+    with pytest.raises(DomusError, match="garage"):
         build(part("Polygon", box(1005.0, 2015.0, 1008.0, 2018.0), id="g", part="garage"))
 
 

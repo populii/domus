@@ -52,6 +52,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from . import __version__
+from .errors import DomusError
 
 VIEWER = Path(__file__).resolve().parent / "viewer"
 HEAD = """<!doctype html>
@@ -393,7 +394,7 @@ class SketchWorker:
             if self.proc is None or self.proc.poll() is not None or sig != self.seen:
                 self._stop()
                 self.proc = subprocess.Popen([sys.executable, "-m", "domus.cli", "sketch-worker"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                             stderr=subprocess.DEVNULL, text=True, encoding="utf-8", env=job_env(self.root, self.own_output))
+                                             text=True, encoding="utf-8", env=job_env(self.root, self.own_output))   # its errors: the server's log
                 self.seen = sig
             timer = threading.Timer(WORKER_TIMEOUT_S, self.proc.kill)   # a stuck worker ends the read below
             timer.start()
@@ -407,7 +408,7 @@ class SketchWorker:
                 timer.cancel()
             if not line:
                 self._stop()
-                return {"error": "The sketch couldn't be worked out."}
+                return {"error": "The sketch couldn't be worked out. The server's log says why."}
             if self.idle:
                 self.idle.cancel()
             self.idle = threading.Timer(WORKER_IDLE_S, self.stop)
@@ -435,7 +436,11 @@ def save_option(root, name, items, own_output):
     out = subprocess.run([sys.executable, "-c", code], input=json.dumps({"name": name, "items": items}), capture_output=True, text=True, encoding="utf-8",
                          env=job_env(root, own_output), check=False, timeout=WORKER_TIMEOUT_S)
     if out.returncode:
-        return None
+        sys.stderr.write(out.stderr)            # all of it, in the server's log
+        last = (out.stderr.strip().splitlines() or [""])[-1]
+        problem = "domus.errors.DomusError: "
+        raise DomusError(last.removeprefix(problem) if last.startswith(problem) else
+                         "That sketch couldn't be saved as an option. The server's log says why.")
     path.write_text(out.stdout, encoding="utf-8", newline="\n")
     return path
 
@@ -661,9 +666,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         with CREATE_LOCK:
             if self.build_job.status()["state"] == "running":
                 return self.send_json({"error": "A build is already running."}, 409)
-            saved = save_option(self.build_job.root, name.strip(), items, self.build_job.own_output)
-            if saved is None:
-                return self.send_json({"error": "That sketch couldn't be saved as an option."}, 400)
+            try:
+                saved = save_option(self.build_job.root, name.strip(), items, self.build_job.own_output)
+            except DomusError as e:
+                return self.send_json({"error": str(e)}, 400)
             self.build_job.start()
         return self.send_json({"file": saved.relative_to(self.build_job.root).as_posix()}, 202)
 

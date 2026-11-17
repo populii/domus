@@ -14,6 +14,7 @@ import numpy as np
 
 from .. import geojson
 from ..crs import ROOT
+from ..errors import DomusError
 from ..georef import apply_affine, find_cross, fit_affine, fit_rigid, fit_similarity, intersect, refine_line
 from . import config
 
@@ -50,7 +51,7 @@ def page_image(stream):
     space = getattr(stream.get("ColorSpace"), "name", None)
     mode = {("DeviceGray", 8): "L", ("DeviceGray", 1): "1", ("DeviceRGB", 8): "RGB", ("DeviceCMYK", 8): "CMYK"}.get((space, bits))
     if mode is None:
-        raise SystemExit(f"Can't save an embedded image with {filters} in {space} at {bits} bits; convert the PDF's pages first.")
+        raise DomusError(f"Can't save an embedded image with {filters} in {space} at {bits} bits; convert the PDF's pages first.")
     buf = io.BytesIO()
     Image.frombytes(mode, (w, h), stream.get_data()).save(buf, "PNG")
     return "png", buf.getvalue()

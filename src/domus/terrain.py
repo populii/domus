@@ -21,7 +21,7 @@ from shapely.ops import unary_union
 
 from . import geojson, raster
 from .crs import ROOT
-from .mesh import Mesh, cross2, offset_behind
+from .mesh import Mesh, cross2, offset_behind, resample_line
 
 FIXES = ROOT / "data" / "site" / "ground-fixes.geojson"
 
@@ -31,18 +31,6 @@ def grid(extent, step):
     es = np.arange(e0, e1 + step / 2, step)
     ns = np.arange(n0, n1 + step / 2, step)
     return np.meshgrid(es, ns)
-
-
-def resample_line(line, spacing):
-    """Points about every `spacing` metres along a polyline and at each of its own vertices (its
-    corners and steps), and their distances along it."""
-    pts = np.asarray(line, float)
-    seg = np.hypot(*np.diff(pts[:, :2], axis=0).T)
-    s = np.concatenate([[0], np.cumsum(seg)])
-    t = np.linspace(0, s[-1], max(int(np.ceil(s[-1] / spacing)) + 1, 2))
-    t = np.union1d(t[np.abs(t[:, None] - s[None, :]).min(axis=1) > 0.1 * spacing], s)
-    out = np.column_stack([np.interp(t, s, pts[:, k]) for k in range(pts.shape[1])])
-    return out, t
 
 
 def line_normals(pts):
