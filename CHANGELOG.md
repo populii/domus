@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.34
 
 - **For site projects:** the parts of the model that draw the house's looks, the walls and the small features read no site of their own now, and the import rules hold them to it: the build gives them the ground, the settings and the folders of the site's pictures. A site's own code that calls them gives them too. `walls.mesh(wall, ground)` and `walls.set_out(walls, ground)` take the ground (`terrain.ground()`), `walls.texture_file` and `features.texture_file` the folder of the site's pictures, `features.read_all` the site's folder, and the house's drawing a `house_texture.Looks`. `terrain.wall_levels(wall)` reads the site's ground as before, and the models built are unchanged.
 
