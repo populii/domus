@@ -20,6 +20,7 @@ STEPS = {
     "house-textures": ("textures", "house_textures", "Rectify house walls from photos and placed video"),
     "check": ("check", "main", "Adversarial checks of the model against its data, the LiDAR and placed video"),
     "sections": ("sections", "main", "Cross-sections through the point clouds"),
+    "profile": ("profile", "main", "The ground along a line, and either side of it"),
     "canopy-plot": ("canopy_plot", "main", "A plan of candidate tree crowns over the aerial"),
 }
 

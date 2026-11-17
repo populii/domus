@@ -153,3 +153,24 @@ def test_a_block_piece_is_whole_half_or_cut():
     assert check._piece(3.0, 0, True) == 1.0 and check._piece(3.5, 1, False) == 1.0      # on a joint
     assert abs(check._piece(3.5, 0, True) - 0.5) < 1e-9 and not check._cut(0.5)          # half a block: a corner's end
     assert check._cut(check._piece(3.3, 0, True)) and not check._cut(check._piece(3.004, 0, True))
+
+
+def test_a_profile_reads_the_ground_along_a_line_and_either_side(site):
+    from domus import design, terrain
+    from domus.prep import profile
+
+    assert [round(s, 3) for s, _, _ in profile.stations(np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 1.5]]), 1.0)] == [0, 1, 2, 3, 3.5]
+    g, fr = terrain.ground(), design.frame()
+    z = lambda en: float(np.atleast_1d(g.sample(np.array([en[0]]), np.array([en[1]])))[0])
+    rows = profile.profile([[4.0, 3.0], [8.0, 3.0]], offsets=(-1.0, 0.0, 1.0), step=2.0)
+    assert [s for s, _, _ in rows] == [0.0, 2.0, 4.0]
+    _, p, h = rows[1]
+    assert np.allclose(p, [6.0, 3.0])
+    # along s, the right is +o: into the lot, the way o grows
+    for off in (-1.0, 0.0, 1.0):
+        assert h[off] == pytest.approx(z(fr.en(np.array([6.0, 3.0 + off]))), abs=1e-9)
+    e, n = fr.en(np.array([6.0, 3.0]))
+    east = profile.profile([[e - 1, n], [e + 1, n]], offsets=(1.0,), step=0, grid=True)
+    assert east[0][2][1.0] == pytest.approx(z([e - 1, n - 1]), abs=1e-9)                       # east's right is south
+    with pytest.raises(DomusError, match="two points or more"):
+        profile.profile([[0, 0]])

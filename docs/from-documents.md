@@ -77,6 +77,9 @@ domus prep sections walk-colmap-dense walk-colmap-site
 domus prep canopy-plot
 ```
 
+`profile` reads the ground along a line and either side of it, a table of levels: `domus prep profile "8,0.4 8,3"
+--offsets -0.5 0 0.5` for a line in the wall options' frame, `--grid` for one on the site's grid.
+
 `check` looks for things floating above or buried in the ground, spikes and holes in the ground, a roof that doesn't fit
 the LiDAR, placed clouds that are tilted or off the ground, and duplicate ids. For the wall options it looks for ground
 that comes through a wall or a flight of steps, or stands over a tread's edge (`through`, in the built model), ground-fix
