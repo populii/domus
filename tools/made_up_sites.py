@@ -11,9 +11,9 @@ The sites, all in the sea, so none is a real place:
   richer   The demo with more of what real sites have: house parts (a porch and its steps, a deck and its
            balustrade, a chimney and a tank), levels along the drain, a sewer at an assumed depth, and a right of
            way listed before the lot.
-  abroad   The demo moved onto the British National Grid (EPSG:27700), rasters and all. Domus reads rasters on New
-           Zealand's grid for now, so this one won't build until phase 3 in ARCHITECTURE.md, and the report says so
-           rather than failing.
+  abroad   The demo moved onto the British National Grid (EPSG:27700), rasters and all. The same site on another grid
+           builds the same model, from the site's origin: the report holds the head's build of it to the demo's
+           within 1.5 mm (`twin`), and fails if it isn't.
   format1  The demo as a site in format 1 (Domus 2026.11.26 and before) with what format 2 changed: compass words
            along a frame at an angle to the grid, [front_garden], floor levels relative to each other, and a drain
            drawn from its printed levels only. Every Domus reads it as format 1 did, so it never moves. It stays as
@@ -22,7 +22,9 @@ The sites, all in the sea, so none is a real place:
 `report` reads what CI leaves in DIR for each side (base and head) and site: the copy it built (`<side>-<site>/`,
 with the model in `viewer/data/`), the build's output (`<side>-<site>.log`) and whether it built
 (`<side>-<site>.status`, `ok` or `failed`). It prints Markdown, and exits 1 only when the head can't build a site
-the base could.
+the base could, or builds the abroad site other than the demo.
+
+    python tools/made_up_sites.py twin DEMO_OUT ABROAD_OUT   # the twin check alone, on two builds' viewer/data
 """
 
 import argparse
@@ -38,7 +40,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SITES = ("demo", "richer", "abroad", "format1")
-EXPECTED = {"abroad": "Expected until Domus reads rasters on their own grid (phase 3 in ARCHITECTURE.md)."}
+TWIN_M = 0.0015         # how far the abroad site's model may be from the demo's: the same site on another grid
+IMAGE_MEAN, IMAGE_MAX = 0.5, 16      # and its pictures: the mean and largest difference in a colour, out of 255
 # The abroad site's grid: the British National Grid, in the Celtic Sea.
 ABROAD_EPSG, ABROAD_X0, ABROAD_Y0 = 27700, 100000.0, 100000.0
 ABROAD_CRS = {"label": "OSGB36 / British National Grid (EPSG:27700)", "vertical": "ODN"}
@@ -259,6 +262,153 @@ def fenced(text):
     return ["", "```text", text.strip(), "```", ""]
 
 
+def decimals(x):
+    """How many decimals a number was written with."""
+    s = repr(float(x))
+    return 0 if "e" in s else len(s.split(".")[1].rstrip("0"))
+
+
+def same_number(x, y):
+    """Equal within TWIN_M, or one unit apart in the last decimal they were rounded to: a value on a rounding
+    boundary rounds either way, as 42.015 does to 42.01 or 42.02."""
+    if isinstance(x, bool) or isinstance(y, bool) or (isinstance(x, int) and isinstance(y, int)):
+        return x == y
+    d = max(decimals(x), decimals(y))
+    return abs(x - y) <= TWIN_M + 1e-12 or (d >= 1 and math.isclose(abs(x - y), 10.0 ** -d, rel_tol=1e-6))
+
+
+def heights(positions, indices, box, step=0.05):
+    """A mesh's highest surface on a grid of `step` m over `box` (x0, z0, x1, z1) in viewer metres: NaN off it."""
+    import numpy as np
+
+    P = np.asarray(positions, float).reshape(-1, 3)
+    T = np.asarray(indices, int).reshape(-1, 3)
+    x0, z0, x1, z1 = box
+    nx, nz = int((x1 - x0) / step) + 1, int((z1 - z0) / step) + 1
+    H = np.full((nz, nx), np.nan)
+    for a, b, c in P[T]:
+        lo = np.floor((np.minimum(np.minimum(a, b), c) - [x0, 0, z0]) / step).astype(int)
+        hi = np.ceil((np.maximum(np.maximum(a, b), c) - [x0, 0, z0]) / step).astype(int)
+        xs = np.arange(max(lo[0], 0), min(hi[0] + 1, nx))
+        zs = np.arange(max(lo[2], 0), min(hi[2] + 1, nz))
+        if not len(xs) or not len(zs):
+            continue
+        X, Z = np.meshgrid(x0 + xs * step, z0 + zs * step)
+        den = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2])
+        if abs(den) < 1e-12:
+            continue
+        l1 = ((b[2] - c[2]) * (X - c[0]) + (c[0] - b[0]) * (Z - c[2])) / den
+        l2 = ((c[2] - a[2]) * (X - c[0]) + (a[0] - c[0]) * (Z - c[2])) / den
+        l3 = 1 - l1 - l2
+        inside = (l1 >= -1e-9) & (l2 >= -1e-9) & (l3 >= -1e-9)
+        iz, ix = np.meshgrid(zs, xs, indexing="ij")
+        H[iz[inside], ix[inside]] = np.fmax(H[iz[inside], ix[inside]], (l1 * a[1] + l2 * b[1] + l3 * c[1])[inside])
+    return H
+
+
+def same_surface(a, b, path):
+    """Two meshes with the same vertices but other triangles: the same surface within TWIN_M, where both have one."""
+    import numpy as np
+
+    pa, pb = np.asarray(a["positions"], float).reshape(-1, 3), np.asarray(b["positions"], float).reshape(-1, 3)
+    if not len(pa) or not len(pb):
+        return [] if len(pa) == len(pb) else [f"{path}: {len(pa)} vertices, abroad {len(pb)}"]
+    lo, hi = np.minimum(pa.min(axis=0), pb.min(axis=0)), np.maximum(pa.max(axis=0), pb.max(axis=0))
+    box = (lo[0] - 0.05, lo[2] - 0.05, hi[0] + 0.05, hi[2] + 0.05)
+    ha, hb = heights(pa, a["indices"], box), heights(pb, b["indices"], box)
+    both, one = np.isfinite(ha) & np.isfinite(hb), np.isfinite(ha) ^ np.isfinite(hb)
+    worst = float(np.abs(ha - hb)[both].max()) if both.any() else 0.0
+    out = []
+    if worst > TWIN_M:
+        out.append(f"{path}: its surface is up to {worst * 1000:.1f} mm off the demo's")
+    if one.sum() > max(4, 0.002 * both.sum()):     # cells a triangle's edge falls either side of
+        out.append(f"{path}: {int(one.sum())} of its 5 cm cells are covered in only one of the two")
+    return out
+
+
+def twin_diffs(a, b, swap, path=""):
+    """What differs between the demo's model (a) and the abroad site's (b), beyond what the grid changes:
+    `swap` maps the abroad site's own words (its grid's and datum's names, its title) to the demo's."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        if "indices" in a and "positions" in a and a.get("indices") != b.get("indices"):
+            yield from same_surface(a, b, path)
+            a, b = ({k: v for k, v in x.items() if k != "indices"} for x in (a, b))
+        for k in sorted(set(a) | set(b)):
+            if k not in a or k not in b:
+                yield f"{path}/{k}: only in {'the demo' if k in a else 'abroad'}"
+            else:
+                yield from twin_diffs(a[k], b[k], swap, f"{path}/{k}")
+    elif isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            yield f"{path}: {len(a)} items, abroad {len(b)}"
+        else:
+            for i, (x, y) in enumerate(zip(a, b)):
+                yield from twin_diffs(x, y, swap, f"{path}[{i}]")
+    elif isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        if not same_number(a, b):
+            yield f"{path}: {a} -> {b}"
+    elif isinstance(a, str) and isinstance(b, str):
+        for theirs, ours in swap.items():
+            b = b.replace(theirs, ours)
+        if a != b:
+            yield f"{path}: {a[:60]!r} -> {b[:60]!r}"
+    elif a != b:
+        yield f"{path}: {str(a)[:60]!r} -> {str(b)[:60]!r}"
+
+
+def from_origin(model, summary=None):
+    """The model (or the summary it came with) with what's written in the site's own grid coordinates made
+    relative to the site's origin."""
+    import copy
+
+    e0, n0 = model["origin"][:2]
+    if summary is not None:
+        s = copy.deepcopy(summary)
+    else:
+        m = copy.deepcopy(model)
+        m["origin"][:2] = [0.0, 0.0]
+        m["extent"] = [m["extent"][0] - e0, m["extent"][1] - n0, m["extent"][2] - e0, m["extent"][3] - n0]
+        s = m.get("summary") or {}
+    frame = s.get("options_site", {}).get("frame", {})
+    for key in ("origin", "toward"):
+        if key in frame:
+            frame[key] = [frame[key][0] - e0, frame[key][1] - n0, *frame[key][2:]]
+    return s if summary is not None else m
+
+
+def twin(demo, abroad):
+    """The abroad site's build (viewer/data) against the demo's: what differs beyond the grid, as lines."""
+    import numpy as np
+    from PIL import Image
+
+    ma, mb = read_json(demo / "model.json"), read_json(abroad / "model.json")
+    a, b = from_origin(ma), from_origin(mb)
+    swap = {b[k]: a[k] for k in ("crs", "vertical", "title") if isinstance(b.get(k), str) and b.get(k)}
+    drop = ("built", "commit")
+    out = [f"model.json{d}" for d in twin_diffs({k: v for k, v in a.items() if k not in drop},
+                                                 {k: v for k, v in b.items() if k not in drop}, swap)]
+    sa, sb = from_origin(ma, read_json(demo / "summary.json")), from_origin(mb, read_json(abroad / "summary.json"))
+    out += [f"summary.json{d}" for d in twin_diffs(sa, sb, swap)]
+    names = {p.name for p in demo.iterdir()} | {p.name for p in abroad.iterdir()}
+    for name in sorted(names - {"model.json", "summary.json", "build.json"}):
+        x, y = demo / name, abroad / name
+        if not x.exists() or not y.exists():
+            out.append(f"{name}: only in {'the demo' if x.exists() else 'abroad'}")
+        elif x.read_bytes() == y.read_bytes():
+            continue
+        elif x.suffix.lower() in (".jpg", ".jpeg", ".png"):
+            p, q = Image.open(x), Image.open(y)
+            if p.size != q.size:
+                out.append(f"{name}: {p.size[0]}x{p.size[1]} pixels, abroad {q.size[0]}x{q.size[1]}")
+                continue
+            d = np.abs(np.asarray(p.convert("RGB"), int) - np.asarray(q.convert("RGB"), int))
+            if d.mean() > IMAGE_MEAN or d.max() > IMAGE_MAX:
+                out.append(f"{name}: its colours differ by {d.mean():.2f} on average, {d.max()} at most")
+        else:
+            out.append(f"{name}: differs")
+    return out
+
+
 def report(d):
     rows, details, broke = [], [], []
     for name in SITES:
@@ -280,11 +430,21 @@ def report(d):
         elif head == "ok":
             moved = "builds now"
         else:
-            moved = EXPECTED.get(name, "fails with both")
+            moved = "fails with both"
             details += [f"### {name}: the build's last lines", *fenced(tail(d / f"head-{name}.log"))]
         rows.append(f"| {name} | {base} | {head} | {moved} |")
+    if status(d, "head", "demo") == status(d, "head", "abroad") == "ok":
+        off = twin(*(d / f"head-{name}" / "viewer" / "data" for name in ("demo", "abroad")))
+        if off:
+            broke.append("abroad")
+            details += [f"### abroad against the demo: {len(off)} differences beyond the grid", *fenced("\n".join(off[:40]))]
+        twin_line = ("The abroad site builds the demo's model within 1.5 mm." if not off else
+                     "**The abroad site doesn't build the demo's model:** see below.")
+    else:
+        twin_line = "The abroad site and the demo weren't both built, so they weren't compared."
     print("\n".join(["## Made-up sites: the base against this pull request", "",
-                     "| Site | Base | This pull request | What moved |", "|---|---|---|---|", *rows, "", *details]))
+                     "| Site | Base | This pull request | What moved |", "|---|---|---|---|", *rows, "", twin_line, "",
+                     *details]))
     return 1 if broke else 0
 
 
@@ -293,10 +453,17 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("write", help="write the made-up sites").add_argument("out", type=Path)
     sub.add_parser("report", help="say what moved between the base's builds and the head's").add_argument("dir", type=Path)
+    tw = sub.add_parser("twin", help="the abroad site's build against the demo's")
+    tw.add_argument("demo", type=Path)
+    tw.add_argument("abroad", type=Path)
     args = ap.parse_args(argv)
     if args.command == "write":
         write(args.out)
         return 0
+    if args.command == "twin":
+        off = twin(args.demo, args.abroad)
+        print("\n".join(off) if off else "The abroad site builds the demo's model within 1.5 mm.")
+        return 1 if off else 0
     return report(args.dir)
 
 

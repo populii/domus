@@ -20,7 +20,7 @@ from scipy.spatial import Delaunay
 from shapely.ops import unary_union
 
 from . import geojson, raster
-from .crs import ROOT
+from .crs import ROOT, settings
 from .mesh import Mesh, cross2, offset_behind, resample_line
 
 FIXES = ROOT / "data" / "site" / "ground-fixes.geojson"
@@ -183,6 +183,32 @@ def outline_points(poly, spacing=0.2):
     return np.asarray(pts, float).reshape(-1, 2), np.asarray(nrm, float).reshape(-1, 2)
 
 
+def cut_cells(faces, cell, heights):
+    """Triangles with each whole grid cell cut along the diagonal whose ends are closer in height. A cell's four corners
+    lie on a circle, so Delaunay may cut it either way; along the closer pair a bank is drawn down its slope, where
+    the other diagonal would draw a ridge or a gully across it. `cell` gives each point's (row, column) on the grid,
+    or (-1, -1) for a point off it (a breakline's)."""
+    faces = np.asarray(faces).copy()
+    edges = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
+    other = np.concatenate([faces[:, 2], faces[:, 0], faces[:, 1]])
+    tri = np.tile(np.arange(len(faces)), 3)
+    key = np.sort(edges, axis=1)
+    order = np.lexsort((key[:, 1], key[:, 0]))
+    key, other, tri = key[order], other[order], tri[order]
+    twin = np.flatnonzero((key[1:] == key[:-1]).all(axis=1))           # an edge two triangles share: k and k + 1
+    a, b, c, d = key[twin, 0], key[twin, 1], other[twin], other[twin + 1]
+    on = (cell[a, 0] >= 0) & (cell[b, 0] >= 0) & (cell[c, 0] >= 0) & (cell[d, 0] >= 0)
+    ra, rb, rc, rd = cell[a], cell[b], cell[c], cell[d]
+    # a and b opposite corners of one cell, c and d its other two
+    diagonal = on & (np.abs(ra - rb) == 1).all(axis=1)
+    corners = ((rc == np.column_stack([ra[:, 0], rb[:, 1]])).all(axis=1) & (rd == np.column_stack([rb[:, 0], ra[:, 1]])).all(axis=1)) | \
+              ((rd == np.column_stack([ra[:, 0], rb[:, 1]])).all(axis=1) & (rc == np.column_stack([rb[:, 0], ra[:, 1]])).all(axis=1))
+    flip = diagonal & corners & (np.abs(heights[c] - heights[d]) < np.abs(heights[a] - heights[b]) - 1e-9)
+    faces[tri[twin][flip]] = np.column_stack([c[flip], d[flip], a[flip]])
+    faces[tri[twin + 1][flip]] = np.column_stack([d[flip], c[flip], b[flip]])
+    return faces
+
+
 def build(extent, step, walls=(), surface=None, edges=()):
     """Triangulated ground surface over `extent` (E0, N0, E1, N1). `surface(E, N)` replaces the
     ground model (a wall option's designed ground); the fix points stay as breaklines only where it
@@ -250,12 +276,15 @@ def build(extent, step, walls=(), surface=None, edges=()):
     if len(fix):
         breaks.append(fix)
     pts = np.column_stack([E[keep & ~clear], N[keep & ~clear], H[keep & ~clear]])
+    cell = np.column_stack(np.nonzero(keep & ~clear))          # each grid point's row and column, in the same order
     if breaks:
         pts = np.vstack([pts] + breaks)
-    # Triangulated about the points' own middle: in whole grid coordinates (hundreds of kilometres) the arithmetic
-    # cannot tell apart points a few centimetres from each other, as the two rows along an edge are.
-    tri = Delaunay(pts[:, :2] - pts[:, :2].mean(axis=0))
-    faces = tri.simplices
+        cell = np.vstack([cell, np.full((len(pts) - len(cell), 2), -1)])
+    # Triangulated about the site's origin, to the micrometre: in whole grid coordinates (hundreds of kilometres) the
+    # arithmetic cannot tell apart points a few centimetres from each other, as the two rows along an edge are, and
+    # from the origin the same site on any grid gives the same triangles.
+    tri = Delaunay(np.round(pts[:, :2] - np.asarray(settings()["model"]["origin"][:2], float), 6))
+    faces = cut_cells(tri.simplices, cell, pts[:, 2])
     # Drop sliver triangles along the hull.
     a, b, c = (pts[faces[:, k], :2] for k in range(3))
     area = 0.5 * np.abs(cross2(b - a, c - a))

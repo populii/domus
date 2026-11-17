@@ -218,12 +218,7 @@ def check_sanity(m, findings):
 # --------------------------------------------------------------------------- roof
 
 def dsm_cells(window):
-    d = raster.dsm()
-    tr = d.transform
-    rows, cols = d.data[0].shape
-    cc, rr = np.meshgrid(np.arange(cols) + 0.5, np.arange(rows) + 0.5)
-    e, n = crs.nztm_to_site((tr.c + cc * tr.a).ravel(), (tr.f + rr * tr.e).ravel())
-    e, n, z = np.asarray(e), np.asarray(n), d.data[0].ravel()
+    e, n, z = (a.ravel() for a in raster.dsm().cells())
     e0, n0, e1, n1 = window
     k = (e > e0) & (e < e1) & (n > n0) & (n < n1) & np.isfinite(z)
     return e[k], n[k], z[k]

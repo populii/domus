@@ -12,6 +12,10 @@ uv run domus new site --name "My place" --boundary lot.geojson
 
 No boundary yet? `--centre -43.53,172.63 --size 30` puts in a stand-in square.
 
+A site is on a grid in metres, and Domus picks it from the boundary. A boundary on such a grid stays on it. One in
+longitude and latitude goes on NZTM2000 in New Zealand, the LINZ data's own grid, and on its UTM zone anywhere else.
+One on a grid in feet goes on the UTM zone too. `--epsg 27700`, say, puts the site on a grid of your choosing.
+
 This writes `site/data/site.toml`, the boundary, and `site/options/_site.toml`. In a copy of the Domus repo,
 git ignores everything you add to `site/`; anywhere else, use any folder you like. `[model] extent` is the
 area modelled: it starts 15 m past the boundary, and you can widen it.
@@ -23,9 +27,14 @@ uv run domus --site site fetch
 ```
 
 This finds the newest LINZ survey covering your extent, reads just your patch and records what it used in
-`data/linz-sources.json`. If LINZ has no 1 m LiDAR for your area, it stops and says so. You can supply your own
-GeoTIFFs at `data/lidar/dem.tif` (required), `data/lidar/dsm.tif` and `data/aerial/aerial.tif` (both optional), on
-NZTM2000.
+`data/linz-sources.json`. If LINZ has no 1 m LiDAR for your area, it stops and says so.
+
+LINZ covers New Zealand only. Anywhere, you can bring your own GeoTIFFs instead: `data/lidar/dem.tif` (the ground
+model, required), `data/lidar/dsm.tif` (the surface model: roofs and trees) and `data/aerial/aerial.tif` (a photo),
+both optional. They can be on any grid, as each file's own header says: Domus reads each one on its own grid. One
+that names no grid is taken to be on the site's. Heights in a band that says it's in feet are read in metres. Name
+the heights' datum in `[crs] vertical` in `data/site.toml` (`domus new` leaves it empty away from New Zealand), and
+say where the data came from in `[site] attribution`.
 
 ## 3. Build and look
 
@@ -39,7 +48,7 @@ optional, and each file you add shows up at the next build.
 
 ## 4. Add what's on the site
 
-The layers are GeoJSON in `data/site/`, on the site's grid (NZTM2000 unless you changed `[crs]`). QGIS reads and
+The layers are GeoJSON in `data/site/`, on the site's grid (`[crs] epsg` in `data/site.toml`). QGIS reads and
 writes them. [site-format.md](site-format.md) lists each file and its properties, and `domus demo` writes a
 small working example of all of them.
 

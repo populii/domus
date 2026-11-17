@@ -43,8 +43,9 @@ def test_newest_year_from_title():
     assert linz._year("no year") == 0
 
 
-def test_fetch_skips_a_survey_with_no_data_here(monkeypatch, tmp_path):
+def test_fetch_skips_a_survey_with_no_data_here(site, monkeypatch, tmp_path):
     monkeypatch.setattr(linz, "site_bounds", lambda: (0, 0, 10, 10))
+    linz.crs.settings()             # the demo's settings, read before the site's folder moves to tmp_path
     monkeypatch.setattr(linz.crs, "ROOT", tmp_path)
     (tmp_path / "data").mkdir()
     surveys = {"ground model": [("Empty (2025)", ["e"]), ("Full (2025)", ["f"])]}
@@ -55,3 +56,13 @@ def test_fetch_skips_a_survey_with_no_data_here(monkeypatch, tmp_path):
     import json
     used = json.loads((tmp_path / "data" / "linz-sources.json").read_text(encoding="utf-8"))
     assert used == {"ground model": {"title": "Full (2025)", "tiles": ["f"]}}
+
+
+def test_fetch_says_linz_covers_new_zealand_only(site, monkeypatch):
+    from domus import crs, linz
+    from domus.errors import DomusError
+
+    monkeypatch.setattr(crs, "site_to_lonlat", lambda e, n: (-5.5, 50.1))       # a site in Cornwall
+    monkeypatch.setattr(linz, "find_surveys", lambda *a: pytest.fail("asked LINZ"))
+    with pytest.raises(DomusError, match="New Zealand only"):
+        linz.main()

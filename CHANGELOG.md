@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Sites anywhere:** Domus reads each raster on its own grid, the one its file names, so a site's ground model, surface model and photos can come on any grid. A file that names none is taken to be on the site's, and heights in a band that says it's in feet are read in metres. Domus used to take every raster to be on NZTM2000.
+- `domus new` puts a site on a grid in metres. A boundary on one stays on it; one in longitude and latitude goes on NZTM2000 in New Zealand and on its UTM zone anywhere else; one on a grid in feet goes on the UTM zone. `--epsg` names another grid in metres. Away from New Zealand it leaves the height datum and the credit line for the site's own data to fill in, and `domus fetch` says that LINZ covers New Zealand only and what to bring instead. A site can leave its height datum unnamed: the viewer then calls its heights the model's.
+- The same site on any grid builds the same model, as the build now works from the site's origin. The ground is triangulated about it, and each whole grid cell is cut along the diagonal whose corners are closer in height, so a bank is drawn down its slope. A cell's corners lie on a circle, so it could be cut either way, and which way used to depend on where the site sat on its grid. A site built before has some cells cut the other way now, its points unchanged: on the made-up sites the ground between points moves by up to 6 mm, and an option's designed ground by up to 8.5 cm in cells it bends sharply across, and on steep banks the middle of a cell can move by tens of centimetres. CI builds the made-up demo moved onto the British National Grid and holds its model to the demo's within 1.5 mm.
+- A new lawn or bed in an option has its grass or soil tiled from the viewer's origin. It was tiled from the grid's own, millions of tiles away, where the viewer's numbers can't place a texture within a tile, which smeared it.
+- A lawn's picture comes out the same size whatever the arithmetic's last digits are.
+
 ## 2026.11.28
 
 - **For site projects:** every setting Domus reads from `data/site.toml` and `options/_site.toml` is declared in one place, with its default and a line on what it is, and [docs/site-format.md](docs/site-format.md#settings) lists them all from there. A key Domus doesn't know gets a warning naming the nearest one it does, such as `house.boards_m isn't a setting Domus knows: did you mean board_m?`, where it used to do nothing without a word. Settings only your own tools read go under `[local]`, which Domus leaves alone.

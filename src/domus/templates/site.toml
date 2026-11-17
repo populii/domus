@@ -7,11 +7,12 @@ format = {{format}}          # this site folder's format: `domus site upgrade` m
 title = {{name}}
 heading = {{name}}
 about = {{about}}
+attribution = {{attribution}}          # where the data came from, shown in the viewer
 
 [crs]
-epsg = 2193
-label = "NZGD2000 / New Zealand Transverse Mercator (EPSG:2193)"
-vertical = "NZVD2016"
+epsg = {{epsg}}
+label = {{crs_label}}
+vertical = {{vertical}}          # the heights' datum, as the viewer names it
 
 [model]
 # Area modelled (E min, N min, E max, N max) and the viewer's origin (E, N). The viewer works in

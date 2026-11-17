@@ -53,3 +53,64 @@ def test_a_scanned_sheet_can_be_shifted(site):
     finally:
         (folder / "blot.png").unlink()
         (folder / "blot.json").unlink()
+
+
+def write_raster(path, data, transform, crs=None, units=None):
+    import rasterio
+
+    with rasterio.open(path, "w", driver="GTiff", width=data.shape[1], height=data.shape[0], count=1, dtype="float32",
+                       crs=crs, transform=transform) as dst:
+        dst.write(data.astype("float32"), 1)
+        if units:
+            dst.units = (units,)
+
+
+def test_a_raster_on_another_grid_is_read_on_its_own(site, tmp_path):
+    """A raster in longitude and latitude, its values a plane in degrees: sampled at site points it gives the
+    plane at those points' longitude and latitude."""
+    from pyproj import Transformer
+    from rasterio.transform import from_origin
+
+    from domus import crs, raster
+
+    e0, n0 = crs.settings()["model"]["origin"][:2]
+    lon0, lat0 = Transformer.from_crs(crs.site_epsg(), 4326, always_xy=True).transform(e0, n0)
+    step = 1e-5                                                         # about a metre
+    cols, rows = np.meshgrid(np.arange(60) + 0.5, np.arange(60) + 0.5)
+    west, north = lon0 - 30 * step, lat0 + 30 * step
+    lon, lat = west + cols * step, north - rows * step
+    write_raster(tmp_path / "plane.tif", 1000 * (lon - lon0) + 2000 * (lat - lat0) + 40, from_origin(west, north, step, step), "EPSG:4326")
+    r = raster.Raster(tmp_path / "plane.tif")
+    e, n = np.meshgrid(e0 + np.linspace(-15, 15, 7), n0 + np.linspace(-15, 15, 7))
+    lo, la = Transformer.from_crs(crs.site_epsg(), 4326, always_xy=True).transform(e, n)
+    assert np.allclose(r.sample(e, n), 1000 * (lo - lon0) + 2000 * (la - lat0) + 40, atol=1e-4)
+    E, N, values = r.cells()                                            # each cell's middle, on the site's grid
+    lo, la = Transformer.from_crs(crs.site_epsg(), 4326, always_xy=True).transform(E, N)
+    assert values.shape == lon.shape and np.allclose(lo, lon, atol=1e-9) and np.allclose(la, lat, atol=1e-9)
+
+
+def test_a_raster_that_names_no_grid_is_on_the_sites(site, tmp_path):
+    import rasterio
+
+    from domus import crs, raster
+
+    with rasterio.open(raster.DEM) as src:
+        write_raster(tmp_path / "bare.tif", src.read(1), src.transform)
+    e0, n0 = crs.settings()["model"]["origin"][:2]
+    e, n = np.meshgrid(e0 + np.linspace(-6, 6, 13), n0 + np.linspace(-6, 6, 13))
+    assert np.allclose(raster.Raster(tmp_path / "bare.tif").sample(e, n), raster.Raster(raster.DEM).sample(e, n), equal_nan=True)
+
+
+def test_heights_in_feet_are_read_in_metres(site, tmp_path):
+    import rasterio
+
+    from domus import crs, raster
+
+    with rasterio.open(raster.DEM) as src:
+        write_raster(tmp_path / "feet.tif", src.read(1) / 0.3048, src.transform, src.crs, units="ft")
+    e0, n0 = crs.settings()["model"]["origin"][:2]
+    e, n = np.meshgrid(e0 + np.linspace(-6, 6, 13), n0 + np.linspace(-6, 6, 13))
+    metres = raster.Raster(raster.DEM).sample(e, n)
+    assert np.allclose(raster.Raster(tmp_path / "feet.tif", heights=True).sample(e, n), metres, atol=1e-3, equal_nan=True)
+    assert not np.allclose(raster.Raster(tmp_path / "feet.tif").sample(e, n), metres, atol=1, equal_nan=True)  # a photo's bands aren't heights
+    assert raster.metres_per_unit("US survey foot") == 1200 / 3937 and raster.metres_per_unit(None) == 1.0

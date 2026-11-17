@@ -275,7 +275,7 @@ def write_ground(pts, bounds, path=GROUND_DEM, res=0.5):
         rows, cols = np.nonzero(~seen)
         xs, ys = rasterio.transform.xy(transform, rows, cols)
         dem = raster.Raster(raster.__getattr__("DEM"))
-        col, row = dem.inverse * (np.asarray(xs), np.asarray(ys))
+        col, row = dem.inverse @ (np.asarray(xs), np.asarray(ys))
         from scipy.ndimage import map_coordinates
 
         grid[~seen] = map_coordinates(dem.data[0], [np.asarray(row) - 0.5, np.asarray(col) - 0.5], order=1, cval=np.nan)

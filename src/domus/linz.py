@@ -20,6 +20,7 @@ from pyproj import Transformer
 from rasterio.windows import Window, from_bounds
 
 from . import crs, raster
+from .errors import DomusError
 
 ELEVATION = "https://nz-elevation.s3.ap-southeast-2.amazonaws.com/catalog.json"
 IMAGERY = "https://nz-imagery.s3.ap-southeast-2.amazonaws.com/catalog.json"
@@ -173,9 +174,16 @@ def clip(name, urls, bounds, out_path, bands=None):
 
 
 def site_bounds(margin=12.0):
-    """The model's extent in NZTM with a margin, so the build can sample just past its edge."""
+    """The model's extent in NZTM with a margin, so the build can sample just past its edge. LINZ covers New Zealand
+    only: a site elsewhere is told to bring its own rasters."""
+    from .newsite import in_new_zealand
+
     to_nztm = Transformer.from_crs(crs.site_epsg(), crs.NZTM_EPSG, always_xy=True)
     e0, n0, e1, n1 = crs.settings()["model"]["extent"]
+    if not in_new_zealand(*crs.site_to_lonlat((e0 + e1) / 2, (n0 + n1) / 2)):
+        raise DomusError("domus fetch gets the ground model and photos from LINZ, which covers New Zealand only. A site "
+                         "elsewhere brings its own, on any grid: its ground model in data/lidar/dem.tif, and its surface "
+                         "model and photo if it has them (see docs/new-site.md).")
     xs, ys = to_nztm.transform([e0, e1, e0, e1], [n0, n0, n1, n1])
     return min(xs) - margin, min(ys) - margin, max(xs) + margin, max(ys) + margin
 

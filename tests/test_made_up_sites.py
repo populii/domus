@@ -63,4 +63,58 @@ def test_the_report_fails_only_when_the_head_breaks_a_build(tmp_path, capsys):
     assert made_up_sites.report(tmp_path) == 1
     out = capsys.readouterr().out
     assert "| demo | ok | failed | **this pull request can't build it** |" in out and "something broke" in out
-    assert "| abroad | failed | failed | Expected until" in out and "| richer | not built | not built | not built |" in out
+    assert "| abroad | failed | failed | fails with both |" in out and "| richer | not built | not built | not built |" in out
+    assert "weren't both built, so they weren't compared" in out
+
+
+def twin_build(root, e0, n0, top=1.0, diagonal=0, title="Demo site (made up)", crs="NZTM", vertical="NZVD2016",
+               level=42.01, picture=None):
+    """A small build of the same made-up site, with its origin at (e0, n0) on its grid: a 1 m square of ground whose
+    far corner stands `top` high, cut along one diagonal or the other."""
+    root.mkdir(parents=True)
+    faces = [0, 1, 2, 0, 2, 3] if diagonal == 0 else [0, 1, 3, 1, 2, 3]
+    model = {"title": title, "crs": crs, "vertical": vertical, "origin": [e0, n0, 40.0],
+             "extent": [e0 - 10, n0 - 10, e0 + 10, n0 + 10], "built": "now", "commit": None,
+             "layers": [{"id": "ground", "name": f"Ground ({vertical})", "positions": [0, 0, 0, 1, 0, 0, 1, top, -1, 0, 0, -1],
+                         "indices": faces, "info": {"top_min": level}}],
+             "summary": {"options_site": {"frame": {"origin": [e0 + 1, n0 + 2], "toward": [e0 + 5, n0 + 2]}}}}
+    (root / "model.json").write_text(json.dumps(model), encoding="utf-8")
+    (root / "summary.json").write_text(json.dumps(model["summary"]), encoding="utf-8")
+    (root / "build.json").write_text("{}", encoding="utf-8")
+    from PIL import Image
+
+    Image.new("RGB", (8, 8), picture or (120, 140, 90)).save(root / "relief.jpg")
+    return root
+
+
+def test_the_same_site_on_another_grid_is_the_twin(tmp_path):
+    demo = twin_build(tmp_path / "demo", 1500000.0, 5500000.0)
+    abroad = twin_build(tmp_path / "abroad", 100000.0, 100000.0, title="Demo site abroad (made up)", crs="BNG",
+                        vertical="ODN", level=42.02)          # 42.015 rounds either way
+    assert made_up_sites.twin(demo, abroad) == []
+
+
+def test_the_twin_check_finds_what_the_grid_doesnt_explain(tmp_path):
+    demo = twin_build(tmp_path / "demo", 1500000.0, 5500000.0)
+    # A surface cut along the other diagonal, where the ground isn't flat: 0.5 m off in the middle.
+    off = made_up_sites.twin(demo, twin_build(tmp_path / "a", 100000.0, 100000.0, diagonal=1))
+    assert any("surface is up to" in line for line in off)
+    # The same flat ground cut either way is the same surface.
+    flat = twin_build(tmp_path / "flat", 1500000.0, 5500000.0, top=0.0)
+    assert made_up_sites.twin(flat, twin_build(tmp_path / "b", 100000.0, 100000.0, top=0.0, diagonal=1)) == []
+    # A corner 5 mm higher, a level two rounding steps off, and a picture of something else.
+    assert made_up_sites.twin(demo, twin_build(tmp_path / "c", 100000.0, 100000.0, top=1.005)) != []
+    assert made_up_sites.twin(demo, twin_build(tmp_path / "d", 100000.0, 100000.0, level=42.03)) != []
+    assert made_up_sites.twin(demo, twin_build(tmp_path / "e", 100000.0, 100000.0, picture=(200, 30, 30))) != []
+
+
+def test_the_report_holds_the_abroad_site_to_the_demo(tmp_path, capsys):
+    for name in ("demo", "abroad"):
+        (tmp_path / f"base-{name}.status").write_text("failed" if name == "abroad" else "ok", encoding="utf-8")
+        (tmp_path / f"head-{name}.status").write_text("ok", encoding="utf-8")
+    twin_build(tmp_path / "head-demo" / "viewer" / "data", 1500000.0, 5500000.0)
+    twin_build(tmp_path / "head-abroad" / "viewer" / "data", 100000.0, 100000.0, top=1.2)
+    twin_build(tmp_path / "base-demo" / "viewer" / "data", 1500000.0, 5500000.0)
+    assert made_up_sites.report(tmp_path) == 1
+    out = capsys.readouterr().out
+    assert "| abroad | failed | ok | builds now |" in out and "doesn't build the demo's model" in out

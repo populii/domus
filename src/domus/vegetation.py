@@ -739,6 +739,12 @@ def bed_texture(path, size=512, seed=29):
     return path
 
 
+def _whole(x):
+    """`x` pixels, rounded up to a whole number: a ratio that is whole but for the arithmetic's last digits counts
+    as whole, so a lawn's picture has the same size whichever grid the site is on."""
+    return int(math.ceil(round(x, 6)))
+
+
 def lawn_box(lawn_poly):
     """The box (E0, N0, E1, N1) a lawn's picture covers: the lawn's own, and 0.2 m round it."""
     e0, n0, e1, n1 = lawn_poly.bounds
@@ -757,8 +763,8 @@ def lawn_plain_box(lawn_poly, reach, px=0.025):
     """The box of a lawn's plain picture, grown to take in `reach` (E0, N0, E1, N1) as well: the lawn's own
     picture's box and whole pixels round it. Returns the box and the pixels added (west, east, south, north)."""
     e0, n0, e1, n1 = lawn_box(lawn_poly)
-    grow = (max(0, math.ceil((e0 - reach[0]) / px)), max(0, math.ceil((reach[2] - e1) / px)),
-            max(0, math.ceil((n0 - reach[1]) / px)), max(0, math.ceil((reach[3] - n1) / px)))
+    grow = (max(0, _whole((e0 - reach[0]) / px)), max(0, _whole((reach[2] - e1) / px)),
+            max(0, _whole((n0 - reach[1]) / px)), max(0, _whole((reach[3] - n1) / px)))
     return (e0 - grow[0] * px, n0 - grow[2] * px, e1 + grow[1] * px, n1 + grow[3] * px), grow
 
 
@@ -791,7 +797,7 @@ def lawn_texture(path, lawn_poly, colour, patches, px=0.025, seed=11):
 
     rng = np.random.default_rng(seed)
     e0, n0, e1, n1 = lawn_box(lawn_poly)
-    w, h = int(math.ceil((e1 - e0) / px)), int(math.ceil((n1 - n0) / px))
+    w, h = _whole((e1 - e0) / px), _whole((n1 - n0) / px)
     E, N = np.meshgrid(e0 + (np.arange(w) + 0.5) * px, n1 - (np.arange(h) + 0.5) * px)
     mott = _noise((h, w), rng, ((40, 1.0), (12, 0.6), (3, 0.35)), wrap=False)
     blades = rng.normal(size=(h, w))

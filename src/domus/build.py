@@ -74,6 +74,11 @@ def r(a, nd=3):
     return [round(float(v), nd) for v in np.ravel(a)]
 
 
+def datum_note(vertical):
+    """" (NZVD2016)" after a name of something with heights on that datum; nothing for a datum the site doesn't name."""
+    return f" ({vertical})" if vertical else ""
+
+
 def mesh_json(m, frame, colour, name, **extra):
     v = frame.xyz(m.vertices)
     return {"type": "mesh", "name": name, "colour": colour, "positions": r(v),
@@ -401,9 +406,12 @@ def option_layers(opt, res, frame, extent, cfg, existing_walls, lawns=(), existi
                 pictures.append(host["id"])
             continue
         tile = 0.5 if lawn else 2.0      # the grass tile's and the planted bed tile's size on the ground
+        # Tiled from the viewer's origin: from the grid's own, millions of tiles away, the viewer's 32-bit numbers
+        # couldn't place the texture within a tile.
         out.append({**mesh_json(m, frame, "#6f9a48" if lawn else "#6b5a45",
                                 f"{opt['short']}: {t.name} ({t.poly.area:.0f} m2)"),
-                    "id": f"option-{oid}-terrace-{t.id}", "role": "skin", "uv": r(m.vertices[:, :2] / tile, 4),
+                    "id": f"option-{oid}-terrace-{t.id}", "role": "skin",
+                    "uv": r((m.vertices[:, :2] - (frame.e0, frame.n0)) / tile, 4),
                     "texture": "grass-detail.jpg" if lawn else "bed.jpg", "repeat": True,
                     "tint": "#7aa552" if lawn else None, **tag})
     # The lawns that are there stay drawn where the option leaves them: on its ground inside the mask, less its
@@ -474,7 +482,7 @@ def option_layers(opt, res, frame, extent, cfg, existing_walls, lawns=(), existi
     levels = np.arange(np.floor(np.nanmin(H)), np.ceil(np.nanmax(H)) + 0.01, 0.25)
     cs = terrain.contours(E, N, H, levels)
     segs = [[(x0, y0, lv + 0.03), (x1, y1, lv + 0.03)] for lv in levels for x0, y0, x1, y1 in cs[lv]]
-    out.append({**lines_json(segs, frame, "#3d3a33", f"{opt['short']}: contours 0.25 m ({cfg.get('crs', {}).get('vertical', 'NZVD2016')})", "z"),
+    out.append({**lines_json(segs, frame, "#3d3a33", f"{opt['short']}: contours 0.25 m{datum_note(cfg.get('crs', {}).get('vertical', 'NZVD2016'))}", "z"),
                 "id": f"option-{oid}-contours", "role": "contours", **tag,
                 "labels": [{"text": f"{lv:.0f}", "at": r(frame.xyz([[*cs[lv][len(cs[lv]) // 2][:2], lv + 0.1]])[0], 2)}
                            for lv in levels if abs(lv - round(lv)) < 1e-6 and cs.get(lv)]})
@@ -568,7 +576,7 @@ def add_contours(b):
         for lv in sel:
             for x0, y0, x1, y1 in cs[lv]:
                 segs.append([(x0, y0, lv + 0.03), (x1, y1, lv + 0.03)])
-        layers.append({**lines_json(segs, frame, colour, f"{name} ({vertical})", "z"),
+        layers.append({**lines_json(segs, frame, colour, f"{name}{datum_note(vertical)}", "z"),
                        "id": "contours-major" if sel is major else "contours-minor", "group": "Ground",
                        "labels": [{"text": f"{lv:.0f}", "at": r(frame.xyz([[*cs[lv][len(cs[lv]) // 2][:2], lv + 0.1]])[0], 2)}
                                   for lv in major if cs.get(lv)] if sel is major else []})
@@ -767,7 +775,8 @@ def add_marks(b):
                           "at": r(frame.xyz([[e, n, float(ground(e, n)[0]) + 0.25]])[0], 2)})
     if marks:
         layers.append({"type": "labels", "id": "marks", "group": "Survey", "visible": False,
-                       "name": labels.get("marks", f"Survey marks and drains (heights {vertical})"), "items": marks})
+                       "name": labels.get("marks", "Survey marks and drains" + (f" (heights {vertical})" if vertical else "")),
+                       "items": marks})
 
 
 def add_vegetation(b):

@@ -1265,9 +1265,11 @@ $("siteTitle").textContent = model.heading;
 $("siteSub").textContent = model.subtitle || "";
 $("aboutModel").textContent = model.about;
 $("aboutModel").closest("section").hidden = !model.about;
-$("datum").innerHTML = `Grid ${esc(model.crs)}<br>Heights ${esc(model.vertical)}` +
-  DATUMS.map((d) => ` · ${esc(d.label)} = ${esc(model.vertical)} + ${d.offset_m.toFixed(2)} m`).join("");
-$("datumShort").textContent = `${model.crs}, ${model.vertical}`;
+// A site's height datum can go unnamed (a site with its own data, abroad): its heights are then the model's.
+const HEIGHTS = model.vertical || "the model's heights";
+$("datum").innerHTML = `Grid ${esc(model.crs)}<br>Heights ${model.vertical ? esc(model.vertical) : "on a datum the site doesn't name"}` +
+  DATUMS.map((d) => ` · ${esc(d.label)} = ${esc(HEIGHTS)} + ${d.offset_m.toFixed(2)} m`).join("");
+$("datumShort").textContent = [model.crs, model.vertical].filter(Boolean).join(", ");
 $("foot").innerHTML = `Built ${esc(model.built.replace("T", " ").replace("+00:00", " UTC"))}${model.commit ? ` from ${esc(model.commit)}` : ""}.<br>${esc(model.attribution)}`;
 
 // Views. Their positions are at true scale; with the vertical scale raised, heights follow it.
@@ -1607,7 +1609,7 @@ function readPoint({ hit, local }) {
   const [E, N, H] = site(local);
   $("inspector").hidden = false;
   updateHint();
-  $("readout").innerHTML = [["mE", fmt(E, 2)], ["mN", fmt(N, 2)], [model.vertical, `${fmt(H, 2)} m`],
+  $("readout").innerHTML = [["mE", fmt(E, 2)], ["mN", fmt(N, 2)], [model.vertical || "Height", `${fmt(H, 2)} m`],
     ...DATUMS.map((d) => [d.label, fmt(H + d.offset_m, 2)])].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
   placeMarker(local);
   const layer = hit.object.userData.layer;
