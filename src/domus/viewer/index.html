@@ -182,7 +182,7 @@ details > summary { cursor: pointer; font-size: 13px; color: var(--accent); marg
 .north { width: 36px; height: 36px; pointer-events: auto; cursor: pointer; color: var(--ink); }
 /* What sits over the model's top left: what the tool wants next. */
 .over {
-  position: absolute; z-index: 2; top: 10px; left: max(10px, env(safe-area-inset-left, 0px)); right: 56px;
+  position: absolute; z-index: 2; top: 10px; left: max(10px, env(safe-area-inset-left, 0px)); right: 150px;   /* clear of the pad and the view gizmo */
   display: grid; justify-items: start; gap: 6px; pointer-events: none;
 }
 .status { font: 500 13px var(--font-body); color: var(--muted); }
@@ -527,13 +527,17 @@ details > summary { cursor: pointer; font-size: 13px; color: var(--accent); marg
 { "imports": {
   "three": "./vendor/three/three.module.js",
   "three/addons/": "./vendor/three/addons/",
-  "three-mesh-bvh": "./vendor/three-mesh-bvh/index.module.js"
+  "three-mesh-bvh": "./vendor/three-mesh-bvh/index.module.js",
+  "camera-controls": "./vendor/camera-controls/camera-controls.module.js",
+  "three-viewport-gizmo": "./vendor/three-viewport-gizmo/three-viewport-gizmo.js"
 } }
 </script>
 <script type="module">
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import CameraControls from "camera-controls";
+import { ViewportGizmo } from "three-viewport-gizmo";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
@@ -571,7 +575,7 @@ const canvas = $("view");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;    // soft PCF is gone from three r18x; PCF filters the edge itself
 const scene = new THREE.Scene();
 // The model and the measurements drawn on it; its y scale is the vertical exaggeration, so
 // everything measured is read back in its local (true) coordinates.
@@ -579,10 +583,55 @@ const root = new THREE.Group();
 scene.add(root);
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
 const labelRenderer = new CSS2DRenderer({ element: $("labels") });
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true;
+// Camera controls (camera-controls). Everything below reads and moves the camera as an orbit about
+// `controls.target`, the way it did with three's OrbitControls: code that moves camera.position or the target
+// itself and calls controls.update() has the change taken over at once; drags, pinches and the wheel ease.
+CameraControls.install({ THREE: { Vector2: THREE.Vector2, Vector3: THREE.Vector3, Vector4: THREE.Vector4,
+  Quaternion: THREE.Quaternion, Matrix4: THREE.Matrix4, Spherical: THREE.Spherical, Box3: THREE.Box3,
+  Sphere: THREE.Sphere, Raycaster: THREE.Raycaster } });
+const cameraControls = new CameraControls(camera, canvas);
+cameraControls.dollyToCursor = true;
+// Panning slides along the ground (camera-controls' SCREEN_PAN: across the screen and forward, not up).
+cameraControls.mouseButtons.right = CameraControls.ACTION.SCREEN_PAN;
+cameraControls.touches.two = CameraControls.ACTION.TOUCH_DOLLY_SCREEN_PAN;
+cameraControls.smoothTime = 0.12;
+cameraControls.draggingSmoothTime = 0.06;
+cameraControls.minDistance = 0.3;
+// Wheel and pinch share one dolly speed in camera-controls; these match how far OrbitControls moved for each.
+const DOLLY_WHEEL = 0.3, DOLLY_PINCH = 3;
+cameraControls.dollySpeed = DOLLY_WHEEL;
+canvas.addEventListener("pointerdown", (e) => { cameraControls.dollySpeed = e.pointerType === "touch" ? DOLLY_PINCH : DOLLY_WHEEL; }, true);
+canvas.addEventListener("wheel", () => { cameraControls.dollySpeed = DOLLY_WHEEL; }, { capture: true, passive: true });
+const controls = {
+  cameraControls,
+  target: new THREE.Vector3(),
+  get maxPolarAngle() { return cameraControls.maxPolarAngle; },
+  set maxPolarAngle(a) { cameraControls.maxPolarAngle = a; },
+  get enabled() { return cameraControls.enabled; },
+  set enabled(on) { cameraControls.enabled = on; },
+  _pos: new THREE.Vector3(NaN), _tgt: new THREE.Vector3(NaN), _timer: new THREE.Timer(), _on: { change: new Set() },
+  addEventListener(type, fn) {
+    if (type === "change") this._on.change.add(fn);
+    else cameraControls.addEventListener({ start: "controlstart", end: "controlend" }[type] ?? type, fn);
+  },
+  removeEventListener(type, fn) {
+    if (type === "change") this._on.change.delete(fn);
+    else cameraControls.removeEventListener({ start: "controlstart", end: "controlend" }[type] ?? type, fn);
+  },
+  update() {
+    if (!camera.position.equals(this._pos) || !this.target.equals(this._tgt)) {
+      cameraControls.setLookAt(...camera.position.toArray(), ...this.target.toArray(), false);
+    }
+    this._timer.update();
+    const moved = cameraControls.update(this._timer.getDelta());
+    cameraControls.getTarget(this.target);
+    this._pos.copy(camera.position);
+    this._tgt.copy(this.target);
+    if (moved) for (const fn of this._on.change) fn({ type: "change" });
+    return moved;
+  },
+};
 controls.maxPolarAngle = Math.PI * 0.495;
-controls.zoomToCursor = true;
 
 function applySky() {
   scene.background = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("--sky").trim());
@@ -1271,7 +1320,6 @@ function stepFlight(now) {
   if (f >= 1) flight = null;
 }
 controls.addEventListener("start", () => { flight = null; });
-controls.screenSpacePanning = false;    // panning slides along the ground
 
 // Navigation pad and keys
 const sph = new THREE.Spherical();
@@ -1363,9 +1411,10 @@ for (const b of document.querySelectorAll("[data-nav]")) {
 }
 function setPanDrag(on) {
   $("panMode").setAttribute("aria-pressed", String(on));
-  controls.mouseButtons.LEFT = on ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
-  controls.mouseButtons.RIGHT = on ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
-  controls.touches.ONE = on ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE;
+  const A = CameraControls.ACTION;
+  cameraControls.mouseButtons.left = on ? A.SCREEN_PAN : A.ROTATE;
+  cameraControls.mouseButtons.right = on ? A.ROTATE : A.SCREEN_PAN;
+  cameraControls.touches.one = on ? A.TOUCH_SCREEN_PAN : A.TOUCH_ROTATE;
 }
 $("panMode").addEventListener("click", () => setPanDrag($("panMode").getAttribute("aria-pressed") !== "true"));
 $("north").addEventListener("click", faceNorth);
@@ -2144,7 +2193,7 @@ canvas.addEventListener("pointerdown", (e) => { down = [e.clientX, e.clientY]; }
 canvas.addEventListener("pointerup", (e) => {
   const moved = !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4;
   down = null;
-  if (moved || e.button !== 0) return;
+  if (moved || e.button !== 0 || turn.axis) return;    // a click on the turning ring isn't a click on the model
   const p = pickAt(e.clientX, e.clientY, tool === "select");
   if (!p && tool !== "select") return;
   if (tool === "select") {
@@ -2722,7 +2771,7 @@ $("sketchSend").addEventListener("click", async () => {
 // at that corner (Shift: the whole wall) or an area's level, and the blue square moves it all.
 // Double-click a corner, or press Delete after touching it, to remove it.
 const SHAPE_HINT = "Shaping: drag a white corner to move it (Alt stops snapping, or set it by number in the panel), a small dot to add a corner, an orange diamond up or down " +
-  "for height (Shift: whole wall), the blue square to move it all. Double-click a corner to remove it. Esc when done.";
+  "for height (Shift: whole wall), the blue square to move it all, the ring to turn it (5° steps, Alt for any angle). Double-click a corner to remove it. Esc when done.";
 const handleGroup = new THREE.Group();
 scene.add(handleGroup);
 const H_GEO = { v: new THREE.SphereGeometry(1, 16, 12), m: new THREE.SphereGeometry(0.6, 12, 8),
@@ -2745,7 +2794,7 @@ function buildHandles() {
   handleGroup.clear();
   handles = [];
   const it = selItem();
-  if (!it) return;
+  if (!it) { placeTurn(null); return; }
   const P = it.pts, closed = it.kind === "area", zf = closed ? areaZ(it) : null;
   const on = (x, z) => (closed ? zf(x, z) : existingY(x, z) ?? 0);
   const add = (kind, i, x, y, z) => {
@@ -2776,6 +2825,7 @@ function buildHandles() {
     const g = existingY(x, z) ?? a.y;
     add("move", -1, x, (wallTop(it, k, g) + wallTop(it, k + 1, g)) / 2 + 0.3, z);
   }
+  placeTurn(it);
 }
 // Each frame: handles sit at their model points and keep the same size on screen; the height
 // handles stand a little up and to the right, so they stay clear of the corners seen from above.
@@ -2927,6 +2977,59 @@ function endDrag() {
   renderSketch();
   updateHint();
 }
+// Turning a sketch (three's TransformControls): a ring about the selected wall's or area's middle turns
+// it in plan about there, in 5° steps (Alt: any angle). Its corners keep to the ground as they move.
+const turnPivot = new THREE.Object3D();
+scene.add(turnPivot);
+const turn = new TransformControls(camera, canvas);
+turn.setMode("rotate");
+turn.setSpace("world");
+turn.showX = false;
+turn.showZ = false;
+turn.size = 0.5;
+turn.setRotationSnap(THREE.MathUtils.degToRad(5));
+const turnHelper = turn.getHelper();
+scene.add(turnHelper);
+let turning = null;     // { it, centre (model metres), orig }
+function placeTurn(it) {
+  if (turning) return;                        // mid-turn the ring stays where it started
+  if (!it || active || it.pts.length < 2) { turn.detach(); return; }
+  const c = centroid(it.pts);
+  const y = it.kind === "area" ? areaZ(it)(c.x, c.z) : existingY(c.x, c.z) ?? c.y;
+  turnPivot.position.copy(root.localToWorld(new THREE.Vector3(c.x, y, c.z)));
+  turnPivot.rotation.set(0, 0, 0);
+  turn.attach(turnPivot);
+}
+// Over the ring the camera controls stand back, so a drag on it turns the sketch, not the view.
+turn.addEventListener("axis-changed", (e) => { if (!drag && !turning) controls.enabled = !e.value; });
+turn.addEventListener("mouseDown", () => {
+  const it = selItem();
+  if (!it) return;
+  turn.setRotationSnap(altHeld ? null : THREE.MathUtils.degToRad(5));
+  turning = { it, centre: centroid(it.pts), orig: it.pts.map((p) => p.clone()) };
+  controls.enabled = false;
+});
+turn.addEventListener("objectChange", () => {
+  if (!turning) return;
+  const { it, centre, orig } = turning, a = turnPivot.rotation.y, up = new THREE.Vector3(0, 1, 0);
+  it.pts.forEach((p, i) => {
+    const d = new THREE.Vector3(orig[i].x - centre.x, 0, orig[i].z - centre.z).applyAxisAngle(up, a);
+    p.set(centre.x + d.x, 0, centre.z + d.z);
+    p.y = existingY(p.x, p.z) ?? orig[i].y;
+  });
+  drawSketch();
+  buildHandles();
+  const deg = Math.round(THREE.MathUtils.radToDeg(a) * 10) / 10;
+  $("hintText").textContent = `Turned ${deg > 0 ? "+" : ""}${deg}° (anticlockwise seen from above is +)`;
+});
+turn.addEventListener("mouseUp", () => {
+  if (!turning) return;
+  turning = null;
+  controls.enabled = true;
+  renderSketch();
+  updateHint();
+});
+
 // Handles answer before the camera controls do: listen on the window in the capture phase.
 window.addEventListener("pointerdown", (e) => {
   if (e.target !== canvas || e.button !== 0 || active || drag || !handles.length) return;
@@ -3124,10 +3227,35 @@ function resize() {
 new ResizeObserver(resize).observe($("stage"));
 resize();
 
+// A theme colour as the browser resolves it (the theme's tokens can be color-mix() expressions).
+function cssColour(name) {
+  const probe = document.createElement("span");
+  probe.style.color = `var(${name})`;
+  document.body.append(probe);
+  const c = getComputedStyle(probe).color;
+  probe.remove();
+  return c;
+}
+// View gizmo (three-viewport-gizmo), left of the navigation pad: click a side to look from it, drag it to turn the view. The axes are
+// the compass: x east, z south, y up. There is no view from below, as the orbit stops at the horizon.
+const gizmo = new ViewportGizmo(camera, renderer, {
+  container: $("stage"), placement: "top-right", offset: { right: 58, top: 10 }, size: 84, type: "sphere",
+  className: "viewgizmo", animated: !reduceMotion,
+  font: { family: css.getPropertyValue("--font-body").trim() || "sans-serif", weight: 600 },
+  background: { enabled: true, color: cssColour("--panel"), opacity: 0.85 },
+  x: { label: "E", labelColor: "#ffffff" }, z: { label: "S", labelColor: "#ffffff" },
+  y: { label: "Up", labelColor: "#1d2a10" },
+  nx: { label: "W", scale: 0.55, color: "#ff3653", labelColor: "#ffffff", opacity: 0.85 },
+  nz: { label: "N", scale: 0.7, color: "#2c8fff", labelColor: "#ffffff" },
+  ny: { enabled: false },
+});
+gizmo.attachControls(controls);
+gizmo.addEventListener("start", () => { flight = null; });
+
 // Scriptable hook (used to line the model up with photos): positions are viewer coordinates
 // (x east, y up, z south of the origin); siteViewer.site(E, N, H) converts site coordinates.
 window.siteViewer = {
-  camera, controls, model, renderer, scene, root,
+  camera, controls, cameraControls, gizmo, turn, model, renderer, scene, root,
   site: (E, N, H) => [E - E0, H - H0, -(N - N0)],
   setCamera(pos, target, fov) {
     flight = null;
@@ -3146,6 +3274,7 @@ renderer.setAnimationLoop((now) => {
   updateHandles();
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
+  gizmo.domUpdate().render();
   updateHud();
 });
 </script>

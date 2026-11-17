@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The viewer runs on three.js r187 (was r170), with three-mesh-bvh 0.9.18. Shadows use PCF filtering, as soft PCF is gone from three.
+- The camera is driven by camera-controls instead of three's OrbitControls. Dragging, panning along the ground, the wheel, pinching, the navigation pad, the keys, double-click and saved views work as before, and drags and zooms ease to a stop.
+- A view gizmo at the top right shows north, east, south and up: click a side to look from it, or drag it to turn the view.
+- A selected sketch wall or level area has a ring to turn it about its middle in plan, in 5° steps (Alt for any angle), with undo.
+
 ## 2026.11.25
 
 - The house's parts are general. Each feature in `house.geojson` besides the walls and openings says what it is in `part`: `bay`, `porch`, `steps`, `block` (decks, landings, steps, planters, units on the ground), `wall`, `balustrade`, `chimney`, `tank` or `retaining-walls`, with its sides, heights, colours and viewer layer in its own properties ([docs/site-format.md](docs/site-format.md#house-parts)). A porch can stand on any side of a house with walls on whichever sides it has, and steps can face any way. **A site made before this needs its parts given a `part`**; the build names any that have none, and leaves them out.

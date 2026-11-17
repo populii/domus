@@ -203,8 +203,8 @@ to prove a change left a model alone.
 
 ## Thanks and licences
 
-Domus stands on a lot of generous work: LINZ and its data partners (CC BY 4.0), OpenStreetMap contributors (ODbL), three.js and
-three-mesh-bvh (MIT) and COLMAP via pycolmap.
+Domus stands on a lot of generous work: LINZ and its data partners (CC BY 4.0), OpenStreetMap contributors (ODbL), three.js,
+three-mesh-bvh, camera-controls and three-viewport-gizmo (MIT) and COLMAP via pycolmap.
 
 Domus itself is under the [MIT licence](LICENSE): use it, change it and share it, as long as the licence notice goes with it. The
-bundled three.js and three-mesh-bvh are MIT too, in `src/domus/viewer/vendor/`.
+bundled three.js, three-mesh-bvh, camera-controls and three-viewport-gizmo are MIT too, in `src/domus/viewer/vendor/`.
