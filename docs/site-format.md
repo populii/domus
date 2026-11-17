@@ -56,6 +56,8 @@ plants, `house.py` for the house.
   [House parts](#house-parts).
 - **`walls-existing.geojson`**: LineString along each wall's face, with a top height as each point's third
   coordinate or a `height_m`. `retained_side` is `left` or `right` looking along the line; `material`, `thickness_m`.
+  A wall with posts, such as `timber`, has one at every point of its line. `open_ends` (`start`, `end`) names an end
+  with none, where its boards run on, as behind another wall.
 - **`services.geojson`**: LineStrings for drains. A Point with `line` (a drain's id) and `invert_m` gives a level
   along it. Without any, a drain's id in `[services] assumed_depth_m` draws it at that depth.
 - **`title.geojson`**: From `domus title`: the lot's title (`kind` `title`, with `title_no`, `estate`, `type`) and the

@@ -15,6 +15,7 @@ import numpy as np
 
 from . import terrain
 from .crs import ROOT
+from .errors import DomusError
 from .mesh import Mesh, offset_behind, prism, wall_strip
 
 TEXTURES = ROOT / "data" / "walls"
@@ -96,6 +97,8 @@ def from_feature(feature):
         "side": 1 if p.get("retained_side", "left") == "left" else -1,
         "line": line[:, :2],
         "height": p.get("height_m"),
+        # ends of the line with no post, for a wall with posts: its boards run on to them, as behind another wall
+        "open_ends": open_ends(p),
         "properties": p,
     }
     chain = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(line[:, :2], axis=0).T))])
@@ -106,6 +109,16 @@ def from_feature(feature):
         w["toe"] = np.asarray(p["toe_m"], float)
         w["toe_chain"] = chain
     return w
+
+
+def open_ends(props):
+    """A wall's `open_ends`: "start" and "end", the ends of its line with no post."""
+    ends = props.get("open_ends") or []
+    ends = [ends] if isinstance(ends, str) else list(ends)
+    wrong = [e for e in ends if e not in ("start", "end")]
+    if wrong:
+        raise DomusError(f"{props.get('id')}: open_ends can be \"start\" and \"end\", not {', '.join(map(repr, wrong))}")
+    return tuple(sorted(set(ends), key=("start", "end").index))
 
 
 def texture_file(material):
@@ -176,13 +189,22 @@ def wall_image(wall, out, painted=False):
 
 def texture_u(wall, chain):
     """u (in copies of the wall's picture) at `chain` along the wall: true scale, or for a
-    material with bays a whole number of copies on each segment of the line."""
+    material with bays a whole number of copies on each segment of the line. A segment running to an open end
+    (`open_ends`) has no post there: its boards go on at true scale from the post before it."""
     (tu, _), bays = texture_size(wall)
     if not bays:
         return chain / tu
     seg = np.hypot(*np.diff(wall["line"][:, :2], axis=0).T)
     copies = np.maximum(1, np.round(seg / tu))
-    return np.interp(chain, np.concatenate([[0], np.cumsum(seg)]), np.concatenate([[0], np.cumsum(copies)]))
+    ends = wall.get("open_ends", ())
+    if not ends:
+        return np.interp(chain, np.concatenate([[0], np.cumsum(seg)]), np.concatenate([[0], np.cumsum(copies)]))
+    if "start" in ends:
+        copies[0] = seg[0] / tu
+    if "end" in ends:
+        copies[-1] = seg[-1] / tu
+    at = np.concatenate([[0], np.cumsum(copies)]) - (copies[0] if "start" in ends else 0.0)    # whole copies from the first post
+    return np.interp(chain, np.concatenate([[0], np.cumsum(seg)]), at)
 
 
 POST_WIDTH_M = 0.2      # along the wall: the post the bay image has half of at each side
@@ -192,15 +214,25 @@ POST_DEPTH_M = 0.15     # and how far back into the wall it goes
 
 def post_positions(wall):
     """Distances along a wall with bays where a post stands: every point of its line (its ends, corners and
-    steps) and between them where the bay image repeats, so the posts are the ones its picture shows."""
+    steps) but an open end, and between them where the bay image repeats, so the posts are the ones its picture
+    shows."""
     (tu, _), _ = texture_size(wall)
     seg = np.hypot(*np.diff(wall["line"][:, :2], axis=0).T)
     start = np.concatenate([[0], np.cumsum(seg)])
-    out = [start[-1]]
-    for s0, length in zip(start[:-1], seg, strict=True):
-        copies = int(max(1, round(length / tu)))
-        out += list(s0 + length * np.arange(copies) / copies)
-    return np.unique(np.round(out, 6))
+    ends = wall.get("open_ends", ())
+    if not ends:
+        out = [start[-1]]
+        for s0, length in zip(start[:-1], seg, strict=True):
+            copies = int(max(1, round(length / tu)))
+            out += list(s0 + length * np.arange(copies) / copies)
+        return np.unique(np.round(out, 6))
+    u = texture_u(wall, start)
+    out = []
+    for s0, length, u0, u1 in zip(start[:-1], seg, u[:-1], u[1:], strict=True):
+        whole = np.arange(math.ceil(u0 - 1e-9), math.floor(u1 + 1e-9) + 1)     # where the picture has a post
+        out += list(s0 + (whole - u0) / (u1 - u0) * length)
+    skip = [start[0]] * ("start" in ends) + [start[-1]] * ("end" in ends)
+    return np.unique(np.round([c for c in out if all(abs(c - s) > 1e-6 for s in skip)], 6))
 
 
 def posts(wall, pts, chain, top, bottom):
@@ -666,6 +698,10 @@ def mesh(wall):
         # The end caps at true scale across the wall's end; with bays, centred on the image's edge,
         # so the end shows the post the image has half of at each side.
         u[m.cap] = (m.uv[m.cap, 0] - (0.5 * wall["thickness"] if bays else 0.0)) / tu
+        for end in wall.get("open_ends", ()) if bays else ():      # boards at an open end, not the post
+            near = np.hypot(*(m.vertices[:, :2] - pts[0 if end == "start" else -1]).T)
+            other = np.hypot(*(m.vertices[:, :2] - pts[-1 if end == "start" else 0]).T)
+            u[m.cap & (near < other)] += 0.5
         m.uv = np.column_stack([u, m.uv[:, 1] / tv])
         if bays:
             cap = m.cap

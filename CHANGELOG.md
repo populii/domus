@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- A wall with posts, such as timber post and board, can end without one: `open_ends` (`start`, `end`) in `walls-existing.geojson` names an end where its boards run on, as behind another wall. The boards there keep their true size from the last post, and the wall's end shows the ends of its boards. Such an end used to get a post that isn't there, and a whole bay squeezed into its last stretch.
+
 ## 2026.11.26
 
 - The image runs on Python 3.14 (was 3.13), and so does a checkout's default `uv` environment. 3.13 still works.
