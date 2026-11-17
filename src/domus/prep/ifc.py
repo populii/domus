@@ -25,8 +25,8 @@ from scipy.spatial import cKDTree
 from shapely.geometry import LineString, MultiPolygon, Polygon
 from shapely.ops import unary_union
 
-from .. import crs, geojson
-from ..crs import site_epsg
+from ..geo import crs, geojson
+from ..geo.crs import site_epsg
 from . import config
 
 

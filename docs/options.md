@@ -2,7 +2,7 @@
 
 One TOML file per retaining-wall scheme. `domus build` reads every
 `options/*.toml` (names starting with `_` are skipped) and turns each into designed ground, walls
-with levels, lawns and beds, and a row in the viewer's options table (`src/domus/design.py`).
+with levels, lawns and beds, and a row in the viewer's options table (`src/domus/options/`).
 `_site.toml` holds what they share: the site frame and `[regrade]`, the part of the lot options may regrade
 (the whole lot unless `s_max` or `polygon_so` narrows it).
 

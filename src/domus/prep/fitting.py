@@ -26,8 +26,8 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from .. import crs
 from ..errors import DomusError
+from ..geo import crs
 from .cloud import read_clouds
 
 
@@ -160,7 +160,7 @@ def face_main():
     ap.add_argument("spec", help="the faces: a JSON file of name: {box, along, model}")
     ap.add_argument("--all", action="store_true", help="every point of a -site cloud, not only those three cameras saw")
     args = ap.parse_args()
-    from .. import design
+    from ..options import design
 
     xyz, _ = read_clouds([args.cloud], args.all)
     so, z = design.frame().so(xyz[:, :2]), xyz[:, 2]
@@ -176,7 +176,7 @@ def points_main():
     ap.add_argument("spec", help="the frames: a JSON list of {frame, plane, points}")
     ap.add_argument("--georef", help="another placement of it than data/video/<TAG>-georef.json")
     args = ap.parse_args()
-    from .. import design
+    from ..options import design
 
     fr = design.frame()
     placed = Placed(args.tag, args.georef)

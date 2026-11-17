@@ -28,7 +28,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy.spatial.transform import Rotation
 
-from .. import crs, geojson, house, terrain
+from ..geo import crs, geojson
+from ..model import house, terrain
 from . import config
 
 

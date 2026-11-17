@@ -141,7 +141,7 @@ def test_a_scan_reaches_the_build(built, site, tmp_path):
     import json
 
     from domus import build, cli
-    from domus.video import export_cloud
+    from domus.capture import export_cloud
 
     ext = json.loads((built / "model.json").read_text(encoding="utf-8"))["extent"]
     e, n = (ext[0] + ext[2]) / 2, (ext[1] + ext[3]) / 2

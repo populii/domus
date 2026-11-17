@@ -22,7 +22,9 @@ import numpy as np
 import shapely
 from shapely.geometry import Polygon
 
-from . import importers, newsite, publicdata
+from . import importers
+from .importers.nz import publicdata
+from .project import newsite
 
 STAND_IN_M = 24.0        # side of the stand-in lot when the source has no parcels
 OVERHANG_M = 0.4
@@ -85,7 +87,7 @@ def osm_importer():
 
 
 def fc(name, features):
-    from . import crs
+    from .geo import crs
 
     return {"type": "FeatureCollection", "name": name,
             "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{crs.site_epsg()}"}}, "features": features}
@@ -142,7 +144,7 @@ def fit_gable(ring, fr, e, n, z):
 
 def fit_hip_rms(ring, fr, e, n, z, keep):
     """How well the best hip of any pitch fits the same cells as another shape, for comparing them (m)."""
-    from . import house
+    from .model import house
 
     local = fr.local(np.column_stack([e, n]))
     inset = house.roof_surface(fr, fr.local(np.asarray(ring[:-1], float)), {"roof_pitch_deg": 45.0, "eaves_overhang_m": OVERHANG_M, "roof_plane_at_wall": 0.0})
@@ -156,7 +158,7 @@ def fit_hip_rms(ring, fr, e, n, z, keep):
 
 def fit_shape(ring, e, n, s, g):
     """Settings for a skillion or gable, if one fits the surface model clearly better than a hip of any pitch. Otherwise None."""
-    from . import house
+    from .model import house
 
     fr = house.HouseFrame(ring[:-1])
 
@@ -233,7 +235,9 @@ def clockwise(ring):
 
 def draft_layers(root, found, lot, source):
     """Run in a process with DOMUS_SITE set to the project, once its rasters are there."""
-    from . import canopy, crs, points, raster, terrain, vegetation
+    from .geo import crs, raster
+    from .importers.nz import points
+    from .model import canopy, terrain, vegetation
 
     site = crs.ROOT / "data" / "site"
     dem = terrain.ground()
@@ -283,7 +287,7 @@ def draft_layers(root, found, lot, source):
 
 
 def _extent():
-    from . import crs
+    from .geo import crs
 
     return crs.settings()["model"]["extent"]
 
@@ -345,21 +349,22 @@ def main(argv=None):
 
 def rest():
     """Runs with DOMUS_SITE set: fetch, draft, build."""
-    from . import build, crs
+    from . import build
+    from .geo import crs
 
     found = json.loads((crs.ROOT / "data" / "public-lookup.json").read_text(encoding="utf-8"))
     lot = json.loads((crs.ROOT / "data" / "site" / "boundary.geojson").read_text(encoding="utf-8"))["features"][0]["geometry"]["coordinates"][0]
     importers.fetch()
     nz = found.get("importer", "nz") == "nz"
     if nz and publicdata.linz_key():
-        from . import title
+        from .importers.nz import title
 
         try:
             title.main([])
         except OSError as e:
             print(f"LINZ's title and easements didn't load ({e}); carrying on without them")
     if nz:
-        from . import points
+        from .importers.nz import points
 
         try:
             points.main([])

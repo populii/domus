@@ -121,7 +121,7 @@ def main(argv=None):
         ed.add_argument("backup", help="a fresh folder for the files as they were")
         ed.add_argument("--apply", action="store_true", help="write the changes (without it, only say what they'd be)")
     args = ap.parse_args(argv)
-    from .. import crs
+    from ..geo import crs
 
     if args.action in ("shift", "edit", "regrade"):
         import json

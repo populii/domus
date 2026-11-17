@@ -288,7 +288,7 @@ def test_steps_can_be_railway_sleepers(two_lawns):
 
 def test_a_walls_back_does_not_fold_at_a_corner():
     """Offset to the inside of a corner, the points near it go to the mitre; to the outside, the corner goes out to it."""
-    from domus.mesh import offset_behind
+    from domus.geo.mesh import offset_behind
 
     line = np.array([[0, 0], [1, 0], [1.9, 0], [2, 0], [2, 0.1], [2, 1], [2, 2]], float)      # east, then north
     assert np.allclose(offset_behind(line, 0.3, 1), [[0, 0.3], [1, 0.3], [1.7, 0.3], [1.7, 0.3], [1.7, 0.3], [1.7, 1], [1.7, 2]])

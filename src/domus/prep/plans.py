@@ -12,10 +12,10 @@ import json
 
 import numpy as np
 
-from .. import crs, geojson
-from ..crs import site_epsg
 from ..errors import DomusError
-from ..georef import apply_affine, find_cross, fit_affine, fit_rigid, fit_similarity, intersect, refine_line
+from ..geo import crs, geojson
+from ..geo.crs import site_epsg
+from ..geo.georef import apply_affine, find_cross, fit_affine, fit_rigid, fit_similarity, intersect, refine_line
 from . import config
 
 MM_PER_PT = 25.4 / 72

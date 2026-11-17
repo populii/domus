@@ -63,10 +63,10 @@ def run(command, rest):
         from . import create
         return create.main(rest)
     if command == "new":
-        from . import newsite
+        from .project import newsite
         return newsite.main(rest)
     if command == "demo":
-        from . import demo
+        from .project import demo
         return demo.main(rest)
     if command == "serve":
         from . import serve
@@ -75,28 +75,28 @@ def run(command, rest):
         from . import importers
         return importers.fetch()
     if command == "canopy":
-        from . import canopy
+        from .model import canopy
         return canopy.map_site()
     if command == "sketch-worker":
-        from . import sketch
+        from .options import sketch
         return sketch.main()
     if command == "marks":
-        from . import marks
+        from .importers.nz import marks
         return marks.main(rest)
     if command == "title":
-        from . import title
+        from .importers.nz import title
         return title.main(rest)
     if command == "points":
-        from . import points
+        from .importers.nz import points
         return points.main(rest)
     if command == "video":
-        from . import video
+        from . import capture as video
         return video.main(rest)
     if command == "prep":
         from . import prep
         return prep.main(rest)
     if command == "scan":
-        from . import scan
+        from .capture import scan
         return scan.main(rest)
     if command == "site":
         from .project import upgrade

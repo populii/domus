@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** Domus's package is laid out by what each part does: `geo/` (grids, rasters, GeoJSON, meshes,
+  fits), `model/` (the ground, house, walls, features, plants, drains), `options/` (the wall options), `build/`,
+  `checks/`, `capture/` (videos and scans), `importers/nz/`, `prep/` and `project/` (ARCHITECTURE.md has the table).
+  The old import paths, such as `domus.terrain` and `domus.video.georef_sfm`, still work and give the same modules, so
+  a site's tools written before keep working.
+
 ## 2026.11.37
 
 - **For site projects:** a process can open several sites. `api.open_site` no longer refuses a second one: each `Site`

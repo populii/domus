@@ -180,8 +180,8 @@ only your own tools read under `[local]`.
 ## Layers
 
 Every feature has an `id` and usually a `name`, `source` and short `confidence`, shown when you click it. Docstrings
-at the top of each module give the full detail: `features.py` for fences, sheds and so on, `vegetation.py` for
-plants, `house.py` for the house.
+at the top of each module give the full detail: `model/features.py` for fences, sheds and so on,
+`model/vegetation.py` for plants, `model/house.py` for the house.
 
 - **`boundary.geojson`**: Polygon per boundary. The main one is drawn and used for the lot's area.
 - **`house.geojson`**: A Polygon with id `house-walls` and a `soffit` height and optional `faces` names, one per edge.

@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from domus import serve
-from domus.video import safe_npz
+from domus.capture import safe_npz
 
 
 @pytest.mark.parametrize("host", ["localhost", "localhost:8765", "app.localhost:1", "127.0.0.1:8765", "10.20.30.40", "[::1]:8765", "[::1]", None, "SITE.example:443"])

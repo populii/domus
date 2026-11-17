@@ -9,7 +9,8 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from .. import canopy, crs, geojson, raster, vegetation
+from ..geo import crs, geojson, raster
+from ..model import canopy, vegetation
 
 
 def main():

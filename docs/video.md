@@ -57,7 +57,7 @@ Every step has `--help`, and `domus video` lists the others.
 
 `place` needs to know how the clip sits on the grid. `data/video/<tag>-control.json` names points marked in the frames
 and their site coordinates, such as house corners from your `house.geojson` and ground heights from the LiDAR. The
-docstring at the top of `src/domus/video/georef_sfm.py` gives every kind of control. Use ground the LiDAR sees
+docstring at the top of `src/domus/capture/georef_sfm.py` gives every kind of control. Use ground the LiDAR sees
 clearly, not lawn that has been regraded or anything under trees, and spread the points out: a short or nearly straight
 line of control can leave the clip tilted about it, which the frames' own vertical (a `plumb` block) prevents.
 

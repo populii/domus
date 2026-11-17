@@ -45,8 +45,8 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .. import crs
 from ..errors import DomusError
+from ..geo import crs
 
 
 def layers_dir():
@@ -176,7 +176,7 @@ def _vertices(geom):
 
 
 def edit(spec, backup, apply=False, say=print):
-    from .. import design
+    from ..options import design
 
     fr = design.frame()
 

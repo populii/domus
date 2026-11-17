@@ -15,8 +15,8 @@ import itertools
 
 import numpy as np
 
-from .. import terrain
 from ..errors import DomusError
+from ..model import terrain
 
 
 def stations(points, step):
@@ -49,7 +49,7 @@ def profile(points, offsets=(0.0,), step=0.5, grid=False):
     if grid:
         to_en, turn = (lambda p: np.asarray(p, float)), 1.0                   # east, north: right is clockwise
     else:
-        from .. import design
+        from ..options import design
 
         fr = design.frame()
         to_en = lambda p: fr.en(np.asarray(p, float))

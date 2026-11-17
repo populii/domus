@@ -7,8 +7,8 @@ import importlib
 import json
 import sys
 
-from .. import crs
 from ..errors import DomusError
+from ..geo import crs
 
 STEPS = {
     "plan-pages": ("plans", "pages", "Pull the page scans out of a PDF"),
@@ -18,7 +18,7 @@ STEPS = {
     "feature-textures": ("textures", "feature_textures", "Cut fence, shed and paving textures from photos"),
     "wall-textures": ("textures", "wall_textures", "Cut wall textures from photos"),
     "house-textures": ("textures", "house_textures", "Rectify house walls from photos and placed video"),
-    "check": ("check", "main", "Adversarial checks of the model against its data, the LiDAR and placed video"),
+    "check": ("domus.checks.model", "main", "Adversarial checks of the model against its data, the LiDAR and placed video"),
     "sections": ("sections", "main", "Cross-sections through the point clouds"),
     "profile": ("profile", "main", "The ground along a line, and either side of it"),
     "cloud": ("cloud", "main", "A placed cloud's ground against the model's or the LiDAR's, cell by cell"),
@@ -48,4 +48,4 @@ def main(argv):
         return 0 if not argv else 2
     module, func, _ = STEPS[argv[0]]
     sys.argv = [f"domus prep {argv[0]}", *argv[1:]]
-    return getattr(importlib.import_module(f".{module}", __name__), func)()
+    return getattr(importlib.import_module(module if module.startswith("domus.") else f".{module}", __name__), func)()

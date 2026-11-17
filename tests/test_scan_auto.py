@@ -9,7 +9,7 @@ import pytest
 from scipy.spatial.transform import Rotation
 
 from domus import serve
-from domus.sfm_georef import apply, horn_initial
+from domus.capture.sfm_georef import apply, horn_initial
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def walk():
 
 
 def test_the_fit_recovers_scale_and_place(site, walk):
-    from domus.video import auto
+    from domus.capture import auto
 
     t, pos, local = walk
     params, res = auto.fit_to_track(dict(zip(t.tolist(), local)), t, pos)
@@ -33,7 +33,7 @@ def test_the_fit_recovers_scale_and_place(site, walk):
 
 
 def test_a_short_walk_is_refused(site, walk):
-    from domus.video import auto
+    from domus.capture import auto
 
     t, pos, local = walk
     still = pos[:12] * 0 + pos[0]
@@ -42,7 +42,7 @@ def test_a_short_walk_is_refused(site, walk):
 
 
 def test_noise_in_the_track_is_reported(site, walk):
-    from domus.video import auto
+    from domus.capture import auto
 
     t, pos, local = walk
     noisy = pos + np.random.default_rng(1).normal(0, 0.3, pos.shape)
@@ -52,7 +52,7 @@ def test_noise_in_the_track_is_reported(site, walk):
 
 
 def test_only_times_inside_the_track_are_used(site, walk):
-    from domus.video import auto
+    from domus.capture import auto
 
     t, pos, local = walk
     a, b = auto.match(dict(zip((t + 15).tolist(), local)), t, pos)
@@ -61,7 +61,7 @@ def test_only_times_inside_the_track_are_used(site, walk):
 
 
 def test_pose_track_turns_viewer_metres_into_the_grid(site):
-    from domus.video import auto
+    from domus.capture import auto
 
     poses = {"started": 1000, "frames": [{"t": 1000, "x": 0, "z": 0, "y": 0}, {"t": 2000, "x": 2, "z": 3, "y": 0.5}]}
     t, pos = auto.pose_track(poses, [100.0, 200.0, 30.0], lambda e, n: np.full(np.shape(e), 40.0))
@@ -70,7 +70,7 @@ def test_pose_track_turns_viewer_metres_into_the_grid(site):
 
 
 def test_ground_shift_uses_the_lowest_points(site):
-    from domus.video import auto
+    from domus.capture import auto
 
     e, n = np.meshgrid(np.arange(0, 10.0, 0.5), np.arange(0, 10.0, 0.5))
     floor = np.column_stack([e.ravel(), n.ravel(), np.full(e.size, 38.0)])
@@ -79,7 +79,7 @@ def test_ground_shift_uses_the_lowest_points(site):
 
 
 def test_cloud_rebuild_is_held_back_when_listed_clouds_are_missing(site):
-    from domus.video import auto
+    from domus.capture import auto
 
     assert auto.missing_clouds({"video": {"clouds": ["nowhere-site"]}}) == ["nowhere-site"]
     assert auto.missing_clouds({}) == []

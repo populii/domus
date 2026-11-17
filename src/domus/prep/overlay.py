@@ -29,9 +29,10 @@ import numpy as np
 import shapely
 from PIL import Image, ImageDraw
 
-from .. import crs, geojson, terrain
-from ..crs import settings
 from ..errors import DomusError
+from ..geo import crs, geojson
+from ..geo.crs import settings
+from ..model import terrain
 from .fitting import Placed
 
 GROUPS = ("house", "walls", "features", "ground", "boundary", "plants")
@@ -100,7 +101,8 @@ class Scene:
         self.fl = settings().get("house", {}).get("fl_upper")
         self.option_walls = []
         if option:
-            from .. import design, options
+            from .. import options
+            from ..options import design
 
             path = crs.ROOT / "options" / (option if option.endswith(".toml") else f"{option}.toml")
             if not path.exists():

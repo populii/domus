@@ -14,7 +14,7 @@ import itertools
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .. import crs, geojson, raster
+from ..geo import crs, geojson, raster
 from . import config
 
 

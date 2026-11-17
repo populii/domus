@@ -179,7 +179,7 @@ domus video export
 ```
 
 Placing needs control you write by hand: see **Hand fitting** below. Long clips take a while on a CPU, so run them in the background. Read [docs/video.md](docs/video.md) first, and the docstring of
-`src/domus/video/georef_sfm.py` for the kinds of control. Watch for:
+`src/domus/capture/georef_sfm.py` for the kinds of control. Watch for:
 
 - **Wrong focal length:** the usual reason a clip falls apart.
 - **Control on ground that has changed:** don't hold a clip on LiDAR that's since been regraded, or anywhere under trees.
@@ -230,7 +230,7 @@ Pixels have (0, 0) at the centre of the top-left pixel, in the frames in `source
 ### 3. Write the control
 
 `data/video/<tag>-control.json` holds the marks to known site coordinates. Take them from the most trusted source: survey marks, then measured points, then
-plans. A null height reads off the LiDAR ground. The docstring of `src/domus/video/georef_sfm.py` has every option.
+plans. A null height reads off the LiDAR ground. The docstring of `src/domus/capture/georef_sfm.py` has every option.
 
 ```json
 {"clip": "walk-colmap", "anchor": "corner-ne-base", "vertical": "corner-ne-eave",
@@ -288,7 +288,7 @@ The drafts are a starting point. Using everything so far, and **Hand fitting** a
 
 - **`house.geojson`:** outline, openings, porches and decks. Fit `[house]` to documents and clips.
 - **`trees.geojson`:** merge or split drafted crowns, name species from photos, and add lawns and beds.
-- **`features-*.geojson`:** fences, sheds, paths and posts. The docstring in `features.py` has the format.
+- **`features-*.geojson`:** fences, sheds, paths and posts. The docstring in `model/features.py` has the format.
 - **`services.geojson`:** drains, with `invert_m` points. Mark any assumed depth as assumed.
 - **Textures:** `domus prep feature-textures --check DIR`, `wall-textures`, `house-textures`. Look at the `--check` output.
 

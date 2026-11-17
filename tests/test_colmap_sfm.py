@@ -18,7 +18,7 @@ F, K, W, H = 640.0, 0.03, 1440, 1080          # a wide-lens frame, with strong d
 
 
 def tool():
-    from domus.video import colmap_sfm as mod
+    from domus.capture import colmap_sfm as mod
 
     return mod
 

@@ -43,6 +43,26 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 4. **Nothing about one property is built into common:** no names, coordinates, documents or one house's looks.
 5. **Real sites stay out of git.**
 
+## The package
+
+`src/domus` is laid out by what each part does:
+
+| Part | What's in it |
+|---|---|
+| `geo/` | The site's grid and datums (`crs`), rasters read on their own grids, GeoJSON, meshes, fits |
+| `model/` | The model's parts: the ground (`terrain` reads the site's, `tin` triangulates), the house and its looks, walls, small features, plants (`canopy` reads the site's, `vegetation` draws), drains |
+| `options/` | The wall options: `scheme` works them out, `design` reads a site's for it, `sketch` turns a drawing into one |
+| `build/` | The build, and its cache |
+| `checks/` | `domus prep check`'s rules, and the viewer's checklist and video walk (`enrich`) |
+| `capture/` | Videos into placed clouds, and phone scans |
+| `prep/` | A site's documents and photos into its data |
+| `importers/` | Places into site folders: New Zealand's (`nz/`), anywhere's (`osm`) |
+| `project/` | The site folder: the Site Domus reads, its settings' schema, formats and upgrades, trusted extensions, layer edits, `domus new` and the demo |
+| top level | The command line, the server, the public API (`api`, `testing`), `create`, the viewer and the templates |
+
+The modules that moved there in 2026.11.38 can still be imported by their old names (`domus.terrain`, `domus.video`,
+...), which are the same modules, so a site's tools written before keep working.
+
 ## Settings and imports
 
 Every setting a site can hold is declared once, with its default and a line of help, in `domus.project.schema`, and the

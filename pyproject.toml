@@ -69,15 +69,16 @@ name = "The server uses the standard library only, and runs builds and jobs in p
 type = "forbidden"
 source_modules = ["domus.serve"]
 forbidden_modules = ["numpy", "scipy", "shapely", "rasterio", "pyproj", "PIL", "cv2", "av", "pycolmap", "laspy", "tomlkit",
-                     "domus.crs", "domus.build", "domus.design", "domus.terrain"]
+                     "domus.geo.crs", "domus.build", "domus.options.design", "domus.model.terrain"]
 
 [[tool.importlinter.contracts]]
 name = "The model's pure parts read no site and know nothing of the app"
 type = "forbidden"
-source_modules = ["domus.house", "domus.house_texture", "domus.mesh", "domus.wall_looks", "domus.walls", "domus.features",
-                  "domus.drains", "domus.tin", "domus.vegetation", "domus.scheme"]
-forbidden_modules = ["domus.crs", "domus.api", "domus.build", "domus.cli", "domus.serve", "domus.create", "domus.design",
-                     "domus.options", "domus.project"]
+source_modules = ["domus.model.house", "domus.model.house_texture", "domus.geo.mesh", "domus.model.wall_looks",
+                  "domus.model.walls", "domus.model.features", "domus.model.drains", "domus.model.tin",
+                  "domus.model.vegetation", "domus.options.scheme"]
+forbidden_modules = ["domus.geo.crs", "domus.api", "domus.build", "domus.cli", "domus.serve", "domus.create",
+                     "domus.options.design", "domus.options.sketch", "domus.project"]
 
 [[tool.importlinter.contracts]]
 name = "Only the command line imports the server, and nothing imports the command line"

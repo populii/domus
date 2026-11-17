@@ -32,8 +32,9 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .. import crs, geojson, raster, terrain
 from ..errors import DomusError
+from ..geo import crs, geojson, raster
+from ..model import terrain
 
 
 def video_dir():
@@ -62,7 +63,7 @@ def axes(grid=False):
     """(to the box's coordinates, from them) for the options' frame, or the site's grid with `grid`."""
     if grid:
         return (lambda en: np.asarray(en, float)[..., :2]), (lambda uv: np.asarray(uv, float))
-    from .. import design
+    from ..options import design
 
     fr = design.frame()
     return fr.so, fr.en

@@ -15,8 +15,8 @@ import rasterio
 from rasterio.errors import RasterioIOError
 from rasterio.merge import merge
 
-from .. import crs, raster
 from ..errors import DomusError
+from ..geo import crs, raster
 
 BASE = "https://copernicus-dem-30m.s3.amazonaws.com"
 VERTICAL = "EGM2008"

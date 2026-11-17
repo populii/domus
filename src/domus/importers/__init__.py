@@ -11,9 +11,10 @@ The build never calls one, so a site built once builds without the internet.
 the public source for where it is.
 """
 
-from .. import crs, publicdata
 from ..errors import DomusError
-from ..newsite import in_new_zealand
+from ..geo import crs
+from ..project.newsite import in_new_zealand
+from .nz import publicdata
 
 NAMES = ("nz", "osm", "manual")
 
@@ -41,7 +42,7 @@ def fetch():
     """`domus fetch`: the site's rasters from the public source for where it is: LINZ's LiDAR and photos in New Zealand,
     the Copernicus ground model anywhere else."""
     if in_nz():
-        from .. import linz
+        from .nz import linz
 
         return linz.main()
     from . import osm

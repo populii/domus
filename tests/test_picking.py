@@ -11,7 +11,7 @@ from domus.errors import DomusError
 
 
 def test_a_sheet_takes_a_frame_every_step_and_names_it(tmp_path):
-    from domus.video import sheet
+    from domus.capture import sheet
 
     names = [f"t{t:07.3f}" for t in np.arange(0.0, 10.0, 0.5)]
     assert sheet.pick(names, 2.0, 6.0, 1.0) == ["t002.000", "t003.000", "t004.000", "t005.000", "t006.000"]
@@ -24,7 +24,7 @@ def test_a_sheet_takes_a_frame_every_step_and_names_it(tmp_path):
 
 
 def test_a_piece_of_a_photo_comes_at_full_size(tmp_path):
-    from domus.video import crop
+    from domus.capture import crop
 
     img = np.zeros((300, 400, 3), np.uint8)
     img[100:150, 200:260] = (255, 0, 0)
@@ -36,7 +36,7 @@ def test_a_piece_of_a_photo_comes_at_full_size(tmp_path):
 
 
 def test_marks_are_set_and_dropped_with_a_backup(tmp_path):
-    from domus.video import picks_edit
+    from domus.capture import picks_edit
 
     path = tmp_path / "clip.json"
     raw = json.dumps({"features": [{"id": "post", "desc": "a post", "obs": [{"frame": "t002.000", "px": [1.0, 2.0]},
@@ -61,7 +61,7 @@ def test_marks_are_set_and_dropped_with_a_backup(tmp_path):
 def test_two_lens_mapping_needs_the_reconstructions_workspace(site):
     import argparse
 
-    from domus.video import two_lens
+    from domus.capture import two_lens
 
     args = argparse.Namespace(clip="walk", work_tag="walk-colmap", t_main=10.0, t_wide=12.0, f_main=1100.0, f_wide=630.0,
                               stage="copy", mapper="global", threads=1, min_matches=30, every=None, keep=None,

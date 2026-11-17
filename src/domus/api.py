@@ -73,7 +73,7 @@ class Site:
 
     def settings(self):
         """data/site.toml, as a dict. It's a copy: changing it changes nothing."""
-        from . import crs
+        from .geo import crs
 
         with self._use():
             return copy.deepcopy(dict(crs.settings()))
@@ -86,7 +86,7 @@ class Site:
     def layer(self, name):
         """The features of data/site/<name>.geojson, such as "trees" or "walls-existing": a list of GeoJSON features,
         empty if the site has no such layer."""
-        from . import geojson
+        from .geo import geojson
 
         if not isinstance(name, str) or not LAYER_NAME.fullmatch(name):
             raise DomusError(f"{name!r} isn't a layer's name: give the file's name without .geojson, such as trees")
@@ -97,7 +97,7 @@ class Site:
         import shapely
         from shapely.geometry import shape
 
-        from . import geojson
+        from .geo import geojson
 
         boundary = self.layer("boundary")
         if not boundary:
@@ -119,7 +119,8 @@ class Site:
         ground-fixes.geojson applied, and NaN where that has no ground."""
         import numpy as np
 
-        from . import raster, terrain
+        from .geo import raster
+        from .model import terrain
 
         with self._use():
             if not raster.DEM.exists():
@@ -144,7 +145,7 @@ class Site:
     def frame(self):
         """The frame the options are drawn in (options/_site.toml `[frame]`): s along a boundary, o in from it.
         frame.en(so) turns (s, o) points into the site's grid, and frame.so(en) the other way."""
-        from . import design
+        from .options import design
 
         with self._use():
             return design.frame()
@@ -152,7 +153,7 @@ class Site:
     def evaluate(self, option):
         """What an option comes to, as the viewer and its comparison table show it: its walls and their heights, cut and
         fill, flat lawn, and its checks. `option` is one of options(), or its id."""
-        from . import design
+        from .options import design
 
         if isinstance(option, str):
             found = [o for o in self.options() if o["id"] == option]
@@ -185,7 +186,7 @@ class Site:
 def resample_line(line, spacing):
     """Points about every `spacing` metres along a polyline and at each of its own vertices, and their distances along
     it: (points, distances). Its points keep any third coordinate."""
-    from .mesh import resample_line as resample
+    from .geo.mesh import resample_line as resample
 
     return resample(line, spacing)
 
@@ -193,7 +194,7 @@ def resample_line(line, spacing):
 def fit_affine(pix, world):
     """The least-squares affine transform from points on an image (column, row) to points on the ground (E, N):
     (A, residuals), where world = A @ [column, row, 1] and A is 2 by 3."""
-    from .georef import fit_affine as fit
+    from .geo.georef import fit_affine as fit
 
     return fit(pix, world)
 
@@ -202,7 +203,7 @@ def linz_query(layer, cql=None, bbox=None, count=20, key=None):
     """Features of a LINZ Data Service layer, on NZTM2000 (EPSG:2193) with east before north. `layer` is the layer's
     number, such as 50820, or its name, "layer-50820". Give a `bbox` (E min, N min, E max, N max on NZTM), a `cql`
     filter, or both; `count` caps how many come back. The key is DOMUS_LINZ_KEY's unless given."""
-    from . import publicdata
+    from .importers.nz import publicdata
 
     key = key or publicdata.linz_key()
     if not key:
@@ -219,6 +220,6 @@ def clip(name, urls, bounds, out_path, bands=None):
     GeoTIFF in `urls`, such as the LINZ survey tiles in data/linz-sources.json, and writes their mosaic to `out_path`
     on the first one's grid. `bands` (counted from 0) keeps just those, losslessly; otherwise a photo keeps its first
     three, as a JPEG. `name` labels it in what's printed."""
-    from . import linz
+    from .importers.nz import linz
 
     return linz.clip(name, urls, bounds, out_path, bands)

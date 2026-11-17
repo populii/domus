@@ -209,15 +209,17 @@ Being honest about the rough edges:
 
 | Part | Where |
 |---|---|
-| Address, parcel and building lookup | `src/domus/publicdata.py` |
+| Places into site folders: New Zealand's (LINZ) and anywhere's (OpenStreetMap) | `src/domus/importers/` |
 | From an address to a model | `src/domus/create.py` |
-| Fetching LINZ's LiDAR and aerials | `src/domus/linz.py` |
-| The build, from site data to `model.json` and textures | `src/domus/build.py`, with `terrain`, `house`, `walls`, `vegetation`, `features` |
-| Wall options: designed ground, volumes, checks | `src/domus/design.py` |
-| Checklist and video walk | `src/domus/enrich.py` |
+| Grids, rasters, GeoJSON, meshes and fits | `src/domus/geo/` |
+| The model's parts: ground, house, walls, features, plants, drains | `src/domus/model/` |
+| The build, from site data to `model.json` and textures | `src/domus/build/` |
+| Wall options: designed ground, volumes, checks | `src/domus/options/` |
+| Checks, and the checklist and video walk | `src/domus/checks/` |
+| The site folder: its Site, settings, formats and edits | `src/domus/project/` |
 | The viewer, one page using three.js | `src/domus/viewer/` |
 | The server and its small store | `src/domus/serve.py` |
-| Videos, phone scans, documents | `src/domus/video/`, `scan.py`, `prep/` |
+| Videos and phone scans, and documents | `src/domus/capture/`, `src/domus/prep/` |
 
 Run the checks with `uv run --all-extras pytest` and `uv run ruff check .`. [CONTRIBUTING.md](CONTRIBUTING.md) explains releases and how
 to prove a change left a model alone.

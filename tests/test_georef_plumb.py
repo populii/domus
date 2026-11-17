@@ -24,7 +24,7 @@ UP = TO_MODEL.apply([0.0, 0.0, 1.0])                                         # t
 
 
 def tool():
-    from domus.video import georef_sfm as mod
+    from domus.capture import georef_sfm as mod
 
     return mod
 

@@ -119,7 +119,7 @@ def test_a_site_abroad_goes_on_a_grid_in_metres(tmp_path):
 
 
 def test_a_grid_cell_is_cut_along_its_corners_closer_in_height():
-    from domus.terrain import cut_cells
+    from domus.model.terrain import cut_cells
 
     # One cell, its corners (row, column): 0 (0, 0), 1 (0, 1), 2 (1, 0), 3 (1, 1). Corner 3 stands high, so the cut
     # runs between 1 and 2, whichever way Delaunay took it; a point off the grid (4) leaves its triangles alone.
@@ -157,7 +157,7 @@ def test_the_ground_is_triangulated_from_what_it_is_given():
 
 
 def test_a_surface_is_read_in_its_own_triangles():
-    from domus.mesh import surface_z
+    from domus.geo.mesh import surface_z
 
     # A 1 m square cut along one diagonal, its far corner 1 m high, and a small roof over one corner.
     v = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 1], [0, 1, 0], [0, 0, 2], [0.2, 0, 2], [0, 0.2, 2]], float)
