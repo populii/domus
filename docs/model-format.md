@@ -1,0 +1,76 @@
+# The model's format
+
+`domus build` writes the model into the site's `viewer/data/` (or `DOMUS_OUTPUT`): `model.json`, the pictures it
+names, `summary.json` and `build.json`. The viewer reads `model.json` and nothing else from the site, so this is the
+whole contract between the build and the viewer. Its `format` is 1; a change the viewer can't read as before gets a
+new number, and `build.json` records it with the Domus that built the model.
+
+Positions are in viewer metres: x east of the site's origin, y up from its height, and z south of it, so a point
+`(E, N, H)` on the site's grid is `(E - E0, H - H0, -(N - N0))` for the origin `(E0, N0, H0)`.
+
+## model.json
+
+| Key | What it is |
+|---|---|
+| `format` | The model's format, 1 |
+| `title`, `heading`, `subtitle`, `about`, `attribution` | The viewer's text, from `[site]` |
+| `built`, `commit` | When it was built (UTC), and the site folder's git commit when it's in git |
+| `crs`, `vertical`, `datums` | The site's grid and height datum by name, and its other height datums (`key`, `label`, `offset_m`) |
+| `origin` | `[E0, N0, H0]`: the viewer's origin on the site's grid |
+| `extent` | `[E min, N min, E max, N max]`: the area modelled, on the site's grid |
+| `textures` | The ground's drapes: `{key: {label, file, width, height}}`; the first is shown first |
+| `layers` | What's drawn, in order (below) |
+| `summary` | The walls (`walls`), the wall options and how each comes out (`options`, `options_site`), and what each layer kind found |
+| `lot` | `{area_m2}` of the main lot |
+| `views` | The site's own view buttons: `{name: {pos, target}}` in viewer metres |
+| `snap` | Lines and points the drawing tools snap to |
+| `enrich` | The "Improve this model" checklist and the suggested walk, unless the site turns them off |
+
+## Layers
+
+Every layer has an `id`, unique in the model, a `type`, a `name` for the layers panel, and may have a `group` (its
+heading in the panel), `colour`, `visible` (false: off until switched on) and `info` (shown when it's picked).
+
+| Type | Its own keys |
+|---|---|
+| `mesh` | `positions` (x, y, z in threes), `indices` (triangles, in threes); `uv` with `texture` (a file) and `repeat`, `opacity`, `role` and `option` (below), `tint`, `mask` |
+| `lines` | `segments`: each segment's two ends, six numbers; `labels`: `{text, at}` along them |
+| `labels` | `items`: `{text, at, kind}`, `at` in viewer metres |
+| `points` | `file`: a JSON of `positions` (base64 little-endian int16, in `step` metres) and `colours` (base64 bytes); `size` |
+| `vegetation` | `plants` (each one's name and info) and what draws them: `cards`, `limbs` or `drape` |
+| `pipes` | A drain or service, drawn at its depth, with its levels |
+
+## Ids the viewer relies on
+
+| Id | What the viewer does with it |
+|---|---|
+| `ground` | The ground: it takes the drapes in `textures`, and fades with the opacity slider |
+| `contours-major`, `contours-minor` | The ground's contours; the minor ones start hidden, and inside a shown option's `mask` they give way to the option's own |
+| `fix-<id>` | The outline of ground that isn't from the ground model: hidden while an option is shown |
+| `wall-<id>` | An existing wall: hidden while an option shown doesn't keep it |
+| `house-roof...` | Drawn with flat shading |
+| `dsm` | The surface model: casts no shadow |
+| `veg-beds`, `veg-bed-floor`, `stumps` | Hidden while an option is shown |
+| `option-<option id>-...` | A wall option's layers, with `option` set and `visible` false: shown with their option. Its designed ground has `role = "ground"` and a `mask` (the box of the ground it replaces, as fractions of the extent); its lawns and beds `role = "skin"` |
+| `site-...` | A site's own layer (below) |
+
+## A site's own layers
+
+When a site needs something drawn that no kind in Domus draws, its tool writes it as data, in
+`data/layers/<name>.json`, and the build places it in the model as it is. The file holds `{"layers": [...]}`, each
+layer with an `id` that starts `site-`, a `type` of `mesh`, `lines` or `labels`, and its points on the site's grid
+(east, north, height), which the build moves into viewer metres:
+
+```json
+{"layers": [
+  {"id": "site-peg", "type": "mesh", "name": "Survey peg", "colour": "#d23f2f",
+   "positions": [[1500010.0, 5500020.0, 41.2], [1500010.2, 5500020.0, 41.2], [1500010.1, 5500020.2, 41.6]],
+   "indices": [0, 1, 2]},
+  {"id": "site-setout", "type": "lines", "name": "Set-out line", "colour": "#1f6fd2",
+   "lines": [[[1500004.0, 5500018.0, 41.0], [1500018.0, 5500018.0, 41.0]]]},
+  {"id": "site-notes", "type": "labels", "name": "Notes", "items": [{"text": "Peg found here", "at": [1500010.0, 5500020.0, 41.8]}]}
+]}
+```
+
+Each may also have `group` (its heading, "The site's own" unless given), `visible`, `info` and, for a mesh,
+`opacity`.

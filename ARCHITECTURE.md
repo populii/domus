@@ -50,6 +50,14 @@ code reads settings through it. The tests fail on a setting the code reads that 
 with another default, and docs/site-format.md's tables are written from it. Import rules in pyproject.toml, checked in CI, keep the server on
 the standard library, the model's pure parts free of the site and the app, and the command line on top.
 
+## The build
+
+`domus build` writes the model from the site folder alone. It keeps what it can reuse in the site's
+`.domus/build-cache/`: the ground's pictures and each wall option's layers, each with a key made of everything it's
+built from (the Domus code, the site's files, and for an option its own file and what it takes from the others). A
+part whose key hasn't changed is taken whole, so a cached build is byte for byte a fresh one; proofs use
+`domus build --fresh` anyway.
+
 ## The public API
 
 Site tools, a site's own tests and agents use `domus.api` and `domus.testing` ([docs/api.md](docs/api.md)): open a site,

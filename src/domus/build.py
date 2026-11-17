@@ -12,6 +12,7 @@ import csv
 import datetime
 import itertools
 import json
+import os
 import subprocess
 from types import SimpleNamespace
 
@@ -23,6 +24,7 @@ from shapely.ops import unary_union
 
 from . import (
     __version__,
+    buildcache,
     crs,
     design,
     features,
@@ -39,6 +41,7 @@ from . import (
 )
 from .crs import OUTPUT as OUT
 from .crs import ROOT
+from .errors import DomusError
 from .georef import invert_affine
 
 POINT_STEP = 0.0025     # m, the video point cloud's storage step
@@ -528,7 +531,31 @@ def add_ground(b):
     e0, n0, e1, n1 = extent
     uv = np.column_stack([(tin.vertices[:, 0] - e0) / (e1 - e0), (tin.vertices[:, 1] - n0) / (n1 - n0)])
     # The ground's drapes: the aerial photo (with paving under the trees where the site records it, and as
-    # taken), the site's georeferenced sheets ([[drapes]] in data/site.toml), the plain relief.
+    # taken), the site's georeferenced sheets ([[drapes]] in data/site.toml), the plain relief. They read only the
+    # site's files, so the last build's are taken when those haven't changed.
+    k = buildcache.key(b.cache.site, "ground") if b.cache.enabled else None
+    textures = b.cache.get("ground", k) if k else None
+    if textures is None:
+        before = buildcache.snapshot(OUT)
+        textures = ground_textures(cfg, extent)
+        if k:
+            b.cache.put("ground", k, textures, buildcache.written(OUT, before))
+    layers.append({**mesh_json(tin, frame, "#9fb58a",
+                               labels.get("ground", "Ground (LiDAR, with walls cut in)")),
+                   "id": "ground", "uv": r(uv, 5), "group": "Ground"})
+    for f in geojson.read_optional(terrain.FIXES):
+        if f["geometry"]["type"] == "Polygon":
+            layers.append({**lines_json([np.asarray(f["geometry"]["coordinates"][0])], frame, "#ff6a3d",
+                                        f"Ground not from LiDAR: {f['properties']['name']}",
+                                        lambda e, n: ground(e, n) + 0.08),
+                           "id": f"fix-{f['properties']['id']}", "group": "Ground",
+                           "info": {k: v for k, v in f["properties"].items() if k in ("note", "basis")}})
+    b.textures = textures
+    b.tin = tin
+
+
+def ground_textures(cfg, extent):
+    """The ground's drape pictures, written to the output folder: {key: {label, width, height, file}}."""
     textures = {}
     if raster.AERIAL.exists():
         aerial = cfg.get("aerial", {})
@@ -547,18 +574,7 @@ def add_ground(b):
                                                   scan_sampler(sheet["georef"], sheet.get("shift_m", (0.0, 0.0))),
                                                   OUT / f"{sheet['key']}.jpg")}
     textures["relief"] = {"label": "Plain relief", **drape_texture(extent, 0.1, relief_sampler, OUT / "relief.jpg")}
-    layers.append({**mesh_json(tin, frame, "#9fb58a",
-                               labels.get("ground", "Ground (LiDAR, with walls cut in)")),
-                   "id": "ground", "uv": r(uv, 5), "group": "Ground"})
-    for f in geojson.read_optional(terrain.FIXES):
-        if f["geometry"]["type"] == "Polygon":
-            layers.append({**lines_json([np.asarray(f["geometry"]["coordinates"][0])], frame, "#ff6a3d",
-                                        f"Ground not from LiDAR: {f['properties']['name']}",
-                                        lambda e, n: ground(e, n) + 0.08),
-                           "id": f"fix-{f['properties']['id']}", "group": "Ground",
-                           "info": {k: v for k, v in f["properties"].items() if k in ("note", "basis")}})
-    b.textures = textures
-    b.tin = tin
+    return textures
 
 
 def add_contours(b):
@@ -710,8 +726,19 @@ def add_options(b):
                if t.kind == "lawn" and t.poly.distance(lawn["poly"]) < LAWN_JOIN_M]
         lawn["plain_reach"] = unary_union([*new, lawn["poly"]]).buffer(0.2).bounds
         lawn["plain_box"] = vegetation.lawn_plain_box(lawn["poly"], lawn["plain_reach"])[0]
+    # An option's layers come from the last build when nothing they're drawn from has changed: the site, the option's
+    # own file, and the lawns' pictures, which every option's new lawns reach into.
+    reach = [[lawn["id"], lawn.get("plain_box"), lawn.get("plain_reach")] for lawn in lawns]
     for opt, res in found:
-        opt_layers, opt_summary, opt_textures = option_layers(opt, res, frame, extent, cfg, wall_defs, lawns, b.tin)
+        k = buildcache.key(b.cache.site, "option", opt, (ROOT / opt["path"]).read_bytes().hex(), reach) if b.cache.enabled else None
+        cached = b.cache.get(f"option-{opt['id']}", k) if k else None
+        if cached is None:
+            before = buildcache.snapshot(OUT)
+            opt_layers, opt_summary, opt_textures = option_layers(opt, res, frame, extent, cfg, wall_defs, lawns, b.tin)
+            if k:
+                b.cache.put(f"option-{opt['id']}", k, [opt_layers, opt_summary, opt_textures], buildcache.written(OUT, before))
+        else:
+            opt_layers, opt_summary, opt_textures = cached
         layers.extend(opt_layers)
         textures.update(opt_textures)
         summary["options"].append(opt_summary)
@@ -719,6 +746,7 @@ def add_options(b):
             b.lawns_redrawn.setdefault(lawn_id, []).append(opt["id"])
         for fid in opt.get("remove_features", []):
             b.removed_features.setdefault(fid, []).append(opt["id"])
+    shared_textures(layers)
     for lawn in lawns:
         if any(lawn["id"] in o["lawn_pictures"] + o["lawns_kept"] for o in summary["options"]):
             vegetation.lawn_plain_texture(OUT / f"{lawn['id']}-plain.jpg", lawn["poly"], lawn["colour"], lawn["plain_reach"],
@@ -727,6 +755,17 @@ def add_options(b):
         summary["options_site"] = {"flat_slope": design.regrade_settings().get("flat_slope", 0.05),
                                    "garden_m2": round(design.regrade_area().area, 1),
                                    "frame": design.settings()["frame"]}
+
+
+def shared_textures(layers):
+    """The planted beds' and the grass's tiles, which options' layers share: an option taken from the last build
+    doesn't paint them, so they're painted here if a layer uses one and it isn't there."""
+    from .vegetation import bed_texture, grass_detail_texture
+
+    used = {layer.get("texture") for layer in layers} | {(layer.get("drape") or {}).get("detail") for layer in layers}
+    for name, paint in (("bed.jpg", bed_texture), ("grass-detail.jpg", grass_detail_texture)):
+        if name in used and not (OUT / name).exists():
+            paint(OUT / name)
 
 
 def add_services(b):
@@ -909,6 +948,55 @@ def add_surface(b):
                        "id": "dsm", "group": "Context", "visible": False, "opacity": 0.55})
 
 
+SITE_LAYER_TYPES = ("mesh", "lines", "labels")
+
+
+def site_layer(spec, frame, where):
+    """One of a site's own layers, from data/layers/<name>.json (`spec`, in the site's grid coordinates), as the
+    viewer takes it. A site's tool writes these when it draws something no kind in Domus does; the build only
+    places them, under ids that start `site-`."""
+    lid, kind = spec.get("id", ""), spec.get("type")
+    if not isinstance(lid, str) or not lid.startswith("site-"):
+        raise DomusError(f"{where}: a site's own layer needs an id that starts with site-, not {lid!r}")
+    if kind not in SITE_LAYER_TYPES:
+        raise DomusError(f"{where}: layer {lid} has type {kind!r}; a site's own layer is one of {', '.join(SITE_LAYER_TYPES)}")
+    base = {"id": lid, "name": spec.get("name", lid), "group": spec.get("group", "The site's own"),
+            **{k: spec[k] for k in ("visible", "info", "opacity") if k in spec}}
+    try:
+        if kind == "mesh":
+            pts = np.asarray(spec["positions"], float).reshape(-1, 3)
+            idx = [int(i) for i in spec["indices"]]
+            if len(idx) % 3 or (idx and not 0 <= min(idx) <= max(idx) < len(pts)):
+                raise ValueError("indices must come in threes, each a position's number")
+            return {**base, "type": "mesh", "colour": spec.get("colour", "#9a9a9a"), "positions": r(frame.xyz(pts)), "indices": idx}
+        if kind == "lines":
+            return {**lines_json([np.asarray(line, float).reshape(-1, 3) for line in spec["lines"]], frame,
+                                 spec.get("colour", "#333333"), base["name"], "z"), **base}
+        items = [{"text": str(it["text"]), "at": r(frame.xyz(np.asarray([it["at"]], float).reshape(1, 3))[0], 2)}
+                 for it in spec["items"]]
+        return {**base, "type": "labels", "items": items}
+    except (KeyError, TypeError, ValueError) as e:
+        raise DomusError(f"{where}: layer {lid} isn't drawn as its type says ({e})") from e
+
+
+def add_site_layers(b):
+    """The site's own layers (data/layers/*.json): what its tools drew, placed in the model as they are."""
+    folder = ROOT / "data" / "layers"
+    seen = {layer.get("id") for layer in b.layers}
+    for path in sorted(folder.glob("*.json")) if folder.is_dir() else ():
+        where = f"data/layers/{path.name}"
+        try:
+            specs = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError as e:
+            raise DomusError(f"{where} isn't JSON: {e}") from e
+        for spec in specs.get("layers", []) if isinstance(specs, dict) else []:
+            layer = site_layer(spec, b.frame, where)
+            if layer["id"] in seen:
+                raise DomusError(f"{where}: layer {layer['id']} is in the model already")
+            seen.add(layer["id"])
+            b.layers.append(layer)
+
+
 def add_enrich(b):
     """What would improve this model: the viewer's checklist, and the route to film as a hidden layer."""
     cfg, frame, ground = b.cfg, b.frame, b.ground
@@ -942,7 +1030,10 @@ def site_origin(cfg, dem):
     return origin
 
 
-def main():
+def main(argv=None):
+    """`domus build [--fresh]`: --fresh draws everything again, taking nothing from the last build."""
+    if "--fresh" in (argv or []):
+        os.environ["DOMUS_BUILD_CACHE"] = "0"
     cfg = crs.settings()
     extent = cfg["model"]["extent"]
     OUT.mkdir(parents=True, exist_ok=True)
@@ -952,7 +1043,8 @@ def main():
     b = SimpleNamespace(cfg=cfg, extent=extent, frame=Frame(origin), dem=dem, origin=origin,
                         ground=lambda e, n: dem.sample(np.atleast_1d(e), np.atleast_1d(n)),
                         labels=cfg.get("labels", {}), vertical=cfg.get("crs", {}).get("vertical", ""),
-                        wall_defs=[walls.from_feature(f) for f in wall_feats], layers=[], summary={})
+                        wall_defs=[walls.from_feature(f) for f in wall_feats], layers=[], summary={},
+                        cache=buildcache.Cache(ROOT, OUT))
     add_ground(b)
     add_contours(b)
     add_boundaries(b)
@@ -967,8 +1059,10 @@ def main():
     add_points(b)
     add_open_questions(b)
     add_surface(b)
+    add_site_layers(b)
     add_enrich(b)
     write_model(b)
+    b.cache.prune()
 
 
 def snap_targets(origin):
@@ -1003,6 +1097,7 @@ def write_model(b):
     lot_ring = np.asarray(next(f for f in bnd if f["properties"]["id"] == main_id)["geometry"]["coordinates"][0])
     site = cfg.get("site", {})
     model = {
+        "format": MODEL_FORMAT,
         "title": site.get("title", "Site model"),
         "heading": site.get("heading", site.get("title", "Site model")),
         "subtitle": site.get("subtitle", ""),

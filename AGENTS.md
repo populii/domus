@@ -26,7 +26,8 @@ property's site.
 - A site tool that proves general can move into common: give its numbers settings, test it on the made-up sites,
   document it, and say in the changelog what sites can drop.
 - A change to the build that shouldn't change a model is proved with `tools/compare_builds.py`. CI runs it on the
-  made-up sites (`tools/made_up_sites.py`) for every pull request; run it yourself on a real site too.
+  made-up sites (`tools/made_up_sites.py`) for every pull request; run it yourself on a real site too, building with
+  `domus build --fresh` so nothing comes from the build cache (`.domus/build-cache/`).
 - `viewer/index.html` is a page body with no doctype or head: `serve.py` adds the skeleton. Its store goes through
   `window.claude` when that exists, else `serverStore()`.
 - The viewer loads nothing from other hosts. New libraries go in `viewer/vendor/`.

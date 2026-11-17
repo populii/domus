@@ -100,7 +100,7 @@ def run(command, rest):
         from .project import upgrade
         return upgrade.main(rest)
     from . import build
-    return build.main()
+    return build.main(rest)
 
 
 if __name__ == "__main__":

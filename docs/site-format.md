@@ -3,7 +3,7 @@
 ```
 data/site.toml            settings (below)
 data/site/*.geojson       curated layers; only boundary.geojson is required
-data/lidar/dem.tif        ground model on NZTM2000 (required)
+data/lidar/dem.tif        ground model, on any grid its file names (required)
 data/lidar/dsm.tif        surface model (optional)
 data/lidar/points.laz     classified point cloud from `domus points` (optional; drafted roofs are fitted to it)
 data/lidar/dem-points.tif 0.5 m ground from its ground points (`domus points --ground`; used only if [rasters] dem names it)
@@ -12,10 +12,12 @@ data/aerial/nir.tif       near-infrared photo, red and near-infrared bands (opti
 data/survey/control.csv   survey marks (optional)
 data/georef/<sheet>.json  georeferenced scanned plans, for [[drapes]] (optional)
 data/features/, data/walls/, data/house/   textures (optional; plain colours without them)
+data/layers/*.json        the site's own layers, drawn by its tools (optional; docs/model-format.md)
 options/_site.toml        what wall options share
 options/*.toml            one per option
-viewer/data/              the built model (set DOMUS_OUTPUT to move it)
-.domus/viewer.db      saved sketches (set DOMUS_DB to move it)
+viewer/data/              the built model (set DOMUS_OUTPUT to move it; docs/model-format.md)
+.domus/viewer.db          saved sketches (set DOMUS_DB to move it)
+.domus/build-cache/       what the next build can reuse
 ```
 
 ## Settings
