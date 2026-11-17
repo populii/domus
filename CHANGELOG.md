@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.26
 
 - The image runs on Python 3.14 (was 3.13), and so does a checkout's default `uv` environment. 3.13 still works.
 - The viewer runs on three.js r187 (was r170), with three-mesh-bvh 0.9.18. Shadows use PCF filtering, as soft PCF is gone from three.
