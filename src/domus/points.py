@@ -40,9 +40,15 @@ LAZ = "application/vnd.laszip+copc"     # the only LAZ LINZ offers for point clo
 EXPORT_WAIT_S = 900
 CATALOG = "https://portal.opentopography.org/API/otCatalog"
 BULK = "https://opentopography.s3.sdsc.edu/pc-bulk/"
-OUT = crs.ROOT / "data" / "lidar" / "points.laz"
-RECORD = crs.ROOT / "data" / "lidar-points-source.json"
-GROUND_DEM = crs.ROOT / "data" / "lidar" / "dem-points.tif"
+def laz_path():
+    """The LiDAR points over the site, data/lidar/points.laz."""
+    return crs.ROOT / "data" / "lidar" / "points.laz"
+def record_path():
+    """Where the LiDAR points came from, data/lidar-points-source.json."""
+    return crs.ROOT / "data" / "lidar-points-source.json"
+def ground_dem_path():
+    """The ground model made from the points, data/lidar/dem-points.tif."""
+    return crs.ROOT / "data" / "lidar" / "dem-points.tif"
 # LINZ's tile names carry the Topo50 sheet, sometimes a year, then the scale and the tile: CL2_BX24_2020_1000_0245.laz.
 TILE_RE = re.compile(r"([A-Z]{2})(\d\d)_(?:\d{4}_)?(\d+)_(\d\d)(\d\d)\.la[sz]$", re.IGNORECASE)
 TO_LONLAT = Transformer.from_crs(2193, 4326, always_xy=True)
@@ -230,7 +236,7 @@ def read(path=None):
     """The site's points as arrays {x, y, z, cls, returns, return_no} on NZTM, or None without points.laz."""
     import laspy
 
-    path = Path(path or OUT)
+    path = Path(path or laz_path())
     if not path.exists():
         return None
     las = laspy.read(path)
@@ -262,9 +268,10 @@ def ground_grid(pts, bounds, res=0.5):
     return grid.reshape(h, w), from_origin(x0, y1, res, res)
 
 
-def write_ground(pts, bounds, path=GROUND_DEM, res=0.5):
-    """dem-points.tif: the ground points' grid, its gaps (under buildings, and where none reached the ground) filled
-    from the 1 m ground model. Returns the share of cells with a ground point."""
+def write_ground(pts, bounds, path=None, res=0.5):
+    """dem-points.tif (or `path`): the ground points' grid, its gaps (under buildings, and where none reached the
+    ground) filled from the 1 m ground model. Returns the share of cells with a ground point."""
+    path = ground_dem_path() if path is None else path
     import rasterio
 
     from . import raster
@@ -288,7 +295,7 @@ def write_ground(pts, bounds, path=GROUND_DEM, res=0.5):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="domus points", description="The LiDAR point cloud over the site, classified.")
-    ap.add_argument("--ground", action="store_true", help=f"also write a 0.5 m ground model from the ground points to {GROUND_DEM.name}")
+    ap.add_argument("--ground", action="store_true", help=f"also write a 0.5 m ground model from the ground points to {ground_dem_path().name}")
     args = ap.parse_args(argv)
     bounds = linz.site_bounds()
     key = os.environ.get("DOMUS_LINZ_KEY", "").strip()
@@ -302,7 +309,7 @@ def main(argv=None):
                 name, dataset = hit
                 print(f"Point cloud: {name}, exporting from LINZ (usually under a minute)")
                 with tempfile.TemporaryDirectory() as tmp:
-                    count = crop([p.as_uri() for p in linz_export(dataset, bounds, key, tmp)], bounds, OUT)
+                    count = crop([p.as_uri() for p in linz_export(dataset, bounds, key, tmp)], bounds, laz_path())
                 short, end, urls = dataset.rstrip("/").rsplit("/", 1)[-1], "", [dataset]
         except (OSError, ValueError, KeyError) as e:
             print(f"  LINZ's export didn't work ({e}). A key needs the exports:read and exports:write scopes. Trying OpenTopography")
@@ -312,15 +319,15 @@ def main(argv=None):
             raise SystemExit("No point cloud covers this site. The 1 m models are all there is.")
         name, short, end, urls = found
         print(f"Point cloud: {name} (to {end}), {len(urls)} tile(s) from OpenTopography; whole tiles, tens of MB each")
-        count = crop(urls, bounds, OUT)
+        count = crop(urls, bounds, laz_path())
     area = (bounds[2] - bounds[0]) * (bounds[3] - bounds[1])
-    print(f"  {count} points, {count / area:.1f} a square metre -> {OUT}")
-    RECORD.write_text(json.dumps({"title": name, "id": short, "to": end, "tiles": urls}, indent=2) + "\n", encoding="utf-8")
+    print(f"  {count} points, {count / area:.1f} a square metre -> {laz_path()}")
+    record_path().write_text(json.dumps({"title": name, "id": short, "to": end, "tiles": urls}, indent=2) + "\n", encoding="utf-8")
     dem = json.loads((crs.ROOT / "data" / "linz-sources.json").read_text(encoding="utf-8")).get("ground model", {}).get("title") \
         if (crs.ROOT / "data" / "linz-sources.json").exists() else None
     if dem:
         print(f"  The ground model is {dem}: if the years differ, anything changed between them won't agree.")
     if args.ground:
         share = write_ground(read(), bounds)
-        print(f"  ground points reach {share:.0%} of the 0.5 m cells -> {GROUND_DEM}. Use it with [rasters] dem = \"data/lidar/dem-points.tif\"")
+        print(f"  ground points reach {share:.0%} of the 0.5 m cells -> {ground_dem_path()}. Use it with [rasters] dem = \"data/lidar/dem-points.tif\"")
     return 0

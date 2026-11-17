@@ -7,7 +7,7 @@ import importlib
 import json
 import sys
 
-from ..crs import ROOT
+from .. import crs
 from ..errors import DomusError
 
 STEPS = {
@@ -31,7 +31,7 @@ STEPS = {
 
 
 def config(section):
-    path = ROOT / "data" / "prep.json"
+    path = crs.ROOT / "data" / "prep.json"
     if not path.exists():
         raise DomusError(f"This step reads its settings from {path}. See docs/from-documents.md.")
     cfg = json.loads(path.read_text(encoding="utf-8"))

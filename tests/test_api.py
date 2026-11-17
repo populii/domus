@@ -70,13 +70,34 @@ def test_the_checks_report_what_they_found(site):
     assert json.loads((site / ".domus" / "checks" / "check_model.json").read_text(encoding="utf-8")) == report
 
 
-def test_one_site_per_process(site, tmp_path):
+def test_a_folder_that_isnt_a_site_is_refused(site, tmp_path):
     with pytest.raises(DomusError, match="isn't a site project"):
         api.open_site(tmp_path)
-    (tmp_path / "data").mkdir()
-    (tmp_path / "data" / "site.toml").write_text("", encoding="utf-8")
-    with pytest.raises(DomusError, match="already has the site"):
-        api.open_site(tmp_path)
+    assert api.open_site(site) is api.open_site(site)
+
+
+def _plain(model):
+    return {k: v for k, v in model.items() if k not in ("built", "commit")}
+
+
+def test_two_sites_in_one_process_are_read_apart(site, tmp_path):
+    # A copy of the demo whose walls stand 0.2 m higher over the ground they retain: each site's option comes to its
+    # own walls, whichever was read first, and the copy built in this process is the copy built in a process of its own.
+    other = tmp_path / "other"
+    shutil.copytree(site, other, ignore=shutil.ignore_patterns("viewer", ".domus"))
+    shared = other / "options" / "_site.toml"
+    shared.write_text(shared.read_text(encoding="utf-8").replace("upstand_m = 0.1", "upstand_m = 0.3"), encoding="utf-8")
+    a, b = api.open_site(site), api.open_site(other)
+    option = a.options()[0]["id"]
+    top_a = a.evaluate(option)["walls"][0]["top_max"]
+    top_b = b.evaluate(option)["walls"][0]["top_max"]
+    assert top_b == pytest.approx(top_a + 0.2, abs=0.02)
+    assert a.evaluate(option)["walls"][0]["top_max"] == top_a
+    here = json.loads((b.build() / "model.json").read_text(encoding="utf-8"))
+    r = run("from domus import build; build.main(['--fresh'])", DOMUS_SITE=str(other), DOMUS_OUTPUT=str(tmp_path / "apart"))
+    assert r.returncode == 0, r.stderr
+    apart = json.loads((tmp_path / "apart" / "model.json").read_text(encoding="utf-8"))
+    assert _plain(here) == _plain(apart)
 
 
 def run(code, **env):
@@ -86,15 +107,15 @@ def run(code, **env):
 
 
 def test_a_site_opened_by_path_is_built_in_its_own_folder(site, tmp_path):
-    r = run(f"from domus import api; s = api.open_site({str(site)!r}); from domus import crs; print(crs.ROOT); print(s.output)",
+    r = run(f"from domus import api; s = api.open_site({str(site)!r}); print(s.path); print(s.output)",
             DOMUS_SITE=str(tmp_path), DOMUS_OUTPUT=str(tmp_path / "elsewhere"))
     assert r.returncode == 0, r.stderr
     assert r.stdout.split() == [str(site.resolve()), str((site / "viewer" / "data").resolve())]
 
 
-def test_a_site_imported_first_cannot_be_swapped(site, tmp_path):
-    r = run(f"from domus import crs, api; api.open_site({str(site)!r})", DOMUS_SITE=str(tmp_path))
-    assert r.returncode != 0 and "already has the site" in r.stderr
+def test_a_site_opens_whatever_domus_imported_first(site, tmp_path):
+    r = run(f"from domus import crs, api, design; print(api.open_site({str(site)!r}).title)", DOMUS_SITE=str(tmp_path))
+    assert r.returncode == 0 and r.stdout.strip() == "Demo site (made up)", r.stderr
 
 
 def test_a_sites_own_tests_get_it_and_build_it_out_of_the_way(site, tmp_path):

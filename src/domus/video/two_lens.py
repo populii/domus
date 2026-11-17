@@ -35,12 +35,16 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from .. import sfm
-from ..crs import ROOT
+from .. import crs, sfm
 from ..errors import DomusError
 
-FRAMES = ROOT / "sources" / "raw" / "frames6"
-OUT = ROOT / "data" / "video"
+
+def frames_dir():
+    """The clips' frames, sources/raw/frames6/."""
+    return crs.ROOT / "sources" / "raw" / "frames6"
+def video_dir():
+    """The site's video work, data/video/."""
+    return crs.ROOT / "data" / "video"
 
 
 def stamp(name):
@@ -74,7 +78,7 @@ def run(args):
     import pycolmap
 
     clip, t_main, t_wide, f_main, f_wide = args.clip, args.t_main, args.t_wide, args.f_main, args.f_wide
-    work = OUT / "cache" / "colmap" / args.work_tag
+    work = video_dir() / "cache" / "colmap" / args.work_tag
     src, db = work / "database.db", work / "database-2lens.db"
     t0 = time.time()
 
@@ -182,7 +186,7 @@ def run(args):
         o.mapper.num_threads = args.threads
         o.mapper.random_seed = 0
         mapping = pycolmap.global_mapping if args.mapper == "global" else pycolmap.incremental_mapping
-        recs = mapping(db, FRAMES, sparse, o)
+        recs = mapping(db, frames_dir(), sparse, o)
         for k, r in sorted(recs.items(), key=lambda kv: -kv[1].num_reg_images()):
             log(f"   model {k}: {r.num_reg_images()} frames, {r.num_points3D()} points, mean reprojection {r.compute_mean_reprojection_error():.3f} px; "
                 + "; ".join(f"camera {c.camera_id} {np.round(c.params, 2).tolist()}" for c in r.cameras.values()))
@@ -200,7 +204,7 @@ def convert(pycolmap, clip, t_main, sparse, db, part, model, as_, log):
     if model is not None:
         folders = [sparse / model]
     rec = pycolmap.Reconstruction(folders[0])
-    log(f"converting {folders[0].relative_to(ROOT)}: {rec.num_reg_images()} frames, {rec.num_points3D()} points")
+    log(f"converting {folders[0].relative_to(crs.ROOT)}: {rec.num_reg_images()} frames, {rec.num_points3D()} points")
     with pycolmap.Database.open(db) as d:
         cam_of = {Path(im.name).stem: im.camera_id for im in d.read_all_images()}
         main_id = min(cam_of.values())
@@ -251,9 +255,9 @@ def convert(pycolmap, clip, t_main, sparse, db, part, model, as_, log):
         intr = np.array([f, k1, cx - 0.5, cy - 0.5])
         out_part = as_ or part
         tag = f"{clip}-{out_part + '-' if out_part else ''}{label}"
-        np.savez_compressed(OUT / f"{tag}-sfm.npz", xyz=xyz, rgb=rgb, nview=nview, frame_names=np.array(names),
+        np.savez_compressed(video_dir() / f"{tag}-sfm.npz", xyz=xyz, rgb=rgb, nview=nview, frame_names=np.array(names),
                             rvecs=rvecs, tvecs=tvecs, intrinsics=intr, obs=obs)
-        d = np.load(OUT / f"{tag}-sfm.npz")
+        d = np.load(video_dir() / f"{tag}-sfm.npz")
         pi, fi = d["obs"][:, 0].astype(int), d["obs"][:, 1].astype(int)
         proj, _ = sfm.project(d["xyz"][pi], d["rvecs"][fi], d["tvecs"][fi], *d["intrinsics"][[0, 1, 2, 3]])
         saved = float(np.median(np.hypot(*(proj - d["obs"][:, 2:]).T)))
@@ -261,7 +265,7 @@ def convert(pycolmap, clip, t_main, sparse, db, part, model, as_, log):
         summary = {"clip": tag, "frames": len(names), "registered": registered, "points": int(len(xyz)), "focal_px": f, "k1": k1,
                    "median_reproj_px": saved,
                    "note": f"One of two lenses of {clip}, mapped together (domus video two-lens): the same coordinates as the other."}
-        (OUT / f"{tag}-sfm.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        (video_dir() / f"{tag}-sfm.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
         log(json.dumps(summary))
         log(f"   {tag}: median reprojection {saved:.4f} px from the saved file with sfm.project, {float(np.median(own)):.4f} px by COLMAP's camera model")
         if not abs(saved - float(np.median(own))) <= 1e-3:

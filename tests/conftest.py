@@ -1,5 +1,5 @@
-"""The tests run on the made-up demo site, built once. Modules read DOMUS_SITE when imported, so
-it's set here, before any test imports them."""
+"""The tests run on the made-up demo site, built once. Domus reads DOMUS_SITE the first time it needs
+the site, so it's set here, before any test runs."""
 
 import os
 import tempfile
@@ -19,6 +19,18 @@ def site():
 
     demo.main([os.environ["DOMUS_SITE"]])
     return Path(os.environ["DOMUS_SITE"])
+
+
+@pytest.fixture
+def at_site():
+    """Makes a folder the current site for the test (domus.project.site.use): at_site(path, output=None) gives the
+    Site, and the site before it is current again after the test."""
+    from contextlib import ExitStack
+
+    from domus.project import site as sites
+
+    with ExitStack() as stack:
+        yield lambda path, output=None: stack.enter_context(sites.use(sites.Site(path, output)))
 
 
 @pytest.fixture(scope="session")

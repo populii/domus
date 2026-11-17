@@ -17,12 +17,14 @@ from collections import Counter
 import cv2
 import numpy as np
 
-from .. import sfm
-from ..crs import ROOT
+from .. import crs, sfm
 from ..sfm_georef import apply, fit_similarity, horn_initial
 from . import safe_npz
 
-VID = ROOT / "data" / "video"
+
+def video_dir():
+    """The site's video work, data/video/."""
+    return crs.ROOT / "data" / "video"
 
 
 def pixel_key(uv):
@@ -31,14 +33,14 @@ def pixel_key(uv):
 
 def load_model(tag):
     """Model arrays, plus each registered frame's features and a pixel -> point lookup."""
-    d = np.load(VID / f"{tag}-sfm.npz")
+    d = np.load(video_dir() / f"{tag}-sfm.npz")
     clip = tag.split("-")[0]
     caches = {}
 
     def cache(name):
         key = name.split("/")[0] if "/" in name else clip
         if key not in caches:
-            path = VID / "cache" / (f"{key}-extra-step1.npz" if "/" in name else f"{key}-step1-w6.npz")
+            path = video_dir() / "cache" / (f"{key}-extra-step1.npz" if "/" in name else f"{key}-step1-w6.npz")
             c = safe_npz.load(path)
             caches[key] = {str(n): (k, des) for n, k, des in zip(c["names"], c["kps"], c["des"])}
         return caches[key][name]
@@ -110,7 +112,7 @@ def main():
     out = {"from": b_tag, "to": a_tag, "params": p.tolist(), "scale": float(np.exp(p[0])),
            "correspondences": len(pairs), "inliers": int(inl.sum()), "tolerance": float(tol),
            "median_error": float(np.median(err[inl])), "frame_pairs": pair_count}
-    (VID / f"{b_tag}-to-{a_tag}.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+    (video_dir() / f"{b_tag}-to-{a_tag}.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(out))
 
 

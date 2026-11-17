@@ -12,8 +12,7 @@ import argparse
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .. import geojson, raster
-from ..crs import ROOT
+from .. import crs, geojson, raster
 
 MARGIN_M = 5.0     # shown beyond the boundary on each side
 PATH_COLOURS = [(255, 0, 255), (0, 220, 255), (255, 140, 0), (120, 255, 0), (255, 255, 255), (0, 90, 255)]
@@ -24,7 +23,7 @@ def main():
     ap.add_argument("tags", nargs="+")
     ap.add_argument("--out", default="")
     args = ap.parse_args()
-    ring = geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0]
+    ring = geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0]
     e0, n0 = min(q[0] for q in ring) - MARGIN_M, min(q[1] for q in ring) - MARGIN_M
     e1, n1 = max(q[0] for q in ring) + MARGIN_M, max(q[1] for q in ring) + MARGIN_M
     px = 0.03
@@ -45,21 +44,21 @@ def main():
         dr.line([p(e0, k), p(e1, k)], fill=(150, 150, 150), width=1)
         dr.text((2, p(e0, k)[1] + 2), str(k)[-3:], fill=(0, 0, 0))
     for tag in args.tags:
-        d = np.load(ROOT / "data" / "video" / f"{tag}-site.npz")
+        d = np.load(crs.ROOT / "data" / "video" / f"{tag}-site.npz")
         xyz, rgb = d["xyz"], d["rgb"]
         inside = (xyz[:, 0] > e0) & (xyz[:, 0] < e1) & (xyz[:, 1] > n0) & (xyz[:, 1] < n1) & (d["nview"] >= 3)
         for (x, y, _), c in zip(xyz[inside], rgb[inside]):
             dr.point(p(x, y), fill=tuple(int(v) for v in c))
     dr.line([p(*q[:2]) for q in ring], fill=(255, 220, 0), width=2)
-    house = geojson.read(ROOT / "data" / "site" / "house.geojson")["features"][0]["geometry"]["coordinates"][0]
+    house = geojson.read(crs.ROOT / "data" / "site" / "house.geojson")["features"][0]["geometry"]["coordinates"][0]
     dr.line([p(*q[:2]) for q in house], fill=(230, 30, 30), width=2)
     for k, tag in enumerate(args.tags):
-        cams = np.load(ROOT / "data" / "video" / f"{tag}-site.npz")["cameras"]
+        cams = np.load(crs.ROOT / "data" / "video" / f"{tag}-site.npz")["cameras"]
         colour = PATH_COLOURS[k % len(PATH_COLOURS)]
         dr.line([p(c[0], c[1]) for c in cams], fill=colour, width=2)
         x, y = p(cams[0][0], cams[0][1])
         dr.text((x + 4, y), tag, fill=colour)
-    out = ROOT / "data" / "video" / "checks"
+    out = crs.ROOT / "data" / "video" / "checks"
     out.mkdir(exist_ok=True)
     name = args.out or args.tags[0]
     img.save(out / f"{name}-plan.jpg", quality=88)

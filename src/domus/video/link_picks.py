@@ -18,15 +18,18 @@ from pathlib import Path
 
 import numpy as np
 
-from ..crs import ROOT
+from .. import crs
 from ..sfm_georef import apply, fit_similarity, horn_initial, load, triangulate_pixels
 
-VID = ROOT / "data" / "video"
+
+def video_dir():
+    """The site's video work, data/video/."""
+    return crs.ROOT / "data" / "video"
 
 
 def triangulated(tag, picks_path):
     """Feature id -> xyz in the reconstruction, for features seen in two or more registered frames."""
-    rec = load(VID / f"{tag}-sfm.npz")
+    rec = load(video_dir() / f"{tag}-sfm.npz")
     clip = tag.split("-")[0]
     registered = {n for n, rv in zip(rec["names"], rec["rvecs"]) if np.all(np.isfinite(rv))}
     out = {}
@@ -72,7 +75,7 @@ def main():
     out = {"from": b_tag, "to": a_tag, "params": p.tolist(), "scale": float(np.exp(p[0])),
            "features": ids, "inliers": int(inl.sum()), "tolerance": float(tol),
            "median_error": float(np.median(err[inl])), "method": "shared marked points"}
-    (VID / f"{b_tag}-to-{a_tag}.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+    (video_dir() / f"{b_tag}-to-{a_tag}.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in out.items() if k != "params"}))
 
 

@@ -16,12 +16,13 @@ import os
 from shapely.geometry import shape
 
 from . import crs, geojson, marks, publicdata
-from .crs import ROOT
 
 TITLES, EASEMENTS, LINEAR_EASEMENTS = "layer-50804", "layer-50782", "layer-50783"
 EASEMENT_SEARCH_M = 10.0
 ON_LOT_M2, ON_LOT_M = 1.0, 0.3
-PATH = ROOT / "data" / "site" / "title.geojson"
+def title_path():
+    """The lot's title and easements, data/site/title.geojson."""
+    return crs.ROOT / "data" / "site" / "title.geojson"
 
 
 def _to_site(coords):
@@ -82,7 +83,7 @@ def fetch(key):
 
 
 def read():
-    return [f for f in geojson.read_optional(PATH) or []]
+    return [f for f in geojson.read_optional(title_path()) or []]
 
 
 def easements():
@@ -101,7 +102,7 @@ def main(argv=None):
             print(f"{p['name']}: {p['estate']}, {p['type']}")
         else:
             print(f"{p['name']} ({p['intent']}){', on the lot' if p['on_lot'] else ', nearby'}")
-    geojson.write(PATH, geojson.collection(feats, "title", "The lot's title and nearby easements, from LINZ (CC BY 4.0)",
+    geojson.write(title_path(), geojson.collection(feats, "title", "The lot's title and nearby easements, from LINZ (CC BY 4.0)",
                                            epsg=crs.site_epsg()))
-    print(f"{len(feats)} features -> {PATH}. Run domus build, then look in the Boundaries group.")
+    print(f"{len(feats)} features -> {title_path()}. Run domus build, then look in the Boundaries group.")
     return 0

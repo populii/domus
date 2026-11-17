@@ -15,16 +15,14 @@
 deprecation warning in an earlier release and a "For site projects" note in CHANGELOG.md. The rest of the `domus`
 package is internal, and can change in any release.
 
-**One site per process, for now.** Domus's modules read the site's folder when they're imported, so open the site
-before importing any other `domus` module, and use another process for another site. open_site says so if something
-got there first. A problem a person can put right, such as a missing setting, comes as a DomusError whose message says
-what.
+**Several sites in one process.** Each Site reads its own folder, and what Domus reads of one is kept apart from
+the others, so a tool can open two sites and compare them. A problem a person can put right, such as a missing
+setting, comes as a DomusError whose message says what.
 """
 
 import copy
 import os
 import re
-import sys
 from pathlib import Path
 
 from .errors import DomusError
@@ -32,56 +30,53 @@ from .errors import DomusError
 __all__ = ["DomusError", "Site", "clip", "fit_affine", "linz_query", "open_site", "resample_line"]
 
 LAYER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
-_site = None
+_opened = {}
 
 
 def open_site(path=None):
-    """The site project in the folder `path`: None means the one DOMUS_SITE names, else the current folder.
+    """The site project in the folder `path`: None means the one DOMUS_SITE names, else the current folder. A folder that
+    isn't a site project raises a DomusError.
 
-    A process holds one site for now: opening another raises a DomusError, and so does a folder that isn't a site
-    project. A site opened by a path other than DOMUS_SITE's is built into its own viewer/data, as `domus --site`
-    does, whatever DOMUS_OUTPUT says."""
-    global _site
+    A process can open several sites; opening one twice gives the same Site. A site opened by a path other than
+    DOMUS_SITE's is built into its own viewer/data, as `domus --site` does, whatever DOMUS_OUTPUT says."""
+    from .project import site as sites
+
     root = Path(path if path is not None else os.environ.get("DOMUS_SITE") or ".").resolve()
     if not (root / "data" / "site.toml").exists():
         raise DomusError(f"{root} isn't a site project: it has no data/site.toml. domus new or domus create starts one.")
-    crs = sys.modules.get("domus.crs")
-    held = _site.path if _site is not None else crs.ROOT if crs is not None else None
-    if held is not None and held != root:
-        raise DomusError(f"This process already has the site in {held} open, so it can't open {root}: Domus holds one site per "
-                         "process for now. Open the site before importing other domus modules, or use another process.")
-    if crs is None and _site is None:
-        named = os.environ.get("DOMUS_SITE")
-        if named is None or Path(named).resolve() != root:
-            os.environ["DOMUS_SITE"] = str(root)
-            os.environ.pop("DOMUS_OUTPUT", None)
-    if _site is None:
-        _site = Site(root)
-    return _site
+    if root not in _opened:
+        started = sites.started()
+        _opened[root] = Site(started if started.path == root else sites.Site(root))
+    return _opened[root]
 
 
 class Site:
     """A site project, as open_site gives it. Its methods read the site's files as they are when called, on the site's
     own grid (`[crs] epsg` in data/site.toml) with heights on its vertical datum."""
 
-    def __init__(self, path):
-        self.path = Path(path)
+    def __init__(self, project):
+        self._project = project
+        self.path = project.path
 
     def __repr__(self):
         return f"Site({str(self.path)!r})"
 
+    def _use(self):
+        from .project.site import use
+
+        return use(self._project)
+
     @property
     def output(self):
         """The folder its model is built into: viewer/data in the site, or DOMUS_OUTPUT for the site DOMUS_SITE names."""
-        from . import crs
-
-        return crs.OUTPUT
+        return self._project.output
 
     def settings(self):
         """data/site.toml, as a dict. It's a copy: changing it changes nothing."""
         from . import crs
 
-        return copy.deepcopy(dict(crs.settings()))
+        with self._use():
+            return copy.deepcopy(dict(crs.settings()))
 
     @property
     def title(self):
@@ -126,10 +121,11 @@ class Site:
 
         from . import raster, terrain
 
-        if not raster.DEM.exists():
-            raise DomusError(f"{self.path} has no ground model yet: domus fetch gets one from LINZ, or put your own at "
-                             f"{raster.DEM}")
-        model = terrain.ground()
+        with self._use():
+            if not raster.DEM.exists():
+                raise DomusError(f"{self.path} has no ground model yet: domus fetch gets one from LINZ, or put your own "
+                                 f"at {raster.DEM}")
+            model = terrain.ground()
 
         def heights(e, n):
             e, n = np.broadcast_arrays(np.asarray(e, float), np.asarray(n, float))
@@ -142,14 +138,16 @@ class Site:
         with `id` (its file's name), `name`, `short`, `description`, `walls`, `terraces`, `stairs` and `path`."""
         from . import options
 
-        return options.load_all()
+        with self._use():
+            return options.load_all()
 
     def frame(self):
         """The frame the options are drawn in (options/_site.toml `[frame]`): s along a boundary, o in from it.
         frame.en(so) turns (s, o) points into the site's grid, and frame.so(en) the other way."""
         from . import design
 
-        return design.frame()
+        with self._use():
+            return design.frame()
 
     def evaluate(self, option):
         """What an option comes to, as the viewer and its comparison table show it: its walls and their heights, cut and
@@ -161,13 +159,15 @@ class Site:
             if not found:
                 raise DomusError(f"{self.path} has no option {option!r} in options/")
             option = found[0]
-        return design.evaluate(option)
+        with self._use():
+            return design.evaluate(option)
 
     def build(self):
         """Builds the model into `output`, as domus build does, and returns that folder."""
         from . import build
 
-        build.main()
+        with self._use():
+            build.main()
         return self.output
 
     def check(self, checks=None, tags=None, plots=False):
@@ -178,7 +178,8 @@ class Site:
         site has nothing for was skipped."""
         from .prep import check
 
-        return check.run(checks or check.CHECKS, tags, plots)
+        with self._use():
+            return check.run(checks or check.CHECKS, tags, plots)
 
 
 def resample_line(line, spacing):

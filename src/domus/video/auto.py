@@ -20,10 +20,12 @@ from PIL import Image
 from scipy.spatial.transform import Rotation
 
 from .. import crs, terrain
-from ..crs import ROOT
 from ..sfm_georef import apply, fit_similarity, load
 
-VID = ROOT / "data" / "video"
+
+def video_dir():
+    """The site's video work, data/video/."""
+    return crs.ROOT / "data" / "video"
 MIN_MATCHED = 8
 MIN_SPREAD_M = 3.0
 EYE_HEIGHT_M = 1.4
@@ -96,7 +98,7 @@ def ground_shift(xyz, ground, cell=0.5):
 
 def missing_clouds(cfg):
     """Clouds the site lists that aren't here, which `export` would need to rebuild the point cloud."""
-    return [t for t in cfg.get("video", {}).get("clouds", []) if not (VID / f"{t}.npz").exists()]
+    return [t for t in cfg.get("video", {}).get("clouds", []) if not (video_dir() / f"{t}.npz").exists()]
 
 
 def main():
@@ -107,7 +109,7 @@ def main():
     args = ap.parse_args()
     video = Path(args.video)
     if not video.is_absolute():
-        video = ROOT / video
+        video = crs.ROOT / video
     if not video.exists():
         raise SystemExit(f"No such video: {video}")
     clip = video.stem
@@ -116,7 +118,7 @@ def main():
 
     print("Pulling out the frames", flush=True)
     step(extract_frames, video)
-    first = next(iter(sorted((ROOT / "sources" / "raw" / "frames6" / clip).glob("*.jpg"))), None)
+    first = next(iter(sorted((crs.ROOT / "sources" / "raw" / "frames6" / clip).glob("*.jpg"))), None)
     if first is None:
         raise SystemExit("No frames came out of that video.")
     width = Image.open(first).size[0]
@@ -134,7 +136,7 @@ def main():
     from ..build import site_origin
 
     t, pos = pose_track(poses, site_origin(cfg, g), ground)
-    rec = load(VID / f"{clip}-sfm.npz")
+    rec = load(video_dir() / f"{clip}-sfm.npz")
     params, res = fit_to_track(camera_centres(rec), t, pos)
     if params is None:
         print("The walk was too short, or too few frames were reconstructed, to fix its place. Place it with `domus video place`.")
@@ -149,8 +151,8 @@ def main():
         dz = 0.0
     xyz[:, 2] += dz
     print(f"Moved {dz:+.2f} m to sit on the ground")
-    np.savez_compressed(VID / f"{clip}-scan.npz", xyz=xyz, rgb=rec["rgb"], nview=rec["nview"])
-    (VID / f"{clip}-scan.json").write_text(json.dumps({"params": params.tolist(), "dz_m": dz, "camera_residual_median_m": float(np.median(res)),
+    np.savez_compressed(video_dir() / f"{clip}-scan.npz", xyz=xyz, rgb=rec["rgb"], nview=rec["nview"])
+    (video_dir() / f"{clip}-scan.json").write_text(json.dumps({"params": params.tolist(), "dz_m": dz, "camera_residual_median_m": float(np.median(res)),
                                                        "source": "AR track, rough"}, indent=1), encoding="utf-8")
 
     gone = missing_clouds(cfg)

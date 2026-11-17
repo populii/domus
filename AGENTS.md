@@ -18,9 +18,11 @@ property's site.
 - Site tools, a site's own tests and agents use the public API, `domus.api` and `domus.testing`
   ([docs/api.md](docs/api.md)), not the package's internals. Anything in it changes only after a deprecation in an
   earlier release and a "For site projects" note in the changelog; the rest of the package can change in any release.
-- `DOMUS_SITE` names the site project; modules read it when imported, so set it before importing them (`cli.py`,
-  `tests/conftest.py`). `api.open_site` and `domus.testing.use_site` do this for site tools and tests. Library code
-  raises `DomusError` for anything a person can put right, never `SystemExit`: the command line shows the message.
+- `DOMUS_SITE` names the site a process starts with, read the first time Domus needs the site. Modules read the
+  current site (`domus.project.site`: `current()`, and `use(site)` to make another current for a while) and keep what
+  they read of it on it (`cached`), never in a module's own globals. `api.open_site` opens any number of sites for
+  site tools and agents, and `domus.testing.use_site` names the one a site's tests are for. Library code raises
+  `DomusError` for anything a person can put right, never `SystemExit`: the command line shows the message.
 - Keep real sites' plans, photos, addresses and names out of the repo's tracked files, including comments and tests.
   Anything only one site needs goes in that site: its data, settings, tools and tests, never in common.
 - A site tool that proves general can move into common: give its numbers settings, test it on the made-up sites,

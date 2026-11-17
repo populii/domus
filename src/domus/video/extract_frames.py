@@ -16,7 +16,7 @@ import av
 import cv2
 import numpy as np
 
-from ..crs import ROOT
+from .. import crs
 
 
 def main():
@@ -25,7 +25,7 @@ def main():
     ap.add_argument("--fps", type=float, default=6.0)
     args = ap.parse_args()
     video = Path(args.video)
-    out = ROOT / "sources" / "raw" / "frames6" / video.stem
+    out = crs.ROOT / "sources" / "raw" / "frames6" / video.stem
     out.mkdir(parents=True, exist_ok=True)
 
     rows, best = [], {}
@@ -52,7 +52,7 @@ def main():
         w = csv.writer(fh)
         w.writerow(["frame", "t_s", "window", "sharpness", "kept"])
         w.writerows((*r, int(r[1] in kept)) for r in rows)
-    print(f"{video.name}: {len(rows)} frames decoded, {len(best)} kept in {out.relative_to(ROOT)}")
+    print(f"{video.name}: {len(rows)} frames decoded, {len(best)} kept in {out.relative_to(crs.ROOT)}")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,8 @@
 """The site project, its coordinate systems and height datums.
 
-A site project is a folder holding data/site.toml, data/site/*.geojson, options/ and so on. Its
-path comes from the DOMUS_SITE environment variable, or the current folder.
+A site project is a folder holding data/site.toml, data/site/*.geojson, options/ and so on. The one Domus reads is the
+current site (domus.project.site): the one the process was started for (DOMUS_SITE, or the current folder), or one a
+workflow made current. ROOT and OUTPUT are its folder and the folder its model is built into, looked up each time.
 
 Site data is on the grid named by [crs] epsg in data/site.toml, heights on [crs] vertical. Rasters are read on
 their own grids (domus.raster).
@@ -9,26 +10,32 @@ A site can list other height datums its documents use: [datums.<key>] label, off
 their level = the model's height + offset_m.
 """
 
-import os
 import sys
 import tomllib
-from functools import lru_cache
-from pathlib import Path
 
 from pyproj import Transformer
 
-ROOT = Path(os.environ.get("DOMUS_SITE", ".")).resolve()
-OUTPUT = Path(os.environ.get("DOMUS_OUTPUT", ROOT / "viewer" / "data")).resolve()
+from .project.site import cached, current
+
 NZTM_EPSG = 2193
 
 
-@lru_cache
+def __getattr__(name):
+    """ROOT and OUTPUT: the current site's folder, and the folder its model is built into."""
+    if name == "ROOT":
+        return current().path
+    if name == "OUTPUT":
+        return current().output
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+@cached
 def settings():
     """data/site.toml, at this Domus's format whatever format the site is in (domus.project.formats), read through
     the settings schema (domus.project.schema): a key the file leaves out reads as its default."""
     from .project import formats, schema
 
-    site = formats.site(tomllib.loads((ROOT / "data" / "site.toml").read_text(encoding="utf-8")))
+    site = formats.site(tomllib.loads((current().path / "data" / "site.toml").read_text(encoding="utf-8")))
     for warning in schema.unknown(site, schema.SITE, "data/site.toml: "):
         print(f"Warning: {warning}", file=sys.stderr)
     return schema.Settings(site, schema.SITE, "data/site.toml: ")
@@ -38,7 +45,7 @@ def site_format():
     """The format the site's own files are in, as data/site.toml says (settings() has them at this Domus's)."""
     from .project import formats
 
-    return formats.format_of(tomllib.loads((ROOT / "data" / "site.toml").read_text(encoding="utf-8")))
+    return formats.format_of(tomllib.loads((current().path / "data" / "site.toml").read_text(encoding="utf-8")))
 
 
 def site_epsg():
@@ -62,17 +69,17 @@ def label():
     return f"{CRS.from_epsg(site_epsg()).name} (EPSG:{site_epsg()})"
 
 
-@lru_cache
+@cached
 def _to_nztm():
     return Transformer.from_crs(site_epsg(), NZTM_EPSG, always_xy=True)
 
 
-@lru_cache
+@cached
 def _to_site():
     return Transformer.from_crs(NZTM_EPSG, site_epsg(), always_xy=True)
 
 
-@lru_cache
+@cached
 def _to_lonlat():
     return Transformer.from_crs(site_epsg(), 4326, always_xy=True)
 

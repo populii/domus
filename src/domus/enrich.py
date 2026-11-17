@@ -14,8 +14,7 @@ import numpy as np
 import shapely
 from shapely.geometry import LineString, Point, Polygon
 
-from . import geojson, raster
-from .crs import ROOT
+from . import crs, geojson, raster
 
 SPOT_SPACING_M = 6.0
 
@@ -73,20 +72,20 @@ def sources(in_nz):
 
 
 def has_any(pattern):
-    return any(p.is_file() and re.search(pattern, p.name, re.IGNORECASE) for p in (ROOT / "sources" / "raw").rglob("*")) \
-        if (ROOT / "sources" / "raw").is_dir() else False
+    return any(p.is_file() and re.search(pattern, p.name, re.IGNORECASE) for p in (crs.ROOT / "sources" / "raw").rglob("*")) \
+        if (crs.ROOT / "sources" / "raw").is_dir() else False
 
 
 def checklist(cfg):
     """The sources in order of value, each with whether the site's files already show it."""
     found = {
         "boundary": not _boundary_is_public(),
-        "measure": (ROOT / "data" / "site" / "ground-fixes.geojson").exists() or (ROOT / "data" / "site" / "walls-existing.geojson").exists(),
-        "video": any((ROOT / "data" / "video").glob("*-site.npz")),
-        "scan": any((ROOT / "data" / "video").glob("*-scan.npz")),
-        "plans": bool(cfg.get("drapes")) or (ROOT / "data" / "georef").is_dir(),
-        "drains": (ROOT / "data" / "site" / "services.geojson").exists(),
-        "photos": (ROOT / "data" / "house" / "faces.json").exists() or (ROOT / "data" / "features").is_dir(),
+        "measure": (crs.ROOT / "data" / "site" / "ground-fixes.geojson").exists() or (crs.ROOT / "data" / "site" / "walls-existing.geojson").exists(),
+        "video": any((crs.ROOT / "data" / "video").glob("*-site.npz")),
+        "scan": any((crs.ROOT / "data" / "video").glob("*-scan.npz")),
+        "plans": bool(cfg.get("drapes")) or (crs.ROOT / "data" / "georef").is_dir(),
+        "drains": (crs.ROOT / "data" / "site" / "services.geojson").exists(),
+        "photos": (crs.ROOT / "data" / "house" / "faces.json").exists() or (crs.ROOT / "data" / "features").is_dir(),
         "ifc": "ifc" in cfg,
     }
     from .crs import site_to_lonlat
@@ -99,7 +98,7 @@ def checklist(cfg):
 
 
 def _boundary_is_public():
-    feats = geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"]
+    feats = geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"]
     src = str(feats[0]["properties"].get("source", ""))
     return "A guide, not a survey" in src or "stand-in" in src or "square" in src
 

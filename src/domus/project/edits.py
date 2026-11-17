@@ -45,14 +45,17 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import cKDTree
 
-from ..crs import ROOT
+from .. import crs
 from ..errors import DomusError
 
-SITE = ROOT / "data" / "site"
+
+def layers_dir():
+    """The site's curated layers, data/site/."""
+    return crs.ROOT / "data" / "site"
 
 
 def _read(name):
-    path = SITE / name
+    path = layers_dir() / name
     if not path.exists():
         raise DomusError(f"There's no {path}")
     raw = path.read_text(encoding="utf-8")

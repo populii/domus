@@ -24,10 +24,10 @@ changing with it.
 `api.open_site(path=None)` gives the site project in a folder: the one given, else the one `DOMUS_SITE` names, else
 the current folder. A folder without `data/site.toml` raises a `DomusError`.
 
-A process holds one site, for now. Domus's modules read the site's folder when they're imported, so open the site
-before importing any other `domus` module, and use another process for another site. `open_site` raises a
-`DomusError` if the process already has a different site. A site opened by a path other than `DOMUS_SITE`'s is
-built into its own `viewer/data`, as `domus --site` does.
+A process can open several sites. Each `Site` reads its own folder, and what Domus reads of one (its settings, its
+rasters, its ground) is kept apart from the others, so a tool can open two sites and compare them. Opening the same
+folder twice gives the same `Site`. A site opened by a path other than `DOMUS_SITE`'s is built into its own
+`viewer/data`, as `domus --site` does.
 
 ## A site
 

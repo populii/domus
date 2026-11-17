@@ -43,11 +43,11 @@ def test_newest_year_from_title():
     assert linz._year("no year") == 0
 
 
-def test_fetch_skips_a_survey_with_no_data_here(site, monkeypatch, tmp_path):
+def test_fetch_skips_a_survey_with_no_data_here(site, monkeypatch, tmp_path, at_site):
     monkeypatch.setattr(linz, "site_bounds", lambda: (0, 0, 10, 10))
-    linz.crs.settings()             # the demo's settings, read before the site's folder moves to tmp_path
-    monkeypatch.setattr(linz.crs, "ROOT", tmp_path)
     (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "site.toml").write_bytes((site / "data" / "site.toml").read_bytes())     # the demo, moved
+    at_site(tmp_path)
     surveys = {"ground model": [("Empty (2025)", ["e"]), ("Full (2025)", ["f"])]}
     monkeypatch.setattr(linz, "find_surveys", lambda catalog, match, bounds, recent: iter(surveys.get(next(
         s[0] for s in linz.SOURCES if s[2] is match), [])))

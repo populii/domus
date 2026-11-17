@@ -14,17 +14,19 @@ import itertools
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .. import geojson, raster
-from ..crs import ROOT
+from .. import crs, geojson, raster
 from . import config
 
-VID = ROOT / "data" / "video"
+
+def video_dir():
+    """The site's video work, data/video/."""
+    return crs.ROOT / "data" / "video"
 
 
 def edge_line():
     """The reference line and the point its chainage counts from."""
     cfg = config("sections")
-    ring = geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0]
+    ring = geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0]
     corners = [ring[i][:2] for i in cfg["line_corners"]]
     return np.array([*cfg.get("line_start", []), *corners], float), np.array(ring[cfg["origin_corner"]][:2], float)
 
@@ -66,14 +68,14 @@ def main():
     line, start = edge_line()
     clouds = []
     for name in args.clouds:
-        d = np.load(VID / f"{name}.npz")
+        d = np.load(video_dir() / f"{name}.npz")
         xyz = d["xyz"]
         keep = d["nview"] >= 3 if "nview" in d else np.ones(len(xyz), bool)
         s, o = frame_of(xyz[keep], line, start)
         clouds.append((name, xyz[keep], d["rgb"][keep], s, o))
-    walls = geojson.read(ROOT / "data" / "site" / "walls-existing.geojson")["features"]
+    walls = geojson.read(crs.ROOT / "data" / "site" / "walls-existing.geojson")["features"]
     dem = raster.dem()
-    out = VID / "checks" / "sections"
+    out = video_dir() / "checks" / "sections"
     out.mkdir(parents=True, exist_ok=True)
     W, H, sc = 760, 520, 120.0
     tiles = []
@@ -138,6 +140,6 @@ def main():
     for k, t in enumerate(tiles):
         sheet.paste(t.resize((W // 2, H // 2)), ((k % cols) * W // 2, (k // cols) * H // 2))
     sheet.save(out / f"{args.clouds[0]}-sheet.jpg", quality=85)
-    print(f"{len(tiles)} sections -> {out.relative_to(ROOT)}")
+    print(f"{len(tiles)} sections -> {out.relative_to(crs.ROOT)}")
 
 

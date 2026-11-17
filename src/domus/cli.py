@@ -18,8 +18,8 @@
     domus site regrade CLOUD SPEC BACKUP [--apply]            give ground fixes the levels a placed cloud shows
 
 Every command but `new` and `demo` works on the site project in the current folder, or the one
-named by --site or the DOMUS_SITE environment variable. Modules are imported only once that's
-set, because they read it when imported.
+named by --site or the DOMUS_SITE environment variable, which Domus reads the first time it needs
+the site (domus.project.site).
 """
 
 import argparse

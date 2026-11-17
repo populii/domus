@@ -7,8 +7,8 @@ import numpy as np
 import shapely
 from shapely.geometry import Polygon
 
-from . import geojson, raster, terrain
-from .crs import ROOT, settings, site_epsg
+from . import crs, geojson, raster, terrain
+from .crs import settings, site_epsg
 from .vegetation import (
     STEP,
     aerial_rgb,
@@ -22,7 +22,10 @@ from .vegetation import (
     vegetation_mask,
 )
 
-TREES = ROOT / "data" / "site" / "trees.geojson"
+
+def trees_path():
+    """The site's curated plants, data/site/trees.geojson."""
+    return crs.ROOT / "data" / "site" / "trees.geojson"
 
 
 def lidar_name():
@@ -30,9 +33,9 @@ def lidar_name():
     return settings().get("labels", {}).get("lidar", "LiDAR")
 
 
-def read(path=TREES):
+def read(path=None):
     """The site's curated plants, data/site/trees.geojson's features (none without the file)."""
-    return geojson.read_optional(path)
+    return geojson.read_optional(trees_path() if path is None else path)
 
 
 def aerial_ndvi(E, N, step=STEP):
@@ -54,7 +57,7 @@ def house_mask(E, N, buffer=1.0):
     """Cells under the house (its walls, bay windows and porches from data/site/house.geojson), widened by
     `buffer`: the eaves (0.35 m) and the half-diagonal of a 1 m LiDAR cell that takes the roof's
     height where it overlaps the eaves."""
-    feats = geojson.read_optional(ROOT / "data" / "site" / "house.geojson")
+    feats = geojson.read_optional(crs.ROOT / "data" / "site" / "house.geojson")
     polys = [Polygon(f["geometry"]["coordinates"][0]) for f in feats
              if f["geometry"]["type"] == "Polygon" and (f["properties"]["id"] == "house-walls"
                                                          or f["properties"].get("part") in ("bay", "porch"))]
@@ -100,7 +103,7 @@ class OnDemand:
 def drawn_from():
     """What the build draws the site's plants from, as vegetation.layers takes it: the lot (the boundary's first
     feature), the surface model and the aerial photo (read when a plant needs them), and the viewer's words."""
-    lot = Polygon(geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0])
+    lot = Polygon(geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0])
     return {"lot": lot, "surface": OnDemand(raster.dsm), "aerial": OnDemand(raster.aerial), "lidar": lidar_name(),
             "looks_from_videos": bool(settings().get("video", {}).get("clouds")),
             "bed_floor_source": settings().get("labels", {}).get("bed_floor_source",
@@ -114,7 +117,7 @@ def map_site():
     fc = geojson.collection([as_json(c) for c in cands], "canopy",
                             "Candidate crowns from the LiDAR canopy (surface less ground) and the aerial; "
                             "data/site/trees.geojson holds the curated features", epsg=site_epsg())
-    out = ROOT / settings().get("rasters", {}).get("canopy", "data/sources/canopy.geojson")
+    out = crs.ROOT / settings().get("rasters", {}).get("canopy", "data/sources/canopy.geojson")
     geojson.write(out, fc)
     kinds = {}
     for c in cands:

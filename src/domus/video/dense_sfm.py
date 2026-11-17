@@ -20,10 +20,13 @@ import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from ..crs import ROOT
+from .. import crs
 from ..sfm_georef import apply, load
 
-VID = ROOT / "data" / "video"
+
+def video_dir():
+    """The site's video work, data/video/."""
+    return crs.ROOT / "data" / "video"
 
 
 T0 = time.time()
@@ -35,7 +38,7 @@ def log(msg):
 
 def frame_path(tag, name):
     clip, stem = (name.split("/", 1) if "/" in name else (tag.split("-")[0], name))
-    return ROOT / "sources" / "raw" / "frames6" / clip / f"{stem}.jpg"
+    return crs.ROOT / "sources" / "raw" / "frames6" / clip / f"{stem}.jpg"
 
 
 def stereo_pair(img_a, img_b, k, dist, ra, ta, rb, tb, scale, z_near, z_far):
@@ -80,8 +83,8 @@ def main():
     ap.add_argument("--every", type=int, default=2)
     ap.add_argument("--scale", type=float, default=0.5)
     args = ap.parse_args()
-    rec = load(VID / f"{args.tag}-sfm.npz")
-    params = np.array(json.loads((VID / f"{args.tag}-georef.json").read_text(encoding="utf-8"))["params"])
+    rec = load(video_dir() / f"{args.tag}-sfm.npz")
+    params = np.array(json.loads((video_dir() / f"{args.tag}-georef.json").read_text(encoding="utf-8"))["params"])
     s_site = float(np.exp(params[0]))
     f, k1, cx, cy = rec["intr"]
     k = np.array([[f, 0, cx], [0, f, cy], [0, 0, 1]])
@@ -145,7 +148,7 @@ def main():
     keep = n_pairs >= 2
     xyz_out = pos[keep] / n_pts[keep, None]
     rgb_out = (col[keep] / n_pts[keep, None]).clip(0, 255).astype(np.uint8)
-    np.savez_compressed(VID / f"{args.tag}-dense.npz", xyz=xyz_out, rgb=rgb_out, pairs=n_pairs[keep])
+    np.savez_compressed(video_dir() / f"{args.tag}-dense.npz", xyz=xyz_out, rgb=rgb_out, pairs=n_pairs[keep])
     log(f"wrote {args.tag}-dense.npz: {keep.sum()} of {len(uniq)} {cell * 100:.0f} cm cells seen by 2+ "
         f"of {len(parts)} pairs")
 

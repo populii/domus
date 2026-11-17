@@ -64,8 +64,8 @@ def test_copernicus_tiles_are_named_for_their_south_west_corner():
     assert "S34_00_E151_00" in osm.tile(-33.9, 151.2) and "N00_00_E000_00" in osm.tile(0.5, 0.5)
 
 
-def test_fetch_takes_the_site_s_patch_of_the_ground_model(site, tmp_path, monkeypatch):
-    from domus import crs, raster
+def test_fetch_takes_the_site_s_patch_of_the_ground_model(site, tmp_path, monkeypatch, at_site):
+    from domus import raster
 
     west, south, east, north = osm.site_box()
     step = 1 / 3600                                                     # one arc-second, as GLO-30's are here
@@ -79,9 +79,10 @@ def test_fetch_takes_the_site_s_patch_of_the_ground_model(site, tmp_path, monkey
                        transform=from_origin(x0, y0, step, step), nodata=-9999.0) as dst:
         dst.write(plane.astype("float32"), 1)
     (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "site.toml").write_bytes((site / "data" / "site.toml").read_bytes())     # the demo, moved
     monkeypatch.setattr(osm, "tile", lambda lat, lon: str(tile))
-    monkeypatch.setattr(raster, "DEM", tmp_path / "data" / "lidar" / "dem.tif")
-    monkeypatch.setattr(crs, "ROOT", tmp_path)
+    at_site(tmp_path)
+    assert raster.DEM == tmp_path / "data" / "lidar" / "dem.tif"
     osm.fetch()
     with rasterio.open(tmp_path / "data" / "lidar" / "dem.tif") as src:
         assert src.crs.to_epsg() == 4326 and src.units == ("metre",)

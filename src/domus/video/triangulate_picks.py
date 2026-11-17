@@ -19,11 +19,13 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from .. import sfm
-from ..crs import ROOT
+from .. import crs, sfm
 from ..sfm_georef import apply, load, triangulate_pixels
 
-VID = ROOT / "data" / "video"
+
+def video_dir():
+    """The site's video work, data/video/."""
+    return crs.ROOT / "data" / "video"
 
 
 def reproject(rec, x, obs):
@@ -46,11 +48,11 @@ def main():
     picks = json.loads(picks_path.read_text(encoding="utf-8"))
     models = []
     for tag in tags:
-        geo = VID / f"{tag}-georef.json"
+        geo = video_dir() / f"{tag}-georef.json"
         if not geo.exists():
             print(f"{tag}: not placed on the site yet, skipped")
             continue
-        rec = load(VID / f"{tag}-sfm.npz")
+        rec = load(video_dir() / f"{tag}-sfm.npz")
         main_clip = tag.split("-")[0]
         reg = {n for n, rv in zip(rec["names"], rec["rvecs"]) if np.all(np.isfinite(rv))}
         models.append((tag, main_clip, rec, reg, np.array(json.loads(geo.read_text(encoding="utf-8"))["params"])))
@@ -94,7 +96,7 @@ def main():
         w.writeheader()
         for r in rows:
             w.writerow({k: r.get(k, "") for k in fields})
-    print(f"wrote {out.relative_to(ROOT)}")
+    print(f"wrote {out.relative_to(crs.ROOT)}")
 
 
 if __name__ == "__main__":

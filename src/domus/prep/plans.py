@@ -12,8 +12,8 @@ import json
 
 import numpy as np
 
-from .. import geojson
-from ..crs import ROOT, site_epsg
+from .. import crs, geojson
+from ..crs import site_epsg
 from ..errors import DomusError
 from ..georef import apply_affine, find_cross, fit_affine, fit_rigid, fit_similarity, intersect, refine_line
 from . import config
@@ -25,9 +25,9 @@ def pages():
     import pdfplumber
 
     for job in config("plans")["pages"]:
-        out = ROOT / job["out"]
+        out = crs.ROOT / job["out"]
         out.mkdir(parents=True, exist_ok=True)
-        with pdfplumber.open(ROOT / job["pdf"]) as pdf:
+        with pdfplumber.open(crs.ROOT / job["pdf"]) as pdf:
             for i, page in enumerate(pdf.pages, start=1):
                 (image,) = page.images
                 ext, data = page_image(image["stream"])
@@ -181,11 +181,11 @@ def _runs(page, split_at_space):
 def georef():
     from PIL import Image
 
-    out_dir = ROOT / "data" / "georef"
+    out_dir = crs.ROOT / "data" / "georef"
     out_dir.mkdir(parents=True, exist_ok=True)
     for sheet in config("plans")["georef"]:
         r = sheet["rough"]
-        gray = np.asarray(Image.open(ROOT / sheet["image"]).convert("L"))
+        gray = np.asarray(Image.open(crs.ROOT / sheet["image"]).convert("L"))
         ties = []
         for n in sheet["grid_n"]:
             for e in sheet["grid_e"]:
@@ -211,9 +211,9 @@ def scan_corners(spec):
     """Corners read off a georeferenced scan: lines refined between rough points, intersected, put on the grid."""
     from PIL import Image
 
-    rec = json.loads((ROOT / spec["sheet"]).read_text(encoding="utf-8"))
+    rec = json.loads((crs.ROOT / spec["sheet"]).read_text(encoding="utf-8"))
     a = np.array(rec["A"])
-    gray = np.asarray(Image.open(ROOT / rec["image"]).convert("L"))
+    gray = np.asarray(Image.open(crs.ROOT / rec["image"]).convert("L"))
     approx = {k: np.array(v) * spec.get("scale", 1.0) for k, v in spec["approx"].items()}
     lines = {n: refine_line(gray, approx[n[0]], approx[n[1]], band=12, trim=0.15) for n in spec["lines"]}
     return [apply_affine(a, [intersect(lines[p], lines[q])])[0] for _, p, q in spec["corners"]]
@@ -237,7 +237,7 @@ def corner_marks(drawings, spec):
 def trace_one(job):
     import pdfplumber
 
-    with pdfplumber.open(ROOT / job["pdf"]) as pdf:
+    with pdfplumber.open(crs.ROOT / job["pdf"]) as pdf:
         _trace_page(job, pdf.pages[job.get("page", 0)])
 
 
@@ -256,7 +256,7 @@ def _trace_page(job, page):
         k = np.exp(1j * rot)
         fields = {"paper": job["paper_scale"], "scale": 1.0}
     else:
-        ring = geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0]
+        ring = geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0]
         title = dict(zip(fit["boundary_corners"], ring))
         paper = lambda pt: np.array([pt[0], -pt[1]])
         src = np.array([paper(p) for p in fit["paper"].values()])
@@ -324,7 +324,7 @@ def _trace_page(job, page):
                                                 text=text.strip()))
     desc = job.get("description", "{name}: rotation {rot:.3f} deg, residuals (m) {resid}.").format(
         name=job["name"], rot=np.degrees(rot), resid=np.round(resid, 3).tolist(), **fields)
-    out = ROOT / job["out"]
+    out = crs.ROOT / job["out"]
     geojson.write(out, geojson.collection(features, job["name"], desc, epsg=site_epsg()))
     print(desc)
     print(f"{len(features)} features -> {out}")

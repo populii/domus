@@ -73,8 +73,8 @@ trusts none, and the server never imports a site's code.
 Site tools, a site's own tests and agents use `domus.api` and `domus.testing` ([docs/api.md](docs/api.md)): open a site,
 read its lot, house, layers, ground and options, evaluate an option, build and check. What they offer changes only
 after a deprecation in an earlier release and a "For site projects" note in the changelog. The rest of the package is
-internal, so common can change behind the API without breaking a site's tools. For now the API is a thin layer over
-one site per process; later phases replace what's behind it.
+internal, so common can change behind the API without breaking a site's tools. A process can hold several sites:
+Domus's modules read the current site (`domus.project.site`), and each site keeps what Domus reads of it.
 
 ## Where it's heading
 

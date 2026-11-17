@@ -11,7 +11,9 @@ import rasterio
 from pyproj import CRS, Transformer
 from scipy.ndimage import map_coordinates
 
-from .crs import ROOT, settings, site_epsg
+from . import crs
+from .crs import settings, site_epsg
+from .project.site import cached
 
 FEET = {"ft": 0.3048, "foot": 0.3048, "feet": 0.3048, "international foot": 0.3048,
         "us survey foot": 1200 / 3937, "us-ft": 1200 / 3937, "ftus": 1200 / 3937, "us_survey_foot": 1200 / 3937}
@@ -24,7 +26,7 @@ def __getattr__(name):
     # raster.DEM and so on: read when used, since a site's settings can name its own files.
     if name in DEFAULTS:
         key, default = DEFAULTS[name]
-        return ROOT / settings().get("rasters", {}).get(key, default)
+        return crs.ROOT / settings().get("rasters", {}).get(key, default)
     raise AttributeError(name)
 
 
@@ -89,25 +91,25 @@ class Raster:
         return np.asarray(x) + self.shift[0], np.asarray(y) + self.shift[1], self.data[band]
 
 
-@lru_cache
+@cached
 def dem():
     """Bare-ground model, LiDAR 1 m DEM."""
     return Raster(__getattr__("DEM"), shift("dem"), heights=True)
 
 
-@lru_cache
+@cached
 def dsm():
     """First-return surface model (roofs, trees), same survey."""
     return Raster(__getattr__("DSM"), shift("dsm"), heights=True)
 
 
-@lru_cache
+@cached
 def aerial():
     """Aerial photo, RGB."""
     return Raster(__getattr__("AERIAL"), shift("aerial"))
 
 
-@lru_cache
+@cached
 def nir():
     """Near-infrared aerial photo: band 0 red, band 1 near-infrared. Optional."""
     return Raster(__getattr__("NIR"), shift("nir"))

@@ -26,11 +26,14 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from ..crs import ROOT
+from .. import crs
 from ..errors import DomusError
 from .cloud import read_clouds
 
-VID = ROOT / "data" / "video"
+
+def video_dir():
+    """The site's video work, data/video/."""
+    return crs.ROOT / "data" / "video"
 
 
 def face_fit(so, z, item):
@@ -94,7 +97,7 @@ class Placed:
     (data/video/<tag>-georef.json, or the file `georef`)."""
 
     def __init__(self, tag, georef=None):
-        sfm, geo = VID / f"{tag}-sfm.npz", georef or VID / f"{tag}-georef.json"
+        sfm, geo = video_dir() / f"{tag}-sfm.npz", georef or video_dir() / f"{tag}-georef.json"
         for path in (sfm, geo):
             if not path.exists():
                 raise DomusError(f"{tag} isn't a placed reconstruction: there's no {path}")

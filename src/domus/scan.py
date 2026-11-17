@@ -25,7 +25,6 @@ import numpy as np
 from pyproj import Transformer
 
 from . import crs
-from .crs import ROOT
 from .errors import DomusError
 
 UP_TO_Z = {"z": np.eye(3), "y": np.array([[1.0, 0, 0], [0, 0, -1.0], [0, 1.0, 0]])}
@@ -244,7 +243,7 @@ def main(argv=None):
     print(f"{inside.sum():,} points fall inside the model's extent")
     if not inside.any():
         print("warning: none of the scan lands on the site. Check the control points' coordinates.")
-    out = ROOT / "data" / "video" / f"{args.tag}-scan.npz"
+    out = crs.ROOT / "data" / "video" / f"{args.tag}-scan.npz"
     out.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(out, xyz=site, rgb=rgb, nview=np.full(len(site), 3, np.uint8))
     print(f"wrote {out}. Next: domus video export, then domus build")

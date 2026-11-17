@@ -72,16 +72,20 @@ from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 
 from .. import crs, geojson, raster, sfm, terrain
-from ..crs import ROOT
 from ..errors import DomusError
 from ..sfm_georef import apply, fit_similarity, horn_initial, load, triangulate_pixels
 
-VID = ROOT / "data" / "video"
-FRAMES = ROOT / "sources" / "raw" / "frames6"
+
+def video_dir():
+    """The site's video work, data/video/."""
+    return crs.ROOT / "data" / "video"
+def frames_dir():
+    """The clips' frames, sources/raw/frames6/."""
+    return crs.ROOT / "sources" / "raw" / "frames6"
 
 
 def house_planes():
-    ring = np.asarray(geojson.read(ROOT / "data" / "site" / "house.geojson")["features"][0]
+    ring = np.asarray(geojson.read(crs.ROOT / "data" / "site" / "house.geojson")["features"][0]
                       ["geometry"]["coordinates"][0])[:-1]
     planes = []
     for a, b in zip(ring, np.roll(ring, -1, axis=0)):
@@ -268,7 +272,7 @@ def vertical_up(intr, img, min_len=60, thresh_deg=0.6, iters=3000, seed=0, roi=N
 def frame_path(tag, name):
     """A frame of the reconstruction: 'tNNN.NNN' of its own clip, or 'clip/tNNN.NNN'."""
     clip, stem = name.split("/", 1) if "/" in name else (tag.split("-")[0], name)
-    return FRAMES / clip / f"{stem}.jpg"
+    return frames_dir() / clip / f"{stem}.jpg"
 
 
 def frame_ups(rec, frames, image):
@@ -463,7 +467,7 @@ def control_points(rec, control, tag, dem):
     marks = {}
     if control.get("picks"):
         main_clip = tag.split("-")[0]
-        for f in json.loads((ROOT / control["picks"]).read_text(encoding="utf-8"))["features"]:
+        for f in json.loads((crs.ROOT / control["picks"]).read_text(encoding="utf-8"))["features"]:
             obs = [{"frame": o["frame"].split("/", 1)[1] if o["frame"].startswith(main_clip + "/") else o["frame"],
                     "px": o["px"]} for o in f["obs"]]
             marks[f["id"]] = [o for o in obs if o["frame"] in rec["names"]
@@ -489,7 +493,7 @@ def marks_in(rec, control, tag):
     """Mark id -> its observations in registered frames of this reconstruction."""
     main_clip = tag.split("-")[0]
     marks = {}
-    for f in json.loads((ROOT / control["picks"]).read_text(encoding="utf-8"))["features"]:
+    for f in json.loads((crs.ROOT / control["picks"]).read_text(encoding="utf-8"))["features"]:
         obs = [{"frame": o["frame"].split("/", 1)[1] if o["frame"].startswith(main_clip + "/") else o["frame"],
                 "px": o["px"]} for o in f["obs"]]
         marks[f["id"]] = [o for o in obs if o["frame"] in rec["names"]
@@ -519,7 +523,7 @@ def known_lengths(rec, control, tag):
         return []
     main_clip = tag.split("-")[0]
     marks = {}
-    for f in json.loads((ROOT / control["picks"]).read_text(encoding="utf-8"))["features"]:
+    for f in json.loads((crs.ROOT / control["picks"]).read_text(encoding="utf-8"))["features"]:
         marks[f["id"]] = [{"frame": o["frame"].split("/", 1)[1] if o["frame"].startswith(main_clip + "/") else o["frame"],
                            "px": o["px"]} for o in f["obs"]]
     out = []
@@ -541,7 +545,7 @@ def main():
     ap.add_argument("--via", help="a placed model this one is linked to (tools/link_sfm.py), instead of control")
     args = ap.parse_args()
     tag = args.tag
-    rec = load(VID / f"{tag}-sfm.npz")
+    rec = load(video_dir() / f"{tag}-sfm.npz")
     house = crs.settings()["house"]
     eaves = house["fl_upper"] + house["roof_at_wall_above_fl"]
     planes = house_planes()
@@ -552,7 +556,7 @@ def main():
                           for rv, tv in zip(rec["rvecs"], rec["tvecs"]) if np.all(np.isfinite(rv))])
 
     pin, held, res0 = None, {}, {}
-    control_path = VID / f"{tag}-control.json"
+    control_path = video_dir() / f"{tag}-control.json"
     if not args.via:
         control = json.loads(control_path.read_text(encoding="utf-8"))
     else:      # a linked model takes only the vertical from a control file of its own
@@ -564,8 +568,8 @@ def main():
     plumb = measure_plumb(rec, tag, control["plumb"]) if control.get("plumb") else None
     hold_plumb = plumb is not None and not plumb["check"]
     if args.via:
-        link = json.loads((VID / f"{tag}-to-{args.via}.json").read_text(encoding="utf-8"))
-        base = json.loads((VID / f"{args.via}-georef.json").read_text(encoding="utf-8"))
+        link = json.loads((video_dir() / f"{tag}-to-{args.via}.json").read_text(encoding="utf-8"))
+        base = json.loads((video_dir() / f"{args.via}-georef.json").read_text(encoding="utf-8"))
         p0 = compose(np.array(base["params"]), np.array(link["params"]))
         print(f"via {args.via}: {link['inliers']} linking points, median error {link['median_error']:.4f}")
     elif control.get("anchor"):
@@ -713,7 +717,7 @@ def main():
             continue
         rot = Rotation.from_rotvec(rv).as_matrix()
         cams.append((name, *apply(params, (-rot.T @ tv)[None])[0]))
-    np.savez_compressed(VID / f"{tag}-site.npz", xyz=site_all, rgb=rec["rgb"], nview=rec["nview"],
+    np.savez_compressed(video_dir() / f"{tag}-site.npz", xyz=site_all, rgb=rec["rgb"], nview=rec["nview"],
                         cameras=np.array([c[1:] for c in cams]), camera_names=np.array([c[0] for c in cams]))
     hc = np.array([c[3] for c in cams]) - dem.sample(np.array([c[1] for c in cams]), np.array([c[2] for c in cams]))
     out = {"clip": tag, "params": params.tolist(), "scale": float(np.exp(params[0])),
@@ -742,7 +746,7 @@ def main():
         print(f"plumb: placed {tilt:.2f} deg from the frames' vertical (toward {toward:.0f}; {lean_strong:+.2f} along "
               f"the best-fixed direction, {lean_weak:+.2f} across it, bearing {weak_bearing:.0f}, fixed {ratio:.1f}x "
               f"less); the start was {plumb['start_tilt_deg']:.2f}")
-    (VID / f"{tag}-georef.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+    (video_dir() / f"{tag}-georef.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in out.items() if k not in ("params",)}))
 
 

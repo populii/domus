@@ -233,10 +233,9 @@ def clockwise(ring):
 
 def draft_layers(root, found, lot, source):
     """Run in a process with DOMUS_SITE set to the project, once its rasters are there."""
-    from . import canopy, points, raster, terrain, vegetation
-    from .crs import ROOT
+    from . import canopy, crs, points, raster, terrain, vegetation
 
-    site = ROOT / "data" / "site"
+    site = crs.ROOT / "data" / "site"
     dem = terrain.ground()
     ground = lambda e, n: dem.sample(np.atleast_1d(e), np.atleast_1d(n))
     surface = (lambda e, n: raster.dsm().sample(np.atleast_1d(e), np.atleast_1d(n))) if raster.DSM.exists() else (
@@ -276,8 +275,8 @@ def draft_layers(root, found, lot, source):
                                      "height_m": round(height, 1), "source": source, "confidence": "height from LiDAR"}})
     if feats:
         write_json(site / "features-buildings.geojson", fc("features-buildings", feats))
-    if settings and "[house]" not in (ROOT / "data" / "site.toml").read_text(encoding="utf-8"):
-        with open(ROOT / "data" / "site.toml", "a", encoding="utf-8", newline="\n") as fh:
+    if settings and "[house]" not in (crs.ROOT / "data" / "site.toml").read_text(encoding="utf-8"):
+        with open(crs.ROOT / "data" / "site.toml", "a", encoding="utf-8", newline="\n") as fh:
             fh.write("".join(settings))
     if raster.DSM.exists() and raster.AERIAL.exists():
         draft_trees(site, canopy, vegetation)
@@ -306,8 +305,8 @@ def draft_trees(site, canopy, vegetation):
 
 
 def run_step(root, *args):
-    """A step in its own process: modules read the site's path when imported. A site other than the one DOMUS_SITE
-    names builds into its own viewer/data, as with --site, whatever a container's DOMUS_OUTPUT says."""
+    """A step in its own process, on the site in `root`. A site other than the one DOMUS_SITE names builds into its
+    own viewer/data, as with --site, whatever a container's DOMUS_OUTPUT says."""
     env = {**os.environ, "DOMUS_SITE": str(root)}
     if Path(root).resolve() != Path(os.environ.get("DOMUS_SITE", ".")).resolve():
         env.pop("DOMUS_OUTPUT", None)
@@ -347,10 +346,9 @@ def main(argv=None):
 def rest():
     """Runs with DOMUS_SITE set: fetch, draft, build."""
     from . import build, crs
-    from .crs import ROOT
 
-    found = json.loads((ROOT / "data" / "public-lookup.json").read_text(encoding="utf-8"))
-    lot = json.loads((ROOT / "data" / "site" / "boundary.geojson").read_text(encoding="utf-8"))["features"][0]["geometry"]["coordinates"][0]
+    found = json.loads((crs.ROOT / "data" / "public-lookup.json").read_text(encoding="utf-8"))
+    lot = json.loads((crs.ROOT / "data" / "site" / "boundary.geojson").read_text(encoding="utf-8"))["features"][0]["geometry"]["coordinates"][0]
     importers.fetch()
     nz = found.get("importer", "nz") == "nz"
     if nz and publicdata.linz_key():
@@ -367,7 +365,7 @@ def rest():
             points.main([])
         except (OSError, SystemExit) as e:
             print(f"No point cloud ({e}); the roof is fitted to the 1 m surface model")
-    draft_layers(ROOT, found, lot, found["source"])
+    draft_layers(crs.ROOT, found, lot, found["source"])
     crs.settings.cache_clear()    # the draft added [house]
     build.main()
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** a process can open several sites. `api.open_site` no longer refuses a second one: each `Site`
+  reads its own folder, and what Domus reads of a site (its settings, rasters, ground and options) is kept with that
+  site, so a tool can open two and compare them. Domus reads `DOMUS_SITE` the first time it needs the site, not when
+  its modules are imported.
+
 ## 2026.11.36
 
 - **For site projects:** `options/_site.toml` takes a `[local]` table too, as `data/site.toml` does: a site's own notes

@@ -37,11 +37,12 @@ def test_only_named_marks_on_the_line_are_kept(nztm_site):
     assert feats[0]["properties"]["confidence"] == "LINZ, +-0.2 m"
 
 
-def test_height_marks_come_nearest_first_and_join_the_layer_only_by_name(nztm_site, monkeypatch, tmp_path, capsys):
+def test_height_marks_come_nearest_first_and_join_the_layer_only_by_name(nztm_site, monkeypatch, tmp_path, capsys, at_site):
     (tmp_path / "data" / "site").mkdir(parents=True)
     (tmp_path / "data" / "site" / "boundary.geojson").write_text(json.dumps(
         {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {"type": "Polygon", "coordinates": [LOT]}}]}), encoding="utf-8")
-    monkeypatch.setattr(marks, "ROOT", tmp_path)
+    (tmp_path / "data" / "site.toml").write_text("[domus]\nformat = 3\n\n[crs]\nepsg = 2193\n", encoding="utf-8")
+    at_site(tmp_path)
     monkeypatch.setattr(crs, "site_epsg", lambda: 2193)
     monkeypatch.setenv("DOMUS_LINZ_KEY", "k")
     asked = []
@@ -64,14 +65,14 @@ def test_height_marks_come_nearest_first_and_join_the_layer_only_by_name(nztm_si
         marks.main(["--height-mark", "NOPE"])
 
 
-def test_marks_and_title_search_round_the_main_lot_not_the_first(nztm_site, monkeypatch, tmp_path):
+def test_marks_and_title_search_round_the_main_lot_not_the_first(nztm_site, monkeypatch, tmp_path, at_site):
     (tmp_path / "data" / "site").mkdir(parents=True)
     way = [[1020.0, 2000.0], [1023.0, 2000.0], [1023.0, 2020.0], [1020.0, 2020.0], [1020.0, 2000.0]]
     feats = [{"type": "Feature", "properties": {"id": "right-of-way"}, "geometry": {"type": "Polygon", "coordinates": [way]}},
              {"type": "Feature", "properties": {"id": "lot"}, "geometry": {"type": "Polygon", "coordinates": [LOT]}}]
     (tmp_path / "data" / "site" / "boundary.geojson").write_text(json.dumps({"type": "FeatureCollection", "features": feats}),
                                                                  encoding="utf-8")
-    monkeypatch.setattr(marks, "ROOT", tmp_path)
+    at_site(tmp_path)
     monkeypatch.setattr(crs, "settings", lambda: {"boundary": {"main": "lot"}})
     assert marks.lot_on_nztm().equals(marks.Polygon(LOT))
     monkeypatch.setattr(crs, "settings", lambda: {"boundary": {"main": "gone"}})

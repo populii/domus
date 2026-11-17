@@ -29,8 +29,8 @@ import numpy as np
 import shapely
 from PIL import Image, ImageDraw
 
-from .. import geojson, terrain
-from ..crs import ROOT, settings
+from .. import crs, geojson, terrain
+from ..crs import settings
 from ..errors import DomusError
 from .fitting import Placed
 
@@ -94,7 +94,7 @@ class Scene:
 
     def __init__(self, option=None):
         self.g = terrain.ground()
-        site = ROOT / "data" / "site"
+        site = crs.ROOT / "data" / "site"
         self.layer = lambda name: geojson.read_optional(site / name)
         self.house = {f["properties"].get("id"): f for f in self.layer("house.geojson")}
         self.fl = settings().get("house", {}).get("fl_upper")
@@ -102,7 +102,7 @@ class Scene:
         if option:
             from .. import design, options
 
-            path = ROOT / "options" / (option if option.endswith(".toml") else f"{option}.toml")
+            path = crs.ROOT / "options" / (option if option.endswith(".toml") else f"{option}.toml")
             if not path.exists():
                 raise DomusError(f"There's no wall option {path}")
             for w in design.Design(options.load(path)).wall_levels():
@@ -190,7 +190,7 @@ class Scene:
             c.line(top, (255, 255, 255), 2, wid, dash=True)
 
     def features(self):
-        return [f for path in sorted((ROOT / "data" / "site").glob("features-*.geojson")) for f in geojson.read_optional(path)]
+        return [f for path in sorted((crs.ROOT / "data" / "site").glob("features-*.geojson")) for f in geojson.read_optional(path)]
 
     def heights(self, p, ground):
         """A feature's base and top: its `base_m` or the ground, and its `top_m` or `height_m` over the base."""
@@ -283,7 +283,7 @@ def main():
     if groups - set(GROUPS):
         raise DomusError(f"--only takes {', '.join(GROUPS)}")
     placed = Placed(args.tag, args.georef)
-    frames_dir = Path(args.frames_dir) if args.frames_dir else ROOT / "sources" / "raw" / "frames6" / args.tag.split("-")[0]
+    frames_dir = Path(args.frames_dir) if args.frames_dir else crs.ROOT / "sources" / "raw" / "frames6" / args.tag.split("-")[0]
     scene = Scene(args.option)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -5,24 +5,27 @@ The geometry is domus.tin's, which reads no site; this module reads the site's a
 kept here for the site tools that use them.
 """
 
-from functools import lru_cache
 
-from . import raster, tin
+from . import crs, raster, tin
 from . import walls as walls_mod
-from .crs import ROOT, settings
+from .crs import settings
 from .mesh import resample_line  # noqa: F401 (as it was, here)
+from .project.site import cached
 from .tin import Ground, contours, cut_cells, distance_to_polyline, grid, outline_points  # noqa: F401
 from .walls import bay_levels, line_normals  # noqa: F401 (as they were, here)
 
-FIXES = ROOT / "data" / "site" / "ground-fixes.geojson"
+
+def fixes_path():
+    """The site's ground fixes, data/site/ground-fixes.geojson."""
+    return crs.ROOT / "data" / "site" / "ground-fixes.geojson"
 
 
-def read_fixes(path=FIXES):
+def read_fixes(path=None):
     """tin.read_fixes: the fix areas and points, from the site's data/site/ground-fixes.geojson unless given."""
-    return tin.read_fixes(path)
+    return tin.read_fixes(fixes_path() if path is None else path)
 
 
-@lru_cache
+@cached
 def ground():
     """Ground model without walls: the LiDAR DEM with data/site/ground-fixes.geojson applied."""
     return Ground(raster.dem(), *read_fixes())

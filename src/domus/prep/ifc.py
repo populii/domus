@@ -25,8 +25,8 @@ from scipy.spatial import cKDTree
 from shapely.geometry import LineString, MultiPolygon, Polygon
 from shapely.ops import unary_union
 
-from .. import geojson
-from ..crs import ROOT, site_epsg
+from .. import crs, geojson
+from ..crs import site_epsg
 from . import config
 
 
@@ -121,13 +121,13 @@ def selected(g, p):
 
 def main():
     cfg = config("ifc")
-    src, dz = ROOT / cfg["source"], cfg.get("datum_dz", 0.0)
-    out = ROOT / cfg["out"]
+    src, dz = crs.ROOT / cfg["source"], cfg.get("datum_dz", 0.0)
+    out = crs.ROOT / cfg["out"]
     out.parent.mkdir(parents=True, exist_ok=True)
     sha = hashlib.sha256(src.read_bytes()).hexdigest()
     f = ifcopenshell.open(str(src))
     prods = products(f)
-    house = {g["properties"]["id"]: g for g in geojson.read(ROOT / "data" / "site" / "house.geojson")["features"]}
+    house = {g["properties"]["id"]: g for g in geojson.read(crs.ROOT / "data" / "site" / "house.geojson")["features"]}
     ring = np.asarray(house["house-walls"]["geometry"]["coordinates"][0], float)[:, :2]
     R, t, med, p90 = fit_to_outline(prods, ring, cfg.get("walls_layer", "Walls"))
     rot = float(np.degrees(np.arctan2(R[1, 0], R[0, 0])))

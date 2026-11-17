@@ -127,7 +127,7 @@ def test_the_option_checks_find_nothing_wrong_on_the_demo(site, built):
         assert f(findings) == 0, findings
 
 
-def test_ground_through_a_wall_or_over_a_tread_is_found(site, tmp_path, monkeypatch):
+def test_ground_through_a_wall_or_over_a_tread_is_found(site, tmp_path, monkeypatch, at_site):
     from domus.prep import check
 
     model = {"origin": [100.0, 200.0, 40.0], "summary": {"options": [{"id": "x", "keep_existing": []}]},
@@ -135,7 +135,7 @@ def test_ground_through_a_wall_or_over_a_tread_is_found(site, tmp_path, monkeypa
                         {"id": "option-x-W1", "type": "mesh", "option": "x", **box(-1, -1, 1, 1, 0.5)},
                         {"id": "option-x-steps-1", "type": "mesh", "option": "x", **box(3, 3, 4, 4, 0.9)}]}
     (tmp_path / "model.json").write_text(json.dumps(model), encoding="utf-8")
-    monkeypatch.setattr(check.crs, "OUTPUT", tmp_path)
+    at_site(site, output=tmp_path)
     findings = []
     assert check.check_through(findings) == 3
     through = {f[2]: f[3] for f in findings if "comes through" in f[3]}

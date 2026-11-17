@@ -24,8 +24,8 @@ _output = None
 
 def use_site(conftest):
     """Names the site these tests are for: DOMUS_SITE if it's set, else the folder above the tests' own (pass the
-    conftest's __file__). Call it at the top of tests/conftest.py, since Domus reads the site when its modules are
-    imported. Its model is built into a temporary folder, whatever DOMUS_OUTPUT says."""
+    conftest's __file__). Call it at the top of tests/conftest.py, before anything reads the site: Domus reads
+    DOMUS_SITE the first time it needs it. Its model is built into a temporary folder, whatever DOMUS_OUTPUT says."""
     global _output
     os.environ["DOMUS_SITE"] = str(Path(os.environ.get("DOMUS_SITE") or Path(conftest).resolve().parents[1]).resolve())
     _output = Path(tempfile.mkdtemp(prefix="domus-site-tests-"))

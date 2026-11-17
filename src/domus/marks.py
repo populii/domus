@@ -14,7 +14,6 @@ import os
 from shapely.geometry import Point, Polygon
 
 from . import crs, geojson, publicdata
-from .crs import ROOT
 
 BOUNDARY_MARKS, VERTICAL_MARKS = "layer-50774", "layer-50784"
 ON_LINE_M = 1.5
@@ -25,7 +24,7 @@ HEIGHT_MARKS_SHOWN = 5
 
 def lot_on_nztm():
     """The lot, [boundary] main, on NZTM. Its neighbours and rights of way in boundary.geojson aren't searched."""
-    lot = geojson.main_lot(geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"], crs.settings())
+    lot = geojson.main_lot(geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"], crs.settings())
     return Polygon([crs.site_to_nztm(*p[:2]) for p in lot["geometry"]["coordinates"][0]])
 
 
@@ -88,7 +87,7 @@ def main(argv=None):
         if not match:
             raise SystemExit(f"No height mark called {args.height_mark!r} within {HEIGHT_SEARCH_M} m.")
         feats.append(height_feature(match[0]))
-    out = ROOT / "data" / "site" / "features-survey-marks.geojson"
+    out = crs.ROOT / "data" / "site" / "features-survey-marks.geojson"
     out.write_text(json.dumps({"type": "FeatureCollection", "name": "features-survey-marks",
                                "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{crs.site_epsg()}"}},
                                "features": feats}, indent=1) + "\n", encoding="utf-8", newline="\n")

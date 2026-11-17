@@ -29,10 +29,12 @@ from PIL import Image, ImageDraw
 from scipy.spatial.transform import Rotation
 
 from .. import crs, geojson, house, terrain
-from ..crs import ROOT
 from . import config
 
-RAW = ROOT / "sources" / "raw"
+
+def raw_dir():
+    """The site's source documents and photos, sources/raw/."""
+    return crs.ROOT / "sources" / "raw"
 PPM = 100
 
 
@@ -80,10 +82,10 @@ def feature_textures():
     ap.add_argument("--check", help="directory for the sources with their quads drawn on")
     args = ap.parse_args()
     cfg = config("feature_textures")
-    out = ROOT / "data" / "features"
+    out = crs.ROOT / "data" / "features"
     out.mkdir(parents=True, exist_ok=True)
     for name, t in cfg["textures"].items():
-        img = np.asarray(Image.open(RAW / t["source"]).convert("RGB"))
+        img = np.asarray(Image.open(raw_dir() / t["source"]).convert("RGB"))
         tex = rectify(img, t["quad"], t["size"])
         note = ""
         if t.get("straighten"):
@@ -110,12 +112,12 @@ def wall_textures():
     ap.add_argument("--check", help="directory for the frames with their quads drawn on")
     args = ap.parse_args()
     cfg = config("wall_textures")
-    out = ROOT / "data" / "walls"
+    out = crs.ROOT / "data" / "walls"
     out.mkdir(parents=True, exist_ok=True)
 
     def piece(name):
         p = cfg["pieces"][name]
-        return even_out(rectify(np.asarray(Image.open(RAW / p["source"]).convert("RGB")), p["quad"], p["size"]))
+        return even_out(rectify(np.asarray(Image.open(raw_dir() / p["source"]).convert("RGB")), p["quad"], p["size"]))
 
     def save(a, name):
         a = a * cfg.get("gain", 1.0)
@@ -135,7 +137,7 @@ def wall_textures():
     if args.check:
         Path(args.check).mkdir(parents=True, exist_ok=True)
         for name, p in cfg["pieces"].items():
-            im = Image.open(RAW / p["source"]).convert("RGB")
+            im = Image.open(raw_dir() / p["source"]).convert("RGB")
             ImageDraw.Draw(im).line([*map(tuple, p["quad"]), tuple(p["quad"][0])], fill=(255, 0, 0), width=3)
             im.save(Path(args.check) / f"src-{name}.jpg", quality=80)
 
@@ -143,7 +145,7 @@ def wall_textures():
 def faces_by_group():
     cfg = crs.settings()
     hc = cfg["house"]
-    fc = geojson.read(ROOT / "data" / "site" / "house.geojson")["features"]
+    fc = geojson.read(crs.ROOT / "data" / "site" / "house.geojson")["features"]
     g = terrain.ground()
     hm = house.build(fc, hc["fl_upper"], hc["roof_pitch_deg"], hc["roof_plane_at_wall"],
                      hc["eaves_overhang_m"], lambda e, n: g.sample(np.atleast_1d(e), np.atleast_1d(n)), **house.roof_options(hc))
@@ -186,7 +188,7 @@ def texel_grid(faces):
 def from_photo(spec, faces):
     (W, H), ext, _, _ = texel_grid(faces)
     z1 = ext[2]
-    img = cv2.imread(str(RAW / spec["photo"]))
+    img = cv2.imread(str(raw_dir() / spec["photo"]))
     tex = np.zeros((H, W, 3), np.uint8)
     mask = np.zeros((H, W), np.uint8)
     for pairs in spec["faces"].values():
@@ -203,12 +205,12 @@ def from_photo(spec, faces):
 
 class Frames:
     def __init__(self, tag):
-        d = np.load(ROOT / "data" / "video" / f"{tag}-sfm.npz")
+        d = np.load(crs.ROOT / "data" / "video" / f"{tag}-sfm.npz")
         self.tag, self.main = tag, tag.split("-")[0]
         self.names = [str(n) for n in d["frame_names"]]
         self.rvecs, self.tvecs = d["rvecs"], d["tvecs"]
         self.f, self.k1, self.cx, self.cy = d["intrinsics"]
-        p = np.array(json.loads((ROOT / "data" / "video" / f"{tag}-georef.json").read_text(encoding="utf-8"))["params"])
+        p = np.array(json.loads((crs.ROOT / "data" / "video" / f"{tag}-georef.json").read_text(encoding="utf-8"))["params"])
         self.s, self.R, self.t = np.exp(p[0]), Rotation.from_rotvec(p[1:4]).as_matrix(), p[4:7]
 
     def registered(self):
@@ -216,7 +218,7 @@ class Frames:
 
     def image(self, name):
         clip, stem = name.split("/", 1) if "/" in name else (self.main, name)
-        return cv2.imread(str(RAW / "frames6" / clip / f"{stem}.jpg"))
+        return cv2.imread(str(raw_dir() / "frames6" / clip / f"{stem}.jpg"))
 
     def project(self, name, X):
         i = self.names.index(name)
@@ -292,7 +294,7 @@ def apply_rects(mask, ext, spec):
 
 
 def house_textures():
-    out = ROOT / "data" / "house"
+    out = crs.ROOT / "data" / "house"
     out.mkdir(parents=True, exist_ok=True)
     sources = config("house_textures")["sources"]
     wanted = sys.argv[1:] or list(sources)

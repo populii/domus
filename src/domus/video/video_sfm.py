@@ -18,8 +18,7 @@ import time
 import cv2
 import numpy as np
 
-from .. import sfm
-from ..crs import ROOT
+from .. import crs, sfm
 from . import safe_npz
 
 T0 = time.time()
@@ -88,10 +87,10 @@ def main():
                     help="processes for features and matching")
     args = ap.parse_args()
 
-    src = ROOT / "sources" / "raw" / "frames6" / args.clip
+    src = crs.ROOT / "sources" / "raw" / "frames6" / args.clip
     paths = sorted(src.glob("*.jpg"))[::args.step]
-    log(f"{len(paths)} frames from {src.relative_to(ROOT)}")
-    cache = ROOT / "data" / "video" / "cache"
+    log(f"{len(paths)} frames from {src.relative_to(crs.ROOT)}")
+    cache = crs.ROOT / "data" / "video" / "cache"
     cache.mkdir(parents=True, exist_ok=True)
     cfile = cache / f"{args.clip}-step{args.step}-w{args.window}.npz"
     if cfile.exists():
@@ -163,7 +162,7 @@ def loop_matches(frames, matches, window, cfile, candidates=12, workers=1):
 def add_extra_clip(frames, matches, clip, step, n_main, cache):
     """Append another clip's frames: matched within the clip, and each against the most
     similar frames of the main clip (found by a quick match of their strongest features)."""
-    paths = sorted((ROOT / "sources" / "raw" / "frames6" / clip).glob("*.jpg"))[::step]
+    paths = sorted((crs.ROOT / "sources" / "raw" / "frames6" / clip).glob("*.jpg"))[::step]
     cfile = cache / f"{clip}-extra-step{step}.npz"
     if cfile.exists():
         c = safe_npz.load(cfile)
@@ -210,7 +209,7 @@ def compute_matches(frames, window, workers=1, scratch=None):
 def _continue_after_tracks(rec, frames, matches, args, n_main):
     lens = np.array([len(t) for t in rec.tracks])
     log(f"{len(rec.tracks)} tracks, median length {np.median(lens):.0f}, >=3 views: {(lens >= 3).sum()}")
-    out = ROOT / "data" / "video"
+    out = crs.ROOT / "data" / "video"
     out.mkdir(parents=True, exist_ok=True)
 
     # Model 1 from the best start pair; if the clip's chain of views breaks, the frames left

@@ -10,14 +10,17 @@ for the format.
 import tomllib
 from pathlib import Path
 
-from .crs import ROOT
+from . import crs
 
-OPTIONS = ROOT / "options"
+
+def options_dir():
+    """The site's wall options, options/."""
+    return crs.ROOT / "options"
 
 
 def load_all():
     out = []
-    for path in sorted(OPTIONS.glob("*.toml")):
+    for path in sorted(options_dir().glob("*.toml")):
         if path.name.startswith("_"):
             continue
         out.append(load(path))
@@ -75,5 +78,5 @@ def load(path):
         "walls": cfg.get("walls", []),
         "terraces": cfg.get("terraces", []),
         "stairs": cfg.get("stairs", []),
-        "path": Path(path).relative_to(ROOT).as_posix(),
+        "path": Path(path).relative_to(crs.ROOT).as_posix(),
     }

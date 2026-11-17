@@ -40,8 +40,6 @@ from . import (
     vegetation,
     walls,
 )
-from .crs import OUTPUT as OUT
-from .crs import ROOT
 from .errors import DomusError
 from .georef import invert_affine
 
@@ -93,7 +91,7 @@ def wall_texture(m, wall, painted=False):
     """uv and texture fields for a wall layer (domus.walls), its image put in the viewer's data: the
     picture of the wall's own blocks if it names them, else the site's own picture of that kind of wall,
     or one painted for it (always, with `painted`); none for a material drawn plain."""
-    tex = walls.wall_image(wall, OUT, painted, ROOT / "data" / "walls")
+    tex = walls.wall_image(wall, crs.OUTPUT, painted, crs.ROOT / "data" / "walls")
     return {"uv": r(m.uv, 4), "texture": tex, "repeat": True} if tex else {}
 
 
@@ -177,7 +175,7 @@ def paved_under_canopy():
     as a shapely polygon, or None."""
     from shapely.geometry import shape
 
-    feats = geojson.read_optional(ROOT / "data" / "site" / "paved-under-canopy.geojson")
+    feats = geojson.read_optional(crs.ROOT / "data" / "site" / "paved-under-canopy.geojson")
     return shape(feats[0]["geometry"]) if feats else None
 
 
@@ -236,7 +234,7 @@ def ground_photo_sampler(E, N):
     shade = np.clip((0.95 * lsun - Lb) / (0.25 * lsun), 0, 1)
     lifted = base * (0.5 + 0.5 * L / np.maximum(Lb, 1))[..., None]
     tu, tv = features.MATERIALS["paving"][2]
-    tex = np.asarray(Image.open(ROOT / "data" / "features" / features.MATERIALS["paving"][1]).convert("L"), np.float32)
+    tex = np.asarray(Image.open(crs.ROOT / "data" / "features" / features.MATERIALS["paving"][1]).convert("L"), np.float32)
     ty = ((N / tv) % 1 * tex.shape[0]).astype(int).clip(0, tex.shape[0] - 1)
     tx = ((E / tu) % 1 * tex.shape[1]).astype(int).clip(0, tex.shape[1] - 1)
     grain = _blur(tex, 0.5 * tex.shape[1] * px / tu)[ty, tx] / tex.mean()
@@ -272,9 +270,9 @@ def relief_sampler(E, N):
 def scan_sampler(sheet, shift=(0.0, 0.0)):
     """A georeferenced scanned sheet (data/georef/<sheet>.json): its linework in red ink over a
     relief-shaded paper tone. `shift` moves the sheet (east, north) in metres from where its georeference puts it."""
-    rec = json.loads((ROOT / "data" / "georef" / f"{sheet}.json").read_text(encoding="utf-8"))
+    rec = json.loads((crs.ROOT / "data" / "georef" / f"{sheet}.json").read_text(encoding="utf-8"))
     ai = invert_affine(np.array(rec["A"]))
-    scan = np.asarray(Image.open(ROOT / rec["image"]).convert("L"), np.float32)
+    scan = np.asarray(Image.open(crs.ROOT / rec["image"]).convert("L"), np.float32)
     from scipy.ndimage import map_coordinates
 
     def f(E, N):
@@ -295,7 +293,7 @@ def load_points(path):
 
 def git_commit():
     try:
-        return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True,
+        return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=crs.ROOT, capture_output=True,
                               text=True, check=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return None
@@ -359,10 +357,10 @@ def option_layers(opt, res, frame, extent, cfg, existing_walls, lawns=(), existi
 
     from .vegetation import bed_texture, drape, grass_detail_texture
 
-    if any(t.kind not in ("lawn", "ground") for t in d.terraces) and not (OUT / "bed.jpg").exists():
-        bed_texture(OUT / "bed.jpg")
-    if any(t.kind == "lawn" for t in d.terraces) and not (OUT / "grass-detail.jpg").exists():
-        grass_detail_texture(OUT / "grass-detail.jpg")
+    if any(t.kind not in ("lawn", "ground") for t in d.terraces) and not (crs.OUTPUT / "bed.jpg").exists():
+        bed_texture(crs.OUTPUT / "bed.jpg")
+    if any(t.kind == "lawn" for t in d.terraces) and not (crs.OUTPUT / "grass-detail.jpg").exists():
+        grass_detail_texture(crs.OUTPUT / "grass-detail.jpg")
     # A lawn or a bed stops at the walls and steps that stand in it, and runs up to the house's wall. It meets a
     # wall at the wall's own face and back, where the ground under it does (terrain.build), and keeps a little
     # clear of a flight of steps.
@@ -468,8 +466,8 @@ def option_layers(opt, res, frame, extent, cfg, existing_walls, lawns=(), existi
         if picture and hasattr(st["mesh"], "uv"):       # a flight drawn with a picture: paint it once, lay it by the mesh's uv
             from . import wall_looks
 
-            if not (OUT / picture[0]).exists():
-                wall_looks.paint(st["material"], OUT / picture[0], picture[1])
+            if not (crs.OUTPUT / picture[0]).exists():
+                wall_looks.paint(st["material"], crs.OUTPUT / picture[0], picture[1])
             look = {"uv": r(st["mesh"].uv, 4), "texture": picture[0], "repeat": True}
         out.append({**mesh_json(st["mesh"], frame, colour,
                                 f"{st['id']} {st['name']} ({st['risers']} risers of {st['riser_m']:.2f} m)"),
@@ -509,7 +507,7 @@ def option_layers(opt, res, frame, extent, cfg, existing_walls, lawns=(), existi
         return rgb.clip(0, 255).astype(np.uint8)
 
     tex = {f"cutfill-{oid}": {"label": f"Cut and fill, {opt['short']}", "option": oid,
-                              **drape_texture(extent, 0.08, cutfill, OUT / f"cutfill-{oid}.jpg")}}
+                              **drape_texture(extent, 0.08, cutfill, crs.OUTPUT / f"cutfill-{oid}.jpg")}}
     walls_out = [{k: w[k] for k in ("id", "name", "material", "length_m", "height_min_m", "height_max_m",
                                     "retained_max_m", "face_area_m2", "top_min", "top_max", "line_so", "flags")} for w in res["walls"]]
     summ = {"id": oid, "name": opt["name"], "short": opt["short"], "description": opt["description"].replace("\n", " "),
@@ -537,14 +535,14 @@ def add_ground(b):
     k = buildcache.key(b.cache.site, "ground") if b.cache.enabled else None
     textures = b.cache.get("ground", k) if k else None
     if textures is None:
-        before = buildcache.snapshot(OUT)
+        before = buildcache.snapshot(crs.OUTPUT)
         textures = ground_textures(cfg, extent)
         if k:
-            b.cache.put("ground", k, textures, buildcache.written(OUT, before))
+            b.cache.put("ground", k, textures, buildcache.written(crs.OUTPUT, before))
     layers.append({**mesh_json(tin, frame, "#9fb58a",
                                labels.get("ground", "Ground (LiDAR, with walls cut in)")),
                    "id": "ground", "uv": r(uv, 5), "group": "Ground"})
-    for f in geojson.read_optional(terrain.FIXES):
+    for f in geojson.read_optional(terrain.fixes_path()):
         if f["geometry"]["type"] == "Polygon":
             layers.append({**lines_json([np.asarray(f["geometry"]["coordinates"][0])], frame, "#ff6a3d",
                                         f"Ground not from LiDAR: {f['properties']['name']}",
@@ -563,18 +561,18 @@ def ground_textures(cfg, extent):
         key = aerial.get("key", "aerial")
         if paved_under_canopy() is not None:
             textures[key] = {"label": aerial.get("label", "Aerial photo"),
-                             **drape_texture(extent, 0.08, ground_photo_sampler, OUT / f"{key}.jpg")}
+                             **drape_texture(extent, 0.08, ground_photo_sampler, crs.OUTPUT / f"{key}.jpg")}
             textures[f"{key}-raw"] = {"label": aerial.get("label_raw", "Aerial photo as taken"),
-                                      **drape_texture(extent, 0.08, aerial_sampler, OUT / f"{key}-raw.jpg")}
+                                      **drape_texture(extent, 0.08, aerial_sampler, crs.OUTPUT / f"{key}-raw.jpg")}
         else:
             textures[key] = {"label": aerial.get("label", "Aerial photo"),
-                             **drape_texture(extent, 0.08, aerial_sampler, OUT / f"{key}.jpg")}
+                             **drape_texture(extent, 0.08, aerial_sampler, crs.OUTPUT / f"{key}.jpg")}
     for sheet in cfg.get("drapes", []):
         textures[sheet["key"]] = {"label": sheet["label"],
                                   **drape_texture(extent, sheet.get("px", 0.05),
                                                   scan_sampler(sheet["georef"], sheet.get("shift_m", (0.0, 0.0))),
-                                                  OUT / f"{sheet['key']}.jpg")}
-    textures["relief"] = {"label": "Plain relief", **drape_texture(extent, 0.1, relief_sampler, OUT / "relief.jpg")}
+                                                  crs.OUTPUT / f"{sheet['key']}.jpg")}
+    textures["relief"] = {"label": "Plain relief", **drape_texture(extent, 0.1, relief_sampler, crs.OUTPUT / "relief.jpg")}
     return textures
 
 
@@ -602,7 +600,7 @@ def add_contours(b):
 def add_boundaries(b):
     """Boundaries."""
     cfg, frame, ground, layers = b.cfg, b.frame, b.ground, b.layers
-    bnd = geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"]
+    bnd = geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"]
     main_boundary = cfg.get("boundary", {}).get("main", bnd[0]["properties"]["id"])
     for f in bnd:
         ring = f["geometry"]["coordinates"][0]
@@ -625,15 +623,15 @@ def add_boundaries(b):
 def add_house(b):
     """House: walls, roof and the parts in data/site/house.geojson, textured through an atlas (house_texture) and a repeating roof-tile image."""
     cfg, frame, ground, layers, summary = b.cfg, b.frame, b.ground, b.layers, b.summary
-    hfc = geojson.read_optional(ROOT / "data" / "site" / "house.geojson")
+    hfc = geojson.read_optional(crs.ROOT / "data" / "site" / "house.geojson")
     hcfg = cfg.get("house", {})
     if hfc:
         hm = house.build(hfc, hcfg["fl_upper"], hcfg["roof_pitch_deg"], hcfg["roof_plane_at_wall"],
                          hcfg["eaves_overhang_m"], ground, **house.roof_options(hcfg))
         extra = [k for parts in hm.solids.values() for _, k in parts if k.startswith("#")]
-        looks = house_texture.Looks(hcfg, ROOT / "data" / "house")
-        pal_uv, house_photos = house_texture.build_atlas(hm.faces, OUT / "house-atlas.jpg", looks, extra=extra)
-        tile_m = house_texture.roof_texture(OUT / "house-roof.jpg", looks)
+        looks = house_texture.Looks(hcfg, crs.ROOT / "data" / "house")
+        pal_uv, house_photos = house_texture.build_atlas(hm.faces, crs.OUTPUT / "house-atlas.jpg", looks, extra=extra)
+        tile_m = house_texture.roof_texture(crs.OUTPUT / "house-roof.jpg", looks)
         hparts, first = {"walls": house.UVMesh(), "eaves": house.UVMesh()}, {}
         for f in hm.faces:
             hparts.setdefault(f.spec.get("layer", "walls"), house.UVMesh()).extend(f.mesh)
@@ -684,9 +682,9 @@ def add_ifc(b):
     """A designer's model of the house ([ifc] in data/site.toml: its parts as a mesh file and a list of layers), each part its own layer, hidden until switched on."""
     cfg, frame, layers = b.cfg, b.frame, b.layers
     ifc = cfg.get("ifc")
-    if ifc and (ROOT / ifc["meta"]).exists():
-        meta = json.loads((ROOT / ifc["meta"]).read_text(encoding="utf-8"))
-        ifc_meshes = np.load(ROOT / ifc["meshes"])
+    if ifc and (crs.ROOT / ifc["meta"]).exists():
+        meta = json.loads((crs.ROOT / ifc["meta"]).read_text(encoding="utf-8"))
+        ifc_meshes = np.load(crs.ROOT / ifc["meshes"])
         fit = meta["fit"]
         for lay in meta["layers"]:
             m = mesh.Mesh(ifc_meshes[f"{lay['key']}_v"], ifc_meshes[f"{lay['key']}_f"])
@@ -732,13 +730,13 @@ def add_options(b):
     # own file, and the lawns' pictures, which every option's new lawns reach into.
     reach = [[lawn["id"], lawn.get("plain_box"), lawn.get("plain_reach")] for lawn in lawns]
     for opt, res in found:
-        k = buildcache.key(b.cache.site, "option", opt, (ROOT / opt["path"]).read_bytes().hex(), reach) if b.cache.enabled else None
+        k = buildcache.key(b.cache.site, "option", opt, (crs.ROOT / opt["path"]).read_bytes().hex(), reach) if b.cache.enabled else None
         cached = b.cache.get(f"option-{opt['id']}", k) if k else None
         if cached is None:
-            before = buildcache.snapshot(OUT)
+            before = buildcache.snapshot(crs.OUTPUT)
             opt_layers, opt_summary, opt_textures = option_layers(opt, res, frame, extent, cfg, wall_defs, lawns, b.tin)
             if k:
-                b.cache.put(f"option-{opt['id']}", k, [opt_layers, opt_summary, opt_textures], buildcache.written(OUT, before))
+                b.cache.put(f"option-{opt['id']}", k, [opt_layers, opt_summary, opt_textures], buildcache.written(crs.OUTPUT, before))
         else:
             opt_layers, opt_summary, opt_textures = cached
         layers.extend(opt_layers)
@@ -751,7 +749,7 @@ def add_options(b):
     shared_textures(layers)
     for lawn in lawns:
         if any(lawn["id"] in o["lawn_pictures"] + o["lawns_kept"] for o in summary["options"]):
-            vegetation.lawn_plain_texture(OUT / f"{lawn['id']}-plain.jpg", lawn["poly"], lawn["colour"], lawn["plain_reach"],
+            vegetation.lawn_plain_texture(crs.OUTPUT / f"{lawn['id']}-plain.jpg", lawn["poly"], lawn["colour"], lawn["plain_reach"],
                                           seed=vegetation.zlib_crc(lawn["id"]) % 10000)
     if summary["options"]:
         summary["options_site"] = {"flat_slope": design.regrade_settings().get("flat_slope", 0.05),
@@ -766,14 +764,14 @@ def shared_textures(layers):
 
     used = {layer.get("texture") for layer in layers} | {(layer.get("drape") or {}).get("detail") for layer in layers}
     for name, paint in (("bed.jpg", bed_texture), ("grass-detail.jpg", grass_detail_texture)):
-        if name in used and not (OUT / name).exists():
-            paint(OUT / name)
+        if name in used and not (crs.OUTPUT / name).exists():
+            paint(crs.OUTPUT / name)
 
 
 def add_services(b):
     """Services: each drain's line on the ground, and below it the pipe at its depth, for the viewer's see-through ground."""
     cfg, frame, ground, layers = b.cfg, b.frame, b.ground, b.layers
-    svc_feats = geojson.read_optional(ROOT / "data" / "site" / "services.geojson")
+    svc_feats = geojson.read_optional(crs.ROOT / "data" / "site" / "services.geojson")
     colours = cfg.get("services", {}).get("colours", {})
     for f in svc_feats:
         p = f["properties"]
@@ -791,7 +789,7 @@ def add_marks(b):
     cfg, frame, ground, labels, layers, vertical, svc_feats = b.cfg, b.frame, b.ground, b.labels, b.layers, b.vertical, b.svc_feats
     marks = []
     survey = cfg.get("survey", {})
-    control = ROOT / "data" / "survey" / "control.csv"
+    control = crs.ROOT / "data" / "survey" / "control.csv"
     for row in load_points(control) if control.exists() else []:
         e, n = float(row["mE"]), float(row["mN"])
         h = float(ground(e, n)[0])
@@ -808,7 +806,7 @@ def add_marks(b):
                 continue
             marks.append({"text": f"drain {lab}" if "depth_m" in p else lab, "kind": "sewer",
                           "at": r(frame.xyz([[e, n, float(ground(e, n)[0]) + 0.2]])[0], 2)})
-    site_features = b.site_features = features.read_all(ROOT)
+    site_features = b.site_features = features.read_all(crs.ROOT)
     for f in site_features:
         if f["properties"].get("kind") == "mark":
             e, n = f["geometry"]["coordinates"][:2]
@@ -824,7 +822,7 @@ def add_vegetation(b):
     """Vegetation (data/site/trees.geojson, domus.vegetation): trees, shrubs and hedges with their crowns from the LiDAR, planted beds, the lawns and the stumps, drawn with leaf cards, bark and cut-face textures written to viewer/data/."""
     frame, ground, layers, summary, tin = b.frame, b.ground, b.layers, b.summary, b.tin
     veg_feats = canopy.read()
-    veg_layers, summary["vegetation"] = vegetation.layers(veg_feats, frame, ground, tin, OUT, **canopy.drawn_from())
+    veg_layers, summary["vegetation"] = vegetation.layers(veg_feats, frame, ground, tin, crs.OUTPUT, **canopy.drawn_from())
     for layer in veg_layers:        # an option that draws a lawn on its own ground has the viewer hide this one
         redrawn = getattr(b, "lawns_redrawn", {}).get(layer["id"].removeprefix("veg-"))
         if redrawn and "drape" in layer:
@@ -849,10 +847,10 @@ def add_features(b):
             merged[key][1].setdefault(p.get("name", p.get("id", "")), p.get("confidence", ""))
     for k, ((group, mat, hide_with), (m, named)) in enumerate(sorted(merged.items())):
         names = list(named)
-        tex = features.texture_file(mat, ROOT / "data" / "features")
+        tex = features.texture_file(mat, crs.ROOT / "data" / "features")
         extra = {}
         if tex:
-            (OUT / f"feature-{tex}").write_bytes((ROOT / "data" / "features" / tex).read_bytes())
+            (crs.OUTPUT / f"feature-{tex}").write_bytes((crs.ROOT / "data" / "features" / tex).read_bytes())
             extra = {"uv": r(m.uv, 4), "texture": f"feature-{tex}", "repeat": True}
         layers.append({**mesh_json(m, frame, features.MATERIALS[mat][0],
                                    f"{group}, {mat.replace('-', ' ')}: {', '.join(names[:3])}"
@@ -873,18 +871,18 @@ def add_features(b):
 def add_points(b):
     """Point cloud from site videos (domus video export), hidden until switched on."""
     frame, labels, layers = b.frame, b.labels, b.layers
-    pfile = ROOT / "data" / "video" / "points.npz"
+    pfile = crs.ROOT / "data" / "video" / "points.npz"
     if pfile.exists():
         pc = np.load(pfile)
         v = frame.xyz(pc["origin"] + pc["mm"] / 1000.0)
         # Viewer coordinates in 2.5 mm steps as little-endian int16, colours as bytes, both base64
         # (artifacts serve JSON but not raw binary).
         q = np.round(v / POINT_STEP).astype("<i2")
-        (OUT / "points.json").write_text(json.dumps({
+        (crs.OUTPUT / "points.json").write_text(json.dumps({
             "count": len(v), "step": POINT_STEP,
             "positions": base64.b64encode(q.tobytes()).decode("ascii"),
             "colours": base64.b64encode(pc["rgb"].astype(np.uint8).tobytes()).decode("ascii")}), encoding="utf-8")
-        (OUT / "points.bin").unlink(missing_ok=True)
+        (crs.OUTPUT / "points.bin").unlink(missing_ok=True)
         layers.append({"type": "points", "id": "video-points", "group": "Context", "visible": False,
                        "name": f"{labels.get('points', 'Point cloud from the videos')} ({len(v):,} points)",
                        "file": "points.json", "count": len(v)})
@@ -894,7 +892,7 @@ def add_open_questions(b):
     """Open questions (data/site.toml [[video.compare]], [[video.question_marks]]): two placements of a clip as clouds side by side (domus video export writes data/video/compare.npz), and the clips' readings of the house's levels as labels, hidden until switched on."""
     cfg, frame, labels, layers = b.cfg, b.frame, b.labels, b.layers
     entries = {e["id"]: e for e in cfg.get("video", {}).get("compare", [])}
-    cfile = ROOT / "data" / "video" / "compare.npz"
+    cfile = crs.ROOT / "data" / "video" / "compare.npz"
     if entries and cfile.exists():
         cp = np.load(cfile)
         for k, cid in enumerate(str(i) for i in cp["ids"]):
@@ -902,7 +900,7 @@ def add_open_questions(b):
                 continue
             sel = cp["set"] == k
             q = np.round(frame.xyz(cp["origin"] + cp["mm"][sel] / 1000.0) / POINT_STEP).astype("<i2")
-            (OUT / f"compare-{cid}.json").write_text(json.dumps({
+            (crs.OUTPUT / f"compare-{cid}.json").write_text(json.dumps({
                 "count": int(sel.sum()), "step": POINT_STEP,
                 "positions": base64.b64encode(q.tobytes()).decode("ascii"),
                 "colours": base64.b64encode(cp["rgb"][sel].astype(np.uint8).tobytes()).decode("ascii")}), encoding="utf-8")
@@ -910,7 +908,7 @@ def add_open_questions(b):
                            "name": entries[cid]["name"], "file": f"compare-{cid}.json", "count": int(sel.sum())})
     readings = []
     for m in cfg.get("video", {}).get("question_marks", []):
-        with open(ROOT / "data" / "video" / "picks" / m["picks"], newline="", encoding="utf-8") as fh:
+        with open(crs.ROOT / "data" / "video" / "picks" / m["picks"], newline="", encoding="utf-8") as fh:
             row = next(x for x in csv.DictReader(fh) if x["id"] == m["id"])
         e, n, h = (float(row[k]) for k in ("E", "N", "H"))
         text = f"{m['text']}: {h:.2f}" + (f" (drawn: {m['drawn']})" if m.get("drawn") else "")
@@ -983,7 +981,7 @@ def site_layer(spec, frame, where):
 
 def add_site_layers(b):
     """The site's own layers (data/layers/*.json): what its tools drew, placed in the model as they are."""
-    folder = ROOT / "data" / "layers"
+    folder = crs.ROOT / "data" / "layers"
     seen = {layer.get("id") for layer in b.layers}
     for path in sorted(folder.glob("*.json")) if folder.is_dir() else ():
         where = f"data/layers/{path.name}"
@@ -1022,10 +1020,10 @@ def add_enrich(b):
         return
     from . import enrich
 
-    bnd = geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"]
+    bnd = geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"]
     main_id = cfg.get("boundary", {}).get("main", bnd[0]["properties"]["id"])
     lot = next(f for f in bnd if f["properties"]["id"] == main_id)["geometry"]["coordinates"][0]
-    hfc = {f["properties"]["id"]: f for f in geojson.read_optional(ROOT / "data" / "site" / "house.geojson")}
+    hfc = {f["properties"]["id"]: f for f in geojson.read_optional(crs.ROOT / "data" / "site" / "house.geojson")}
     house_ring = hfc["house-walls"]["geometry"]["coordinates"][0] if "house-walls" in hfc else None
     route = enrich.walk_route(lot, house_ring, ground)
     if route:
@@ -1054,17 +1052,17 @@ def main(argv=None):
     from .project import extensions
 
     cfg = crs.settings()
-    checked = extensions.check(ROOT, cfg)       # a site's own code runs only where it's trusted, or nothing is built
+    checked = extensions.check(crs.ROOT, cfg)       # a site's own code runs only where it's trusted, or nothing is built
     extent = cfg["model"]["extent"]
-    OUT.mkdir(parents=True, exist_ok=True)
+    crs.OUTPUT.mkdir(parents=True, exist_ok=True)
     dem = terrain.ground()  # LiDAR ground with the curated fixes (data/site/ground-fixes.geojson)
     origin = site_origin(cfg, dem)
-    wall_feats = geojson.read_optional(ROOT / "data" / "site" / "walls-existing.geojson")
+    wall_feats = geojson.read_optional(crs.ROOT / "data" / "site" / "walls-existing.geojson")
     b = SimpleNamespace(cfg=cfg, extent=extent, frame=Frame(origin), dem=dem, origin=origin,
                         ground=lambda e, n: dem.sample(np.atleast_1d(e), np.atleast_1d(n)),
                         labels=cfg.get("labels", {}), vertical=cfg.get("crs", {}).get("vertical", ""),
                         wall_defs=[walls.from_feature(f) for f in wall_feats], layers=[], summary={},
-                        cache=buildcache.Cache(ROOT, OUT), extensions=checked)
+                        cache=buildcache.Cache(crs.ROOT, crs.OUTPUT), extensions=checked)
     add_ground(b)
     add_contours(b)
     add_boundaries(b)
@@ -1093,7 +1091,7 @@ def snap_targets(origin):
     lines, points = [], []
 
     def add(rel, label, pick=lambda f: True):
-        for f in geojson.read_optional(ROOT / "data" / "site" / rel) or []:
+        for f in geojson.read_optional(crs.ROOT / "data" / "site" / rel) or []:
             if not pick(f):
                 continue
             g = f["geometry"]
@@ -1104,7 +1102,7 @@ def snap_targets(origin):
     add("boundary.geojson", "Boundary")
     add("house.geojson", "House", lambda f: f["properties"].get("id") == "house-walls")
     add("walls-existing.geojson", lambda f: f["properties"].get("name", "Wall"))
-    for f in geojson.read_optional(ROOT / "data" / "site" / "features-survey-marks.geojson") or []:
+    for f in geojson.read_optional(crs.ROOT / "data" / "site" / "features-survey-marks.geojson") or []:
         if f["geometry"]["type"] == "Point":
             x, z = pt(f["geometry"]["coordinates"])
             points.append({"label": f["properties"].get("name", "Mark"), "x": x, "z": z})
@@ -1113,7 +1111,7 @@ def snap_targets(origin):
 
 def write_model(b):
     cfg, summary, tin = b.cfg, b.summary, b.tin
-    bnd = geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"]
+    bnd = geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"]
     main_id = cfg.get("boundary", {}).get("main", bnd[0]["properties"]["id"])
     lot_ring = np.asarray(next(f for f in bnd if f["properties"]["id"] == main_id)["geometry"]["coordinates"][0])
     site = cfg.get("site", {})
@@ -1140,19 +1138,19 @@ def write_model(b):
         "snap": snap_targets(b.origin),
         **({"enrich": b.enrich} if b.enrich else {}),
     }
-    (OUT / "model.json").write_text(json.dumps(model, separators=(",", ":")), encoding="utf-8")
-    (OUT / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (crs.OUTPUT / "model.json").write_text(json.dumps(model, separators=(",", ":")), encoding="utf-8")
+    (crs.OUTPUT / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     ran = {rel: sha for rel, _, sha in b.extensions}
-    (OUT / "build.json").write_text(json.dumps({**{k: model[k] for k in ("title", "built", "commit")}, "domus": __version__,
+    (crs.OUTPUT / "build.json").write_text(json.dumps({**{k: model[k] for k in ("title", "built", "commit")}, "domus": __version__,
                                                 "model_format": MODEL_FORMAT, **({"extensions": ran} if ran else {})}),
                                     encoding="utf-8")
-    size = (OUT / "model.json").stat().st_size / 1e6
+    size = (crs.OUTPUT / "model.json").stat().st_size / 1e6
     print(f"ground: {len(tin.vertices)} points, {len(tin)} triangles")
     if "house" in summary:
         print(f"house: {json.dumps(summary['house'])}")
     for w in summary["walls"]:
         print(f"wall {w['id']}: {w['length_m']} m long, exposed {w['height_min_m']}-{w['height_max_m']} m")
-    print(f"wrote {OUT / 'model.json'} ({size:.1f} MB) and textures")
+    print(f"wrote {crs.OUTPUT / 'model.json'} ({size:.1f} MB) and textures")
 
 
 if __name__ == "__main__":

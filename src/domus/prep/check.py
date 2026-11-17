@@ -50,12 +50,16 @@ from scipy.spatial import cKDTree
 from shapely.geometry import LineString, Polygon
 
 from .. import canopy, crs, features, geojson, house, mesh, raster, terrain, vegetation, walls
-from ..crs import ROOT
 from ..sfm_georef import load
 from ..video.georef_sfm import consensus_up, frame_path, frame_ups, tilt_of
 
-VID = ROOT / "data" / "video"
-OUT = ROOT / ".domus" / "checks"
+
+def video_dir():
+    """The site's video work, data/video/."""
+    return crs.ROOT / "data" / "video"
+def checks_dir():
+    """Where the checks' report goes, .domus/checks/."""
+    return crs.ROOT / ".domus" / "checks"
 
 TOL_BASE = 0.10          # m, a base off the drawn ground
 TOL_ROOF_SHIFT = 0.30    # m, best-fit plan shift of the roof against the DSM
@@ -79,10 +83,10 @@ class Model:
         self.extent = cfg["model"]["extent"]
         g = terrain.ground()
         self.ground = lambda e, n: g.sample(np.atleast_1d(e), np.atleast_1d(n))
-        wall_feats = geojson.read_optional(ROOT / "data" / "site" / "walls-existing.geojson")
+        wall_feats = geojson.read_optional(crs.ROOT / "data" / "site" / "walls-existing.geojson")
         self.walls = [walls.from_feature(f) for f in wall_feats]
         self.tin = terrain.build(self.extent, cfg["model"]["terrain_step_m"], self.walls)
-        hfc = geojson.read_optional(ROOT / "data" / "site" / "house.geojson")
+        hfc = geojson.read_optional(crs.ROOT / "data" / "site" / "house.geojson")
         self.hf = {f["properties"]["id"]: f for f in hfc}
         self.parts = lambda *kinds: [f for f in hfc if f["properties"].get("part") in kinds]
         self.has_house = "house-walls" in self.hf
@@ -93,13 +97,13 @@ class Model:
                                   h["eaves_overhang_m"], self.ground, **house.roof_options(h))
             self.ring = np.asarray(self.hf["house-walls"]["geometry"]["coordinates"][0], float)[:-1, :2]
             self.house_poly = Polygon(self.ring)
-        self.site_features = features.read_all(ROOT)
+        self.site_features = features.read_all(crs.ROOT)
         self.feature_meshes = {}
         for items in features.build(self.site_features, self.ground).values():
             for m, _, p in items:
                 self.feature_meshes.setdefault(p["id"], []).append(m)
         self.veg = canopy.read()
-        lot = geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"][0]
+        lot = geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"][0]
         self.lot = Polygon(lot["geometry"]["coordinates"][0])
 
     def tin_z(self, e, n):
@@ -207,7 +211,7 @@ def check_sanity(m, findings):
     # ids
     ids = Counter(f["properties"]["id"] for f in m.site_features + m.veg)
     for name in ("services", "house"):
-        ids.update(f["properties"]["id"] for f in geojson.read_optional(ROOT / "data" / "site" / f"{name}.geojson"))
+        ids.update(f["properties"]["id"] for f in geojson.read_optional(crs.ROOT / "data" / "site" / f"{name}.geojson"))
     for k, n in ids.items():
         if n > 1:
             findings.append(("sanity", "duplicate", k, f"id used {n} times"))
@@ -277,7 +281,7 @@ def check_roof(m, findings, plots):
         img.ring(np.vstack([m.ring, m.ring[:1]]), (200, 30, 30))
         img.title(f"LiDAR DSM - model roof at the DSM's 1 m cells (blue -0.3 .. red +0.3 m, less the median); "
                   f"best shift E {best[0]:+.2f} N {best[1]:+.2f}")
-        img.save(OUT / "check-roof-vs-dsm.jpg")
+        img.save(checks_dir() / "check-roof-vs-dsm.jpg")
     return fails
 
 
@@ -287,8 +291,8 @@ def placement_tilt(tag):
     """(tilt deg, bearing deg the true up leans toward in the placed frame, frames used, frame spread),
     from every registered frame, with the vertical vanishing-point code domus.video.georef_sfm holds
     placements by."""
-    rec = load(VID / f"{tag}-sfm.npz")
-    params = np.array(json.loads((VID / f"{tag}-georef.json").read_text(encoding="utf-8"))["params"])
+    rec = load(video_dir() / f"{tag}-sfm.npz")
+    params = np.array(json.loads((video_dir() / f"{tag}-georef.json").read_text(encoding="utf-8"))["params"])
     frames = [(n, None) for n, rv in zip(rec["names"], rec["rvecs"]) if np.all(np.isfinite(rv))]
     ups = frame_ups(rec, frames, lambda n: cv2.imread(str(frame_path(tag, n)), cv2.IMREAD_GRAYSCALE))
     if len(ups) < 3:
@@ -327,7 +331,7 @@ def check_clouds(m, tags, findings, plots):
     names = (m.hf["house-walls"]["properties"].get("faces") if m.has_house else None) or [f"wall-{i}" for i in range(len(planes))]
     for tag in tags:
         for kind in ("dense", "site"):
-            path = VID / f"{tag}-{kind}.npz"
+            path = video_dir() / f"{tag}-{kind}.npz"
             if not path.exists():
                 continue
             d = np.load(path)
@@ -336,7 +340,7 @@ def check_clouds(m, tags, findings, plots):
             box = m.cfg.get("video", {}).get("keep", {}).get(f"{tag}-{kind}")
             if box:
                 xyz = xyz[(xyz[:, 0] > box[0]) & (xyz[:, 1] > box[1]) & (xyz[:, 0] < box[2]) & (xyz[:, 1] < box[3])]
-            cams = np.load(VID / f"{tag}-site.npz")["cameras"]
+            cams = np.load(video_dir() / f"{tag}-site.npz")["cameras"]
             xyz = xyz[cKDTree(cams).query(xyz)[0] < 6.0]
             if len(xyz) < 200:
                 continue
@@ -391,7 +395,7 @@ def check_clouds(m, tags, findings, plots):
                 if m.has_house:
                     img.ring(np.vstack([m.ring, m.ring[:1]]), (200, 30, 30))
                 img.title(f"{tag}: cloud's lowest flat surface - drawn ground, open cells (blue -0.3 .. red +0.3 m)")
-                img.save(OUT / f"check-cloud-{tag}.jpg")
+                img.save(checks_dir() / f"check-cloud-{tag}.jpg")
     return fails
 
 
@@ -686,9 +690,9 @@ def check_blocks(findings):
 # --------------------------------------------------------------------------- main
 
 def placed_tags():
-    return sorted(p.name[: -len("-georef.json")] for p in VID.glob("*-georef.json")
-                  if (VID / p.name.replace("-georef.json", "-sfm.npz")).exists()
-                  and (VID / p.name.replace("-georef.json", "-site.npz")).exists())
+    return sorted(p.name[: -len("-georef.json")] for p in video_dir().glob("*-georef.json")
+                  if (video_dir() / p.name.replace("-georef.json", "-sfm.npz")).exists()
+                  and (video_dir() / p.name.replace("-georef.json", "-site.npz")).exists())
 
 
 CHECKS = ("sanity", "roof", "plumb", "clouds", "through", "fixes", "blocks")
@@ -698,7 +702,7 @@ def options_there():
     """Whether the site has wall options: options/_site.toml and an option file beside it."""
     from .. import options
 
-    return (ROOT / "options" / "_site.toml").exists() and bool(options.load_all())
+    return (crs.ROOT / "options" / "_site.toml").exists() and bool(options.load_all())
 
 
 def run(checks=CHECKS, tags=None, plots=False):
@@ -706,7 +710,7 @@ def run(checks=CHECKS, tags=None, plots=False):
     `findings` (each a dict of check, level, object and detail) and `skipped` (check: why, for those the site has
     nothing for). `tags` are the placed reconstructions for plumb and clouds, all of them unless given; `plots` also
     writes JPEGs."""
-    OUT.mkdir(parents=True, exist_ok=True)
+    checks_dir().mkdir(parents=True, exist_ok=True)
     tags = tags or placed_tags()
     m = Model()
     findings, fails, skipped = [], {}, {}
@@ -716,7 +720,7 @@ def run(checks=CHECKS, tags=None, plots=False):
         if not m.has_house:
             skipped["roof"] = "the site has no house (house-walls in data/site/house.geojson)"
         elif not raster.DSM.exists():
-            skipped["roof"] = f"the site has no surface model ({raster.DSM.relative_to(ROOT).as_posix()})"
+            skipped["roof"] = f"the site has no surface model ({raster.DSM.relative_to(crs.ROOT).as_posix()})"
         else:
             fails["roof"] = check_roof(m, findings, plots)
     for name in ("plumb", "clouds"):
@@ -737,7 +741,7 @@ def run(checks=CHECKS, tags=None, plots=False):
     report = {"run": time.strftime("%Y-%m-%d %H:%M"), "failures": fails,
               "findings": [dict(zip(("check", "level", "object", "detail"), f)) for f in findings],
               "skipped": skipped}
-    (OUT / "check_model.json").write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
+    (checks_dir() / "check_model.json").write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
     return report
 
 
@@ -752,7 +756,7 @@ def main():
         print(f"{f['check']:7s} {f['level']:9s} {f['object']:40s} {f['detail']}")
     for name, why in report["skipped"].items():
         print(f"{name:7s} skipped   {why}")
-    log(f"failures by check: {report['failures']}; wrote {OUT.relative_to(ROOT) / 'check_model.json'}")
+    log(f"failures by check: {report['failures']}; wrote {checks_dir().relative_to(crs.ROOT) / 'check_model.json'}")
     sys.exit(1 if any(report["failures"].values()) else 0)
 
 

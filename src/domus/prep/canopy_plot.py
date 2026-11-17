@@ -10,15 +10,14 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from .. import canopy, crs, geojson, raster, vegetation
-from ..crs import ROOT
 
 
 def main():
     extent = crs.settings()["model"]["extent"]
     cands, _ = canopy.map_canopy(extent, vegetation.removed_areas(canopy.read()))
     out = sys.argv[1] if len(sys.argv) > 1 else "data/sources/canopy.jpg"
-    plot(extent, cands, ROOT / out)
-    print(f"wrote {ROOT / out}")
+    plot(extent, cands, crs.ROOT / out)
+    print(f"wrote {crs.ROOT / out}")
 
 
 def plot(extent, cands, path, px=0.075):
@@ -37,7 +36,7 @@ def plot(extent, cands, path, px=0.075):
     def P(e, n):
         return (e - e0) / px, (n1 - n) / px
 
-    lot = geojson.read(ROOT / "data" / "site" / "boundary.geojson")["features"][0]
+    lot = geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"][0]
     d.line([P(*p[:2]) for p in lot["geometry"]["coordinates"][0]], fill=(255, 220, 0), width=2)
     colours = {"tree": (255, 80, 200), "shrub": (120, 255, 120), "hedge": (90, 200, 255), "removed": (255, 60, 40)}
     for c in cands:

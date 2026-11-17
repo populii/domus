@@ -32,11 +32,13 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .. import geojson, raster, terrain
-from ..crs import ROOT
+from .. import crs, geojson, raster, terrain
 from ..errors import DomusError
 
-VID = ROOT / "data" / "video"
+
+def video_dir():
+    """The site's video work, data/video/."""
+    return crs.ROOT / "data" / "video"
 
 
 def read_clouds(names, all_points=False):
@@ -44,7 +46,7 @@ def read_clouds(names, all_points=False):
     xyz, rgb = [], []
     for name in names:
         given = Path(name)
-        path = given if given.suffix == ".npz" and given.exists() else VID / (name if name.endswith(".npz") else f"{name}.npz")
+        path = given if given.suffix == ".npz" and given.exists() else video_dir() / (name if name.endswith(".npz") else f"{name}.npz")
         if not path.exists():
             raise DomusError(f"There's no cloud {name}: name a placed reconstruction's data/video/<tag>-site or "
                              "<tag>-dense, or give an .npz file with xyz")
@@ -160,7 +162,7 @@ def plan(xyz, rgb, corners, out, px=0.02, mode="top", above=None, lines=False, g
         d.line([at(u0, v), at(u1, v)], fill=(110, 110, 110), width=1)
         d.text((2, at(u0, v)[1] - 11), f"{names[1]} {v:.0f}", fill=(255, 255, 0))
     if lines:
-        site = ROOT / "data" / "site"
+        site = crs.ROOT / "data" / "site"
 
         def draw(coords, colour):
             p = to_box(np.asarray(coords, float)[:, :2])
