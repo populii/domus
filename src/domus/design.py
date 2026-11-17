@@ -101,7 +101,7 @@ def house_retaining_walls():
 
 
 def house_building():
-    """The house itself (its walls and bay windows), for the surcharge check."""
+    """The house itself (its walls and bay windows), for the checks on the ground beside its foundations."""
     feats = geojson.read_optional(ROOT / "data" / "site" / "house.geojson")
     return unary_union([Polygon(np.asarray(f["geometry"]["coordinates"][0])[:, :2]) for f in feats
                         if f["properties"].get("id") == "house-walls" or f["properties"].get("part") == "bay"])
@@ -615,13 +615,6 @@ def drain_checks(design, services, depths_by_id, rules):
                             "flag": f"{w['id']} crosses it (invert {z:.2f}, {d:.2f} m deep{', assumed' if assumed else ''}): "
                                     "bridge the footing over the pipe or sleeve it"})
     return out
-
-
-def driveway_area():
-    """A driveway or other load beside the lot, for the surcharge check: [regrade] driveway_so in options/_site.toml
-    (a polygon in the frame), or None."""
-    so = regrade_settings().get("driveway_so")
-    return Polygon(frame().en(np.array(so, float))) if so else None
 
 
 def existing_walls():

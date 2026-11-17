@@ -52,14 +52,14 @@ def test_trace_puts_a_vector_sheet_on_the_grid(site, prep_json):
     # A red line 100 pt down the page, a black one 200 pt down and a label between them (PDF's y runs up from 400).
     write_pdf(raw / "plan.pdf", 600, 400, b"1 0 0 RG 1 w 100 300 m 300 300 l S 0 0 0 RG 2 w 100 200 m 300 200 l S "
                                           b"BT /F1 12 Tf 150 250 Td (1.05) Tj ET")
-    ring = json.loads((site / "data" / "site" / "boundary.geojson").read_text())["features"][0]["geometry"]["coordinates"][0]
+    ring = json.loads((site / "data" / "site" / "boundary.geojson").read_text(encoding="utf-8"))["features"][0]["geometry"]["coordinates"][0]
     a, b = ring[0], ring[1]
     prep_json.write_text(json.dumps({"plans": {"trace": [{
         "name": "plan", "pdf": "sources/raw/plan.pdf", "out": "data/sources/plan.geojson", "window": [50, 50, 500, 350],
         "text": "words", "fill_colour": True, "colours": {"1.0,0.0,0.0": "drain", "0.0,0.0,0.0": "line"},
-        "fit": {"kind": "similarity", "paper": {"A": [100, 100], "B": [300, 100]}, "boundary_corners": ["A", "B"]}}]}}))
+        "fit": {"kind": "similarity", "paper": {"A": [100, 100], "B": [300, 100]}, "boundary_corners": ["A", "B"]}}]}}), encoding="utf-8")
     run("plan-trace")
-    feats = json.loads((site / "data" / "sources" / "plan.geojson").read_text())["features"]
+    feats = json.loads((site / "data" / "sources" / "plan.geojson").read_text(encoding="utf-8"))["features"]
     drain = next(f for f in feats if f["properties"]["layer"] == "drain")
     assert np.allclose(drain["geometry"]["coordinates"], [a, b], atol=1e-6)
     assert any(f["properties"].get("text") == "1.05" for f in feats)
@@ -74,7 +74,7 @@ def test_feature_textures_rectify_and_tile(site, prep_json):
     Image.fromarray(a).save(raw / "photo.png")
     prep_json.write_text(json.dumps({"feature_textures": {
         "textures": {"plate.jpg": {"source": "photo.png", "quad": [[60, 60], [140, 60], [140, 140], [60, 140]], "size": [64, 64], "seams": "xy"}},
-        "turned": {"plate-up.jpg": "plate.jpg"}}}))
+        "turned": {"plate-up.jpg": "plate.jpg"}}}), encoding="utf-8")
     run("feature-textures")
     out = np.asarray(Image.open(site / "data" / "features" / "plate.jpg"))
     assert out.shape == (64, 64, 3)

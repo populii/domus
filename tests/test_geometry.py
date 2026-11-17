@@ -73,7 +73,7 @@ def test_read_boundary_takes_lon_lat(tmp_path):
     from domus import newsite
 
     f = tmp_path / "lot.geojson"
-    f.write_text(json.dumps({"type": "Polygon", "coordinates": [[[172.63, -43.53], [172.6302, -43.53], [172.6302, -43.5302], [172.63, -43.53]]]}))
+    f.write_text(json.dumps({"type": "Polygon", "coordinates": [[[172.63, -43.53], [172.6302, -43.53], [172.6302, -43.5302], [172.63, -43.53]]]}), encoding="utf-8")
     ring = newsite.read_boundary(f)
     assert ring[0] == ring[-1]
     assert 1.5e6 < ring[0][0] < 1.6e6 and 5.1e6 < ring[0][1] < 5.2e6

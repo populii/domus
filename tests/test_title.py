@@ -24,7 +24,7 @@ def site(monkeypatch, tmp_path):
     monkeypatch.setattr(crs, "site_epsg", lambda: 2193)
     (tmp_path / "data" / "site").mkdir(parents=True)
     (tmp_path / "data" / "site" / "boundary.geojson").write_text(json.dumps(
-        {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {"type": "Polygon", "coordinates": [LOT]}}]}))
+        {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {"type": "Polygon", "coordinates": [LOT]}}]}), encoding="utf-8")
     monkeypatch.setattr(marks, "ROOT", tmp_path)
     monkeypatch.setattr(title, "PATH", tmp_path / "data" / "site" / "title.geojson")
     return tmp_path
@@ -46,7 +46,7 @@ def test_the_title_and_the_easements_near_the_lot(site, monkeypatch, capsys):
 
     monkeypatch.setattr(publicdata, "_wfs", fake)
     title.main([])
-    feats = json.loads(title.PATH.read_text())["features"]
+    feats = json.loads(title.PATH.read_text(encoding="utf-8"))["features"]
     assert [f["properties"]["name"] for f in feats] == ["Title 123456", "Area A DP 9", "Area C DP 9"]
     t, e, c = (f["properties"] for f in feats)
     assert not c["on_lot"]

@@ -1,5 +1,8 @@
 # Site model settings. See docs/site-format.md for everything that can go here.
 
+[domus]
+format = 1          # this site folder's format, so later versions of Domus can read it
+
 [site]
 title = {{name}}
 heading = {{name}}

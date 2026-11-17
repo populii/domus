@@ -42,11 +42,11 @@ def write(path, fc):
     path.parent.mkdir(parents=True, exist_ok=True)
     for f in fc["features"]:
         f["geometry"]["coordinates"] = round_coords(f["geometry"]["coordinates"])
-    path.write_text(json.dumps(fc, indent=1) + "\n")
+    path.write_text(json.dumps(fc, indent=1) + "\n", encoding="utf-8")
 
 
 def read(path):
-    return json.loads(Path(path).read_text())
+    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 def read_optional(path):

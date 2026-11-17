@@ -23,14 +23,20 @@ Pages:
 With DOMUS_SITES set to a folder, one server holds many sites, each a folder in it. `/` lists them and asks for a new address (POST
 /api/sites {address}), and everything above then lives under /s/<name>/ for that site. /demo stays at the top.
 
+Files under /vendor and /data go out gzipped when they're big text and the browser takes it.
+
 Standard library only, so serving needs nothing extra. There is no login here: run it behind a
 login proxy, or leave it bound to localhost.
 """
 
 import argparse
+import datetime
+import email.utils
 import functools
+import gzip
 import html
 import http.server
+import io
 import ipaddress
 import json
 import os
@@ -171,6 +177,9 @@ HEADERS = {
                                "img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' data: blob:; "
                                "worker-src 'self' blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
 }
+# Text files this big or bigger go out gzipped to a browser that takes it: the demo's model.json shrinks to a quarter.
+GZIP_TYPES = {".css", ".geojson", ".html", ".js", ".json", ".mjs", ".svg"}
+GZIP_MIN = 1024
 SCAN_NAME = re.compile(r"^[A-Za-z0-9-]{1,40}\.(webm|mp4|json)$")
 NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 SITE_PATH = re.compile(r"^/s/([a-z0-9-]{1,64})(/.*)?$")
@@ -242,6 +251,25 @@ def _inside(base, rel):
     base = base.resolve()
     target = (base / unquote(rel)).resolve()
     return str(target) if target.is_relative_to(base) else str(base / "__missing__")
+
+
+def accepts_gzip(header):
+    """True if an Accept-Encoding header takes gzip, and doesn't refuse it with q=0."""
+    for part in (header or "").split(","):
+        coding, *params = [p.strip() for p in part.split(";")]
+        if coding.lower() == "gzip":
+            weights = [p[2:] for p in (p.replace(" ", "").lower() for p in params) if p.startswith("q=")]
+            try:
+                return not weights or float(weights[0]) > 0
+            except ValueError:
+                return False
+    return False
+
+
+@functools.lru_cache(maxsize=32)
+def gzipped(path, mtime_ns, size):
+    """A file's bytes gzipped, kept until the file changes (its time and size are part of the key)."""
+    return gzip.compress(Path(path).read_bytes(), compresslevel=6, mtime=0)
 
 
 def job_env(root, own_output):
@@ -420,6 +448,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     scan_job = None
     data_dirs = ()
     trust_proxy = False
+    varies = False          # the response depends on Accept-Encoding
 
     def log_message(self, format, *args):
         if os.environ.get("DOMUS_ACCESS_LOG"):
@@ -436,7 +465,46 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         for name, value in HEADERS.items():
             self.send_header(name, value)
+        if self.varies:
+            self.send_header("Vary", "Accept-Encoding")
         super().end_headers()
+
+    def send_head(self):
+        """A file from the viewer or the model, gzipped when it's a big text file and the browser takes gzip."""
+        path = Path(self.translate_path(self.path))
+        self.varies = path.suffix.lower() in GZIP_TYPES and path.is_file()
+        if not self.varies or not accepts_gzip(self.headers.get("Accept-Encoding")):
+            return super().send_head()
+        try:
+            st = path.stat()
+            if st.st_size < GZIP_MIN:
+                return super().send_head()
+            if self.unchanged_since(st.st_mtime):
+                self.send_response(304)
+                self.end_headers()
+                return None
+            body = gzipped(str(path), st.st_mtime_ns, st.st_size)
+        except FileNotFoundError:
+            return super().send_head()      # gone since we looked: the standard library's 404
+        self.send_response(200)
+        self.send_header("Content-Type", self.guess_type(str(path)))
+        self.send_header("Content-Encoding", "gzip")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Last-Modified", self.date_time_string(st.st_mtime))
+        self.end_headers()
+        return io.BytesIO(body)
+
+    def unchanged_since(self, mtime):
+        """True if the request's If-Modified-Since is no older than the file, to the second, as the standard library judges it."""
+        if "If-Modified-Since" not in self.headers or "If-None-Match" in self.headers:
+            return False
+        try:
+            since = email.utils.parsedate_to_datetime(self.headers["If-Modified-Since"])
+        except (TypeError, IndexError, OverflowError, ValueError):
+            return False
+        if since.tzinfo is None:
+            since = since.replace(tzinfo=datetime.UTC)
+        return int(mtime) <= since.timestamp()
 
     def send_json(self, value, status=200):
         body = json.dumps(value).encode()

@@ -194,8 +194,6 @@ def main(argv=None):
     ap.add_argument("path")
     args = ap.parse_args(argv)
     root = newsite.write_project(args.path, "Demo site (made up)", LOT, "made up", ABOUT)
-    frame_note = root / "options" / "_site.toml"
-    frame_note.write_text(frame_note.read_text(encoding="utf-8").replace("# driveway_so =", "driveway_so ="), encoding="utf-8", newline="\n")
     ext = newsite.extent_of(LOT)
     write_rasters(root, ext)
     write_layers(root)

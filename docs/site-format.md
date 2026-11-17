@@ -25,6 +25,7 @@ Everything else has a default.
 
 | Section | Keys |
 |---|---|
+| `[domus]` | `format`: the site folder's format, 1 today. `domus new` and `domus create` write it, so later versions of Domus can read older sites |
 | `[site]` | `title`, `heading`, `subtitle`, `about`, `attribution`: the viewer's text |
 | `[crs]` | `epsg` (default 2193), `label`, `vertical` |
 | `[boundary]` | `main`: the id of the feature in `boundary.geojson` that is the lot, default the first |

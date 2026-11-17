@@ -5,9 +5,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Site projects never go in this repo: keep yours in a folder or repo of its own.
+# Real sites stay out of git. site/ ignores everything you add to it (see site/.gitignore), and
+# sites/ holds more than one property.
 /sites/
-/site/
 .domus/
 
 # Build outputs

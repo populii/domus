@@ -110,7 +110,7 @@ def main():
     out = {"from": b_tag, "to": a_tag, "params": p.tolist(), "scale": float(np.exp(p[0])),
            "correspondences": len(pairs), "inliers": int(inl.sum()), "tolerance": float(tol),
            "median_error": float(np.median(err[inl])), "frame_pairs": pair_count}
-    (VID / f"{b_tag}-to-{a_tag}.json").write_text(json.dumps(out, indent=2) + "\n")
+    (VID / f"{b_tag}-to-{a_tag}.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(out))
 
 

@@ -202,7 +202,7 @@ def georef():
                   "dpi": sheet["dpi"], "crs": sheet["crs"], "transform": "mE, mN = A @ [col, row, 1]",
                   "A": [[float(v) for v in row] for row in a], "rms_m": round(rms, 4), "ties": ties}
         path = out_dir / f"{sheet['out']}.json"
-        path.write_text(json.dumps(record, indent=2) + "\n")
+        path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         print(f"{sheet['name']}: {len(used)} crosses, rms {rms * 1000:.0f} mm -> {path}")
 
 
@@ -210,7 +210,7 @@ def scan_corners(spec):
     """Corners read off a georeferenced scan: lines refined between rough points, intersected, put on the grid."""
     from PIL import Image
 
-    rec = json.loads((ROOT / spec["sheet"]).read_text())
+    rec = json.loads((ROOT / spec["sheet"]).read_text(encoding="utf-8"))
     a = np.array(rec["A"])
     gray = np.asarray(Image.open(ROOT / rec["image"]).convert("L"))
     approx = {k: np.array(v) * spec.get("scale", 1.0) for k, v in spec["approx"].items()}

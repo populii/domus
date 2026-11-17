@@ -163,7 +163,7 @@ def photo_layer(group, width, z0, z1, ppm=PPM):
     index = HOUSE_DATA / "faces.json"
     if not index.exists():
         return None
-    rec = json.loads(index.read_text()).get(group)
+    rec = json.loads(index.read_text(encoding="utf-8")).get(group)
     if not rec:
         return None
     src = Image.open(HOUSE_DATA / rec["file"]).convert("RGB")

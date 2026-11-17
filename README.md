@@ -50,16 +50,27 @@ Prefer no Docker? You'll need [uv](https://docs.astral.sh/uv/):
 
 ```sh
 uv sync
-uv run domus demo my-demo
-uv run domus --site my-demo build
-uv run domus --site my-demo serve
+uv run domus demo sites/demo
+uv run domus --site sites/demo build
+uv run domus --site sites/demo serve
 ```
+
+## Two parts: Domus and your site
+
+Domus has two parts. **Common** is the app itself: everything that works for any property, anywhere. It lives in
+`src/domus`, and it's what the container runs. **Your site** is one property's project: its boundary, ground, house,
+plans and wall options, plus any tools and tests written just for it.
+
+In a copy of this repo, your site goes in [`site/`](site/README.md). It comes with a few generic examples to start
+from, and git ignores everything you add there, so your property can't end up in a commit by accident. Got more than
+one? Use `sites/<name>/`, which git ignores too, or keep each one wherever you like. [ARCHITECTURE.md](ARCHITECTURE.md)
+explains what belongs where, and why.
 
 ## Model your own place
 
 ```sh
-uv run domus create "12 Example Street, Christchurch"
-uv run domus --site 12-example-street serve
+uv run domus create "12 Example Street, Christchurch" site
+uv run domus --site site serve
 ```
 
 If that address exists in more than one town, Domus asks which you meant. Adding the suburb or town skips the question.
@@ -77,10 +88,10 @@ it has no parcels, so your lot is a stand-in square. Domus says so when this hap
 Start from your own, as GeoJSON, and add things yourself:
 
 ```sh
-uv run domus new my-place --name "My place" --boundary lot.geojson
-uv run domus --site my-place fetch
-uv run domus --site my-place build
-uv run domus --site my-place serve
+uv run domus new site --name "My place" --boundary lot.geojson
+uv run domus --site site fetch
+uv run domus --site site build
+uv run domus --site site serve
 ```
 
 [docs/new-site.md](docs/new-site.md) walks through it, and [docs/site-format.md](docs/site-format.md) lists every file and setting.

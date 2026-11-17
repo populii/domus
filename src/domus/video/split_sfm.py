@@ -39,13 +39,13 @@ def main():
     obs[:, 0] = newidx[obs[:, 0].astype(int)]
     np.savez_compressed(VID / f"{new}-sfm.npz", xyz=d["xyz"][keepp], rgb=d["rgb"][keepp], nview=cnt[keepp],
                         frame_names=d["frame_names"], rvecs=rv, tvecs=tv, intrinsics=d["intrinsics"], obs=obs)
-    src_json = json.loads((VID / f"{src}-sfm.json").read_text())
+    src_json = json.loads((VID / f"{src}-sfm.json").read_text(encoding="utf-8"))
     summary = {"clip": new, "frames": len(t), "registered": int(keepf.sum()), "points": int(keepp.sum()),
                "focal_px": src_json["focal_px"], "k1": src_json["k1"],
                "median_reproj_px": src_json["median_reproj_px"], "cut_from": src, "span_s": [t0, t1],
                "note": f"Frames {t0:.1f}-{t1:.1f} s of {src} with the points seen in two or more of them; "
                        "poses and points unchanged (not re-adjusted)."}
-    (VID / f"{new}-sfm.json").write_text(json.dumps(summary, indent=2) + "\n")
+    (VID / f"{new}-sfm.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary))
 
 

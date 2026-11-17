@@ -30,7 +30,7 @@ def triangulated(tag, picks_path):
     clip = tag.split("-")[0]
     registered = {n for n, rv in zip(rec["names"], rec["rvecs"]) if np.all(np.isfinite(rv))}
     out = {}
-    for f in json.loads(Path(picks_path).read_text())["features"]:
+    for f in json.loads(Path(picks_path).read_text(encoding="utf-8"))["features"]:
         obs = []
         for o in f["obs"]:
             name = o["frame"].split("/", 1)[1] if o["frame"].startswith(clip + "/") else o["frame"]
@@ -72,7 +72,7 @@ def main():
     out = {"from": b_tag, "to": a_tag, "params": p.tolist(), "scale": float(np.exp(p[0])),
            "features": ids, "inliers": int(inl.sum()), "tolerance": float(tol),
            "median_error": float(np.median(err[inl])), "method": "shared marked points"}
-    (VID / f"{b_tag}-to-{a_tag}.json").write_text(json.dumps(out, indent=2) + "\n")
+    (VID / f"{b_tag}-to-{a_tag}.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in out.items() if k != "params"}))
 
 

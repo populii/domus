@@ -30,12 +30,15 @@ jobs:
         run: docker build -t domus:ci .
       - name: Serve the demo from it, as Unraid would run it
         run: |
-          mkdir -m 777 site
-          docker run -d --name smoke --read-only --tmpfs /tmp --cap-drop=ALL -p 8765:8765 -v "$PWD/site:/site" domus:ci
+          # An empty folder of its own: the repo's site/ holds the starter examples.
+          mkdir -m 777 "$RUNNER_TEMP/site"
+          docker run -d --name smoke --read-only --tmpfs /tmp --cap-drop=ALL -p 8765:8765 -v "$RUNNER_TEMP/site:/site" domus:ci
           for _ in $(seq 1 20); do curl -sf localhost:8765/healthz && break; sleep 1; done
           curl -sf localhost:8765/ | grep -q 'Build a 3D model'
           curl -sf localhost:8765/demo | grep -q 'id="view"'
           curl -sf localhost:8765/data/model.json | grep -q 'Demo site'
+          curl -sf --compressed localhost:8765/data/model.json | grep -q 'Demo site'
+          curl -sf -o /dev/null -D - -H 'Accept-Encoding: gzip' localhost:8765/data/model.json | grep -qi '^content-encoding: gzip'
           curl -sf localhost:8765/vendor/three/three.module.js -o /dev/null
           curl -sf -X PUT -H 'Content-Type: application/json' -d '{"a":1}' localhost:8765/api/db/sketches/current
           curl -sf localhost:8765/api/db/sketches/current | grep -q '"a": 1'
@@ -45,3 +48,45 @@ jobs:
           docker exec -e DOMUS_SITE=/tmp/check -e DOMUS_OUTPUT=/tmp/check/out smoke domus build
       - if: failure()
         run: docker logs smoke
+
+  made-up-sites:
+    # Builds the made-up sites (tools/made_up_sites.py) with the pull request's base and with its head, and says in
+    # the job's summary what moved. It fails only when the head can't build a site the base could.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: head
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          enable-cache: true
+      - run: |
+          uv sync --frozen --directory base
+          uv sync --frozen --directory head
+      - name: Write the made-up sites
+        run: uv run --frozen --directory head python tools/made_up_sites.py write "$RUNNER_TEMP/sites"
+      - name: Build each with the base and with the head
+        run: |
+          for side in base head; do
+            for site in "$RUNNER_TEMP"/sites/*/; do
+              name=$(basename "$site")
+              cp -r "$site" "$RUNNER_TEMP/$side-$name"
+              if uv run --frozen --directory "$side" domus --site "$RUNNER_TEMP/$side-$name" build > "$RUNNER_TEMP/$side-$name.log" 2>&1; then
+                echo ok > "$RUNNER_TEMP/$side-$name.status"
+              else
+                echo failed > "$RUNNER_TEMP/$side-$name.status"
+              fi
+            done
+          done
+      - name: Say what moved
+        run: |
+          status=0
+          uv run --frozen --directory head python tools/made_up_sites.py report "$RUNNER_TEMP" > "$RUNNER_TEMP/report.md" || status=$?
+          tee -a "$GITHUB_STEP_SUMMARY" < "$RUNNER_TEMP/report.md"
+          exit $status

@@ -462,7 +462,7 @@ def control_points(rec, control, tag, dem):
     marks = {}
     if control.get("picks"):
         main_clip = tag.split("-")[0]
-        for f in json.loads((ROOT / control["picks"]).read_text())["features"]:
+        for f in json.loads((ROOT / control["picks"]).read_text(encoding="utf-8"))["features"]:
             obs = [{"frame": o["frame"].split("/", 1)[1] if o["frame"].startswith(main_clip + "/") else o["frame"],
                     "px": o["px"]} for o in f["obs"]]
             marks[f["id"]] = [o for o in obs if o["frame"] in rec["names"]
@@ -488,7 +488,7 @@ def marks_in(rec, control, tag):
     """Mark id -> its observations in registered frames of this reconstruction."""
     main_clip = tag.split("-")[0]
     marks = {}
-    for f in json.loads((ROOT / control["picks"]).read_text())["features"]:
+    for f in json.loads((ROOT / control["picks"]).read_text(encoding="utf-8"))["features"]:
         obs = [{"frame": o["frame"].split("/", 1)[1] if o["frame"].startswith(main_clip + "/") else o["frame"],
                 "px": o["px"]} for o in f["obs"]]
         marks[f["id"]] = [o for o in obs if o["frame"] in rec["names"]
@@ -518,7 +518,7 @@ def known_lengths(rec, control, tag):
         return []
     main_clip = tag.split("-")[0]
     marks = {}
-    for f in json.loads((ROOT / control["picks"]).read_text())["features"]:
+    for f in json.loads((ROOT / control["picks"]).read_text(encoding="utf-8"))["features"]:
         marks[f["id"]] = [{"frame": o["frame"].split("/", 1)[1] if o["frame"].startswith(main_clip + "/") else o["frame"],
                            "px": o["px"]} for o in f["obs"]]
     out = []
@@ -553,9 +553,9 @@ def main():
     pin, held, res0 = None, {}, {}
     control_path = VID / f"{tag}-control.json"
     if not args.via:
-        control = json.loads(control_path.read_text())
+        control = json.loads(control_path.read_text(encoding="utf-8"))
     else:      # a linked model takes only the vertical from a control file of its own
-        control = {k: v for k, v in json.loads(control_path.read_text()).items() if k == "plumb"} \
+        control = {k: v for k, v in json.loads(control_path.read_text(encoding="utf-8")).items() if k == "plumb"} \
             if control_path.exists() else {}
     cps = control_points(rec, control, tag, dem)
     on_line = on_line_points(rec, control, tag)
@@ -563,8 +563,8 @@ def main():
     plumb = measure_plumb(rec, tag, control["plumb"]) if control.get("plumb") else None
     hold_plumb = plumb is not None and not plumb["check"]
     if args.via:
-        link = json.loads((VID / f"{tag}-to-{args.via}.json").read_text())
-        base = json.loads((VID / f"{args.via}-georef.json").read_text())
+        link = json.loads((VID / f"{tag}-to-{args.via}.json").read_text(encoding="utf-8"))
+        base = json.loads((VID / f"{args.via}-georef.json").read_text(encoding="utf-8"))
         p0 = compose(np.array(base["params"]), np.array(link["params"]))
         print(f"via {args.via}: {link['inliers']} linking points, median error {link['median_error']:.4f}")
     elif control.get("anchor"):
@@ -741,7 +741,7 @@ def main():
         print(f"plumb: placed {tilt:.2f} deg from the frames' vertical (toward {toward:.0f}; {lean_strong:+.2f} along "
               f"the best-fixed direction, {lean_weak:+.2f} across it, bearing {weak_bearing:.0f}, fixed {ratio:.1f}x "
               f"less); the start was {plumb['start_tilt_deg']:.2f}")
-    (VID / f"{tag}-georef.json").write_text(json.dumps(out, indent=2) + "\n")
+    (VID / f"{tag}-georef.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in out.items() if k not in ("params",)}))
 
 

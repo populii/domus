@@ -490,11 +490,11 @@ def save(rec, out_dir, tag, median_reproj_px):
         obs=np.array([(k, fi, *frames[fi].keypoints[kp]) for k, t in enumerate(tids)
                       for fi, kp in rec.tracks[t].items() if frames[fi].rvec is not None]),
     )
-    with open(out_dir / f"{tag}-sfm.ply", "w") as fh:
+    with open(out_dir / f"{tag}-sfm.ply", "w", encoding="utf-8") as fh:
         fh.write(f"ply\nformat ascii 1.0\nelement vertex {len(xyz)}\nproperty float x\nproperty float y\n"
                  "property float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n")
         fh.writelines(f"{p[0]:.5f} {p[1]:.5f} {p[2]:.5f} {c[0]} {c[1]} {c[2]}\n" for p, c in zip(xyz, rgb))
     summary = {"clip": tag, "frames": len(frames), "registered": sum(f.rvec is not None for f in frames),
                "points": len(xyz), "focal_px": rec.f, "k1": rec.k1, "median_reproj_px": median_reproj_px}
-    (out_dir / f"{tag}-sfm.json").write_text(json.dumps(summary, indent=2) + "\n")
+    (out_dir / f"{tag}-sfm.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     return summary

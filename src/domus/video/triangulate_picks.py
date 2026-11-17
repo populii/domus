@@ -43,7 +43,7 @@ def reproject(rec, x, obs):
 def main():
     picks_path = Path(sys.argv[1])
     tags = sys.argv[2:]
-    picks = json.loads(picks_path.read_text())
+    picks = json.loads(picks_path.read_text(encoding="utf-8"))
     models = []
     for tag in tags:
         geo = VID / f"{tag}-georef.json"
@@ -53,7 +53,7 @@ def main():
         rec = load(VID / f"{tag}-sfm.npz")
         main_clip = tag.split("-")[0]
         reg = {n for n, rv in zip(rec["names"], rec["rvecs"]) if np.all(np.isfinite(rv))}
-        models.append((tag, main_clip, rec, reg, np.array(json.loads(geo.read_text())["params"])))
+        models.append((tag, main_clip, rec, reg, np.array(json.loads(geo.read_text(encoding="utf-8"))["params"])))
 
     rows = []
     for feat in picks["features"]:
@@ -89,7 +89,7 @@ def main():
                                      if "model" in row else "not triangulated"))
     out = picks_path.resolve().with_name(picks_path.stem + "-site.csv")
     fields = ["id", "E", "N", "H", "model", "used", "marks", "reproj_max_px", "angle_deg", "dropped", "desc"]
-    with open(out, "w", newline="") as fh:
+    with open(out, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=fields)
         w.writeheader()
         for r in rows:

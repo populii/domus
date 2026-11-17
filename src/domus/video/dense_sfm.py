@@ -81,7 +81,7 @@ def main():
     ap.add_argument("--scale", type=float, default=0.5)
     args = ap.parse_args()
     rec = load(VID / f"{args.tag}-sfm.npz")
-    params = np.array(json.loads((VID / f"{args.tag}-georef.json").read_text())["params"])
+    params = np.array(json.loads((VID / f"{args.tag}-georef.json").read_text(encoding="utf-8"))["params"])
     s_site = float(np.exp(params[0]))
     f, k1, cx, cy = rec["intr"]
     k = np.array([[f, 0, cx], [0, f, cy], [0, 0, 1]])

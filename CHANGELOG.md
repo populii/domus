@@ -6,6 +6,12 @@
 - The camera is driven by camera-controls instead of three's OrbitControls. Dragging, panning along the ground, the wheel, pinching, the navigation pad, the keys, double-click and saved views work as before, and drags and zooms ease to a stop.
 - A view gizmo at the top right shows north, east, south and up: click a side to look from it, or drag it to turn the view.
 - A selected sketch wall or level area has a ring to turn it about its middle in plan, in 5° steps (Alt for any angle), with undo.
+- In a copy of this repo, `site/` is where one property's project lives. Git ignores everything you add to it, so a property's data, settings, options, tools and tests can't be published by accident. It comes with a README, notes for agents, an example tool and example tests to copy. `sites/<name>/` is ignored too, for more than one property. [ARCHITECTURE.md](ARCHITECTURE.md) says what belongs in Domus and what belongs in a site.
+- `domus new` and `domus create` write the site folder's format, `[domus] format = 1`, in `data/site.toml`, so later versions of Domus can tell how to read it. Sites without it are read as before.
+- The options' shared settings no longer suggest `driveway_so` for a surcharge check: Domus has no such check, and the setting did nothing.
+- The server sends big text files gzipped to a browser that takes them: the demo's 2.1 MB `model.json` goes as 0.5 MB, and the viewer's three.js as a fifth of its size. Each file is compressed once, and again only when it changes.
+- Every text file is read and written as UTF-8, so a name with a macron reads the same on Windows as on Linux and macOS.
+- CI builds three made-up sites with a pull request's base and with its head, and says what moved (`tools/made_up_sites.py`), so a change to the build can be proved without a real site.
 
 ## 2026.11.25
 

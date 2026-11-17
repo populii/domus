@@ -208,7 +208,7 @@ class Frames:
         self.names = [str(n) for n in d["frame_names"]]
         self.rvecs, self.tvecs = d["rvecs"], d["tvecs"]
         self.f, self.k1, self.cx, self.cy = d["intrinsics"]
-        p = np.array(json.loads((ROOT / "data" / "video" / f"{tag}-georef.json").read_text())["params"])
+        p = np.array(json.loads((ROOT / "data" / "video" / f"{tag}-georef.json").read_text(encoding="utf-8"))["params"])
         self.s, self.R, self.t = np.exp(p[0]), Rotation.from_rotvec(p[1:4]).as_matrix(), p[4:7]
 
     def registered(self):
@@ -298,7 +298,7 @@ def house_textures():
     wanted = sys.argv[1:] or list(sources)
     groups = faces_by_group()
     index_path = out / "faces.json"
-    index = json.loads(index_path.read_text()) if index_path.exists() else {}
+    index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {}
     for key in wanted:
         spec = sources[key]
         faces = groups[key]

@@ -293,7 +293,7 @@ def placement_tilt(tag):
     from every registered frame, with the vertical vanishing-point code domus.video.georef_sfm holds
     placements by."""
     rec = load(VID / f"{tag}-sfm.npz")
-    params = np.array(json.loads((VID / f"{tag}-georef.json").read_text())["params"])
+    params = np.array(json.loads((VID / f"{tag}-georef.json").read_text(encoding="utf-8"))["params"])
     frames = [(n, None) for n, rv in zip(rec["names"], rec["rvecs"]) if np.all(np.isfinite(rv))]
     ups = frame_ups(rec, frames, lambda n: cv2.imread(str(frame_path(tag, n)), cv2.IMREAD_GRAYSCALE))
     if len(ups) < 3:
@@ -473,7 +473,7 @@ def main():
         print(f"{check:7s} {level:9s} {obj:40s} {msg}")
     (OUT / "check_model.json").write_text(json.dumps(
         {"run": time.strftime("%Y-%m-%d %H:%M"), "failures": fails,
-         "findings": [dict(zip(("check", "level", "object", "detail"), f)) for f in findings]}, indent=1) + "\n")
+         "findings": [dict(zip(("check", "level", "object", "detail"), f)) for f in findings]}, indent=1) + "\n", encoding="utf-8")
     log(f"failures by check: {fails}; wrote {OUT.relative_to(ROOT) / 'check_model.json'}")
     sys.exit(1 if any(fails.values()) else 0)
 

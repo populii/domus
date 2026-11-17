@@ -7,18 +7,19 @@ aerial, or a download of your parcel from the [LINZ Data Service](https://data.l
 Either way it's a guide, not a survey: legal boundaries come from your title plan and pegs.
 
 ```sh
-uv run domus new my-place --name "My place" --boundary lot.geojson
+uv run domus new site --name "My place" --boundary lot.geojson
 ```
 
 No boundary yet? `--centre -43.53,172.63 --size 30` puts in a stand-in square.
 
-This writes `my-place/data/site.toml`, the boundary, and `my-place/options/_site.toml`. `[model] extent` is the
+This writes `site/data/site.toml`, the boundary, and `site/options/_site.toml`. In a copy of the Domus repo,
+git ignores everything you add to `site/`; anywhere else, use any folder you like. `[model] extent` is the
 area modelled: it starts 15 m past the boundary, and you can widen it.
 
 ## 2. Fetch the ground and aerial
 
 ```sh
-uv run domus --site my-place fetch
+uv run domus --site site fetch
 ```
 
 This finds the newest LINZ survey covering your extent, reads just your patch and records what it used in
@@ -29,8 +30,8 @@ NZTM2000.
 ## 3. Build and look
 
 ```sh
-uv run domus --site my-place build
-uv run domus --site my-place serve
+uv run domus --site site build
+uv run domus --site site serve
 ```
 
 The ground, boundary, contours and any trees and roofs the LiDAR saw are there already. Everything from here on is

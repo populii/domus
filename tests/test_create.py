@@ -73,7 +73,7 @@ def test_osm_records_far_apart_are_different_places(monkeypatch):
 def test_a_choice_is_offered_on_the_page(tmp_path):
     c = serve.Creator(tmp_path)
     c.log.parent.mkdir(parents=True)
-    c.log.write_text('Traceback\nWHICH: {"address": "2 Main Road", "places": ["A", "B"]}\n')
+    c.log.write_text('Traceback\nWHICH: {"address": "2 Main Road", "places": ["A", "B"]}\n', encoding="utf-8")
     c.proc = type("Done", (), {"poll": lambda self: 1})()
     assert c.status() == {"state": "choose", "address": "2 Main Road", "places": ["A", "B"]}
     assert c.allowed()
@@ -126,9 +126,9 @@ def test_no_parcel_means_a_stand_in_square_saying_so(tmp_path):
     found = {"address": "12 Example Street, Town", "point": [1011.0, 2010.0], "parcel": None, "parcel_name": None, "buildings": [],
              "source": "OpenStreetMap contributors"}
     create.scaffold(tmp_path / "p", found)
-    gj = json.loads((tmp_path / "p" / "data" / "site" / "boundary.geojson").read_text())
+    gj = json.loads((tmp_path / "p" / "data" / "site" / "boundary.geojson").read_text(encoding="utf-8"))
     assert "replace it" in gj["features"][0]["properties"]["source"]
-    assert '"12 Example Street"' in (tmp_path / "p" / "data" / "site.toml").read_text()
+    assert '"12 Example Street"' in (tmp_path / "p" / "data" / "site.toml").read_text(encoding="utf-8")
 
 
 @pytest.fixture
@@ -176,7 +176,7 @@ def test_a_stopped_build_can_carry_on_but_only_for_the_same_address(tmp_path, mo
 def test_the_address_box_wont_touch_a_site_with_a_project(box):
     port, started, root = box
     (root / "data").mkdir(parents=True)
-    (root / "data" / "site.toml").write_text("")
+    (root / "data" / "site.toml").write_text("", encoding="utf-8")
     status, _ = call(port, "POST", "/api/create", json.dumps({"address": "12 Example Street"}), {"Content-Type": "application/json"})
     assert status == 409 and not started
     assert b"Build a 3D model" not in call(port, "GET", "/")[1]

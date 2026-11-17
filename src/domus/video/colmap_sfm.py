@@ -207,7 +207,7 @@ def prepare_workspace(work, settings, fresh):
     COLMAP skips frames and pairs already in the database, so an interrupted run resumes."""
     db = work / "database.db"
     stamp = work / "settings.json"
-    old = json.loads(stamp.read_text()) if stamp.exists() and db.exists() and not fresh else None
+    old = json.loads(stamp.read_text(encoding="utf-8")) if stamp.exists() and db.exists() and not fresh else None
     if old is None or any(old.get(k) != settings[k] for k in FEATURE_SETTINGS):
         if work.exists():
             shutil.rmtree(work)
@@ -221,7 +221,7 @@ def prepare_workspace(work, settings, fresh):
     else:
         log(f"reusing {db.relative_to(ROOT)}: features and matches made with the same settings")
     work.mkdir(parents=True, exist_ok=True)
-    stamp.write_text(json.dumps(settings, indent=1) + "\n")
+    stamp.write_text(json.dumps(settings, indent=1) + "\n", encoding="utf-8")
     return db
 
 
@@ -306,7 +306,7 @@ def match_pairs(db, pairs, path, matching):
     """Match and verify image-name pairs, written to `path`, as one list (pairs already in the
     database are skipped). On this PC that is twice as fast as pycolmap.match_sequential on the
     same pairs (blocks of 1225 pairs keep all threads busy; it goes a frame at a time)."""
-    path.write_text("".join(f"{a} {b}\n" for a, b in pairs))
+    path.write_text("".join(f"{a} {b}\n" for a, b in pairs), encoding="utf-8")
     if pairs:
         pycolmap.match_image_pairs(db, matching_options=matching,
                                    pairing_options=pycolmap.ImportedPairingOptions(match_list_path=path),
@@ -420,7 +420,7 @@ def main():
         pairs_file = work / "revisit-pairs.txt"
         with stage("revisit search", times):
             if pairs_file.exists():          # a re-run: the same pairs, not the next best ones
-                pairs = [tuple(line.split()) for line in pairs_file.read_text().splitlines()]
+                pairs = [tuple(line.split()) for line in pairs_file.read_text(encoding="utf-8").splitlines()]
                 log(f"reusing {len(pairs)} revisit pairs from {pairs_file.relative_to(ROOT)}")
             else:
                 pairs = revisit_pairs(db, args.retrieve, max(2, args.overlap // 2), np.random.default_rng(args.seed))

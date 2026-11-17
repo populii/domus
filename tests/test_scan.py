@@ -67,7 +67,7 @@ def test_text_formats(site, tmp_path, name, text):
 
     rows = [f"{a} {b} {c} {r} {g} {bl}" for (a, b, c), (r, g, bl) in zip(PTS, RGB)]
     f = tmp_path / name
-    f.write_text(text.format(rows="\n".join(rows), commas="\n".join(x.replace(" ", ",") for x in rows)))
+    f.write_text(text.format(rows="\n".join(rows), commas="\n".join(x.replace(" ", ",") for x in rows)), encoding="utf-8")
     xyz, rgb = scan.read_cloud(f)
     assert xyz == pytest.approx(PTS)
     assert np.array_equal(rgb, RGB)
@@ -77,7 +77,7 @@ def test_obj_vertices(site, tmp_path):
     from domus import scan
 
     f = tmp_path / "m.obj"
-    f.write_text("# mesh\nv 0 0 0\nv 1 2 3\nvn 0 0 1\nf 1 2 2\n")
+    f.write_text("# mesh\nv 0 0 0\nv 1 2 3\nvn 0 0 1\nf 1 2 2\n", encoding="utf-8")
     xyz, rgb = scan.read_cloud(f)
     assert xyz.tolist() == [[0, 0, 0], [1, 2, 3]]
     assert rgb.shape == (2, 3)
@@ -146,9 +146,9 @@ def test_a_scan_reaches_the_build(built, site, tmp_path):
     grid = np.array([[e, n, 42.0], [e + 2, n, 42.5], [e + 2, n + 3, 43.0], [e, n + 3, 42.0]])
     local = grid - grid[0]
     f = tmp_path / "scan.xyz"
-    f.write_text("\n".join(" ".join(map(str, p)) for p in local))
+    f.write_text("\n".join(" ".join(map(str, p)) for p in local), encoding="utf-8")
     c = tmp_path / "control.csv"
-    c.write_text("x,y,z,E,N,H\n" + "\n".join(",".join(map(str, [*a, *b])) for a, b in zip(local, grid)))
+    c.write_text("x,y,z,E,N,H\n" + "\n".join(",".join(map(str, [*a, *b])) for a, b in zip(local, grid)), encoding="utf-8")
     cli.main(["scan", str(f), "--tag", "walk", "--control", str(c), "--up", "z"])
     export_cloud.main()
     build.main()

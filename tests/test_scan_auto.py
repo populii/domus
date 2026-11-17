@@ -91,7 +91,7 @@ def app(tmp_path, monkeypatch):
     monkeypatch.setattr(serve.ScanJob, "start", lambda self, rel: started.append(rel))
     out = tmp_path / "out"
     out.mkdir()
-    (out / "model.json").write_text("{}")
+    (out / "model.json").write_text("{}", encoding="utf-8")
     httpd = serve.make_server("127.0.0.1", 0, [out], tmp_path / "v.db", root=tmp_path)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     yield httpd.server_address[1], tmp_path, started

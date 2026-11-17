@@ -1,0 +1,14 @@
+# site/ is where one property's project lives in this copy of Domus. Git ignores everything you add
+# here, so a property's data, settings, options, tools and tests can't be published by accident.
+# Only the generic examples below are tracked: copy one before you change it.
+/*
+!/.gitignore
+!/README.md
+!/AGENTS.md
+!/tools/
+/tools/*
+!/tools/example.py
+!/tests/
+/tests/*
+!/tests/conftest.py
+!/tests/test_example.py

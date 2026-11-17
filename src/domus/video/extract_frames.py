@@ -48,7 +48,7 @@ def main():
         name = f"t{t:07.3f}.jpg"
         cv2.imwrite(str(out / name), img, [cv2.IMWRITE_JPEG_QUALITY, 92])
         kept.add(round(t, 3))
-    with open(out / "frames.csv", "w", newline="") as fh:
+    with open(out / "frames.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(["frame", "t_s", "window", "sharpness", "kept"])
         w.writerows((*r, int(r[1] in kept)) for r in rows)

@@ -1,7 +1,9 @@
 """The server: the viewer, the data, the store, and nothing else."""
 
+import gzip
 import http.client
 import json
+import os
 import threading
 
 import pytest
@@ -13,8 +15,8 @@ from domus import serve
 def server(tmp_path):
     data = tmp_path / "data"
     data.mkdir()
-    (data / "model.json").write_text("{}")
-    (tmp_path / "secret.txt").write_text("private")
+    (data / "model.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "secret.txt").write_text("private", encoding="utf-8")
     httpd = serve.make_server("127.0.0.1", 0, [tmp_path / "unbuilt", data], tmp_path / "db" / "v.db", trust_proxy=True)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     yield httpd.server_address[1]
@@ -72,7 +74,7 @@ def test_user_comes_from_the_proxy_only_when_trusted(server):
 
 def test_no_model_says_so(tmp_path):
     (tmp_path / "data").mkdir()
-    (tmp_path / "data" / "site.toml").write_text("")
+    (tmp_path / "data" / "site.toml").write_text("", encoding="utf-8")
     httpd = serve.make_server("127.0.0.1", 0, [tmp_path], tmp_path / "v.db", root=tmp_path)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     try:
@@ -87,6 +89,41 @@ def test_every_response_says_what_may_load(server):
     r = call(server, "GET", "/healthz")[2]
     assert "frame-ancestors 'none'" in r.getheader("Content-Security-Policy")
     assert r.getheader("X-Content-Type-Options") == "nosniff"
+
+
+def test_big_text_goes_out_gzipped_to_a_browser_that_takes_it(server, tmp_path):
+    # The fixture's model is too small to be worth it.
+    r = call(server, "GET", "/data/model.json", headers={"Accept-Encoding": "gzip"})[2]
+    assert r.getheader("Content-Encoding") is None and r.getheader("Vary") == "Accept-Encoding"
+    model = json.dumps({"layers": [{"id": f"layer-{k}", "name": "A layer of the model"} for k in range(200)]}).encode()
+    (tmp_path / "data" / "model.json").write_bytes(model)
+    status, body, r = call(server, "GET", "/data/model.json", headers={"Accept-Encoding": "gzip, deflate, br"})
+    assert status == 200 and r.getheader("Content-Encoding") == "gzip" and r.getheader("Vary") == "Accept-Encoding"
+    assert gzip.decompress(body) == model and len(body) < len(model) / 3
+    assert int(r.getheader("Content-Length")) == len(body)
+    # A browser that doesn't take gzip, or refuses it, gets the file as it is.
+    for accept in (None, "identity", "gzip;q=0"):
+        status, body, r = call(server, "GET", "/data/model.json", headers={"Accept-Encoding": accept} if accept else {})
+        assert status == 200 and body == model and r.getheader("Content-Encoding") is None
+        assert r.getheader("Vary") == "Accept-Encoding"
+    # Asked again with the time it was given, it hasn't changed.
+    since = r.getheader("Last-Modified")
+    status, body, r = call(server, "GET", "/data/model.json", headers={"Accept-Encoding": "gzip", "If-Modified-Since": since})
+    assert status == 304 and body == b""
+    # The viewer's own libraries are compressed too.
+    lib = max((serve.VIEWER / "vendor").rglob("*.js"), key=lambda p: p.stat().st_size)
+    r = call(server, "GET", "/" + lib.relative_to(serve.VIEWER).as_posix(), headers={"Accept-Encoding": "gzip"})[2]
+    assert r.getheader("Content-Encoding") == "gzip"
+
+
+def test_a_rebuilt_model_is_not_served_from_the_old_one(server, tmp_path):
+    path = tmp_path / "data" / "model.json"
+    for k in range(2):
+        # Two builds the same size: only the file's time tells them apart.
+        model = json.dumps({"build": k, "pad": "x" * 4000}).encode()
+        path.write_bytes(model)
+        os.utime(path, (1_700_000_000 + k, 1_700_000_000 + k))
+        assert gzip.decompress(call(server, "GET", "/data/model.json", headers={"Accept-Encoding": "gzip"})[1]) == model
 
 
 def test_a_name_it_does_not_know_gets_nothing(server):

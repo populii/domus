@@ -53,5 +53,5 @@ def test_fetch_skips_a_survey_with_no_data_here(monkeypatch, tmp_path):
     monkeypatch.setattr(linz, "clip", lambda name, urls, bounds, path, bands=None: 0.0 if urls == ["e"] else 1.0)
     linz.main()
     import json
-    used = json.loads((tmp_path / "data" / "linz-sources.json").read_text())
+    used = json.loads((tmp_path / "data" / "linz-sources.json").read_text(encoding="utf-8"))
     assert used == {"ground model": {"title": "Full (2025)", "tiles": ["f"]}}

@@ -6,8 +6,9 @@ uv run pytest
 uv run ruff check .
 ```
 
-The tests run on the made-up demo site. Keep real sites out of this repo: their plans, photos and
-addresses belong in their own folders.
+The tests run on the made-up demo site. Keep real sites out of the repo's tracked files: their plans,
+photos and addresses belong in `site/` or `sites/`, which git ignores, or in folders of their own.
+[ARCHITECTURE.md](ARCHITECTURE.md) says what belongs in Domus and what in a site.
 
 ## Proving a change left the model alone
 
@@ -18,6 +19,10 @@ python tools/compare_builds.py BEFORE_DIR AFTER_DIR
 ```
 
 It compares every value in the model and every texture, and fails on any difference.
+
+CI does this on every pull request, for the made-up sites `tools/made_up_sites.py` writes: it builds each with the
+pull request's base and with its head, and the job's summary says what moved. A change that shouldn't move a model
+shows "nothing" there, with no real site needed. The job fails only when the head can't build a site the base could.
 
 ## Releasing
 

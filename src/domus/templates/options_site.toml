@@ -17,8 +17,6 @@ toward = {{frame_toward}}
 house_margin_m = 0.6
 # Ground slope that still counts as flat lawn (rise over run): 1:20.
 flat_slope = 0.05
-# A driveway or other load beside the lot, for the surcharge check: a polygon in (s, o).
-# driveway_so = [[0.0, 0.0], [20.0, 0.0], [20.0, -4.0], [0.0, -4.0]]
 
 [defaults]
 upstand_m = 0.1        # how far a wall's top stands above the ground it retains

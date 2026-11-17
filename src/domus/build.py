@@ -272,7 +272,7 @@ def relief_sampler(E, N):
 def scan_sampler(sheet, shift=(0.0, 0.0)):
     """A georeferenced scanned sheet (data/georef/<sheet>.json): its linework in red ink over a
     relief-shaded paper tone. `shift` moves the sheet (east, north) in metres from where its georeference puts it."""
-    rec = json.loads((ROOT / "data" / "georef" / f"{sheet}.json").read_text())
+    rec = json.loads((ROOT / "data" / "georef" / f"{sheet}.json").read_text(encoding="utf-8"))
     ai = invert_affine(np.array(rec["A"]))
     scan = np.asarray(Image.open(ROOT / rec["image"]).convert("L"), np.float32)
     from scipy.ndimage import map_coordinates
@@ -289,7 +289,7 @@ def scan_sampler(sheet, shift=(0.0, 0.0)):
 
 
 def load_points(path):
-    with open(path, newline="") as fh:
+    with open(path, newline="", encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
 
 
@@ -839,7 +839,7 @@ def add_points(b):
         (OUT / "points.json").write_text(json.dumps({
             "count": len(v), "step": POINT_STEP,
             "positions": base64.b64encode(q.tobytes()).decode("ascii"),
-            "colours": base64.b64encode(pc["rgb"].astype(np.uint8).tobytes()).decode("ascii")}))
+            "colours": base64.b64encode(pc["rgb"].astype(np.uint8).tobytes()).decode("ascii")}), encoding="utf-8")
         (OUT / "points.bin").unlink(missing_ok=True)
         layers.append({"type": "points", "id": "video-points", "group": "Context", "visible": False,
                        "name": f"{labels.get('points', 'Point cloud from the videos')} ({len(v):,} points)",
@@ -861,7 +861,7 @@ def add_open_questions(b):
             (OUT / f"compare-{cid}.json").write_text(json.dumps({
                 "count": int(sel.sum()), "step": POINT_STEP,
                 "positions": base64.b64encode(q.tobytes()).decode("ascii"),
-                "colours": base64.b64encode(cp["rgb"][sel].astype(np.uint8).tobytes()).decode("ascii")}))
+                "colours": base64.b64encode(cp["rgb"][sel].astype(np.uint8).tobytes()).decode("ascii")}), encoding="utf-8")
             layers.append({"type": "points", "id": f"compare-{cid}", "group": "Open questions", "visible": False,
                            "name": entries[cid]["name"], "file": f"compare-{cid}.json", "count": int(sel.sum())})
     readings = []
@@ -1021,9 +1021,9 @@ def write_model(b):
         "snap": snap_targets(b.origin),
         **({"enrich": b.enrich} if b.enrich else {}),
     }
-    (OUT / "model.json").write_text(json.dumps(model, separators=(",", ":")))
-    (OUT / "summary.json").write_text(json.dumps(summary, indent=2))
-    (OUT / "build.json").write_text(json.dumps({k: model[k] for k in ("title", "built", "commit")}))
+    (OUT / "model.json").write_text(json.dumps(model, separators=(",", ":")), encoding="utf-8")
+    (OUT / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (OUT / "build.json").write_text(json.dumps({k: model[k] for k in ("title", "built", "commit")}), encoding="utf-8")
     size = (OUT / "model.json").stat().st_size / 1e6
     print(f"ground: {len(tin.vertices)} points, {len(tin)} triangles")
     if "house" in summary:
