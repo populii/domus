@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.31
 
 - **Faster rebuilds:** a build takes from the last one what hasn't changed: the ground's pictures (the aerial photo, the scanned sheets, the relief) and each wall option's layers, each kept with a key made of everything it's built from, the Domus code included. Saving a sketch as an option, or changing one option, rebuilds that option rather than the whole model. The cache is the site's `.domus/build-cache/`, and a cached build is byte for byte the build it saves. `domus build --fresh` takes nothing from it, and a site folder Domus can't write to builds without it.
 - **For site projects:** a site's tool can add layers of its own as data, in `data/layers/<name>.json`: meshes, lines and labels on the site's grid, under ids that start `site-`. The build places them in the model as they are. [docs/model-format.md](docs/model-format.md) documents what the build writes and the viewer reads, and `model.json` now says its format, 1.
