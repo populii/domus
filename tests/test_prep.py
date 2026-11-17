@@ -93,6 +93,7 @@ def test_check_finds_a_duplicate_id_on_the_demo(site, built):
     findings = []
     check.check_sanity(m, findings)
     assert not [f for f in findings if f[1] == "duplicate"]
+    assert not [f for f in findings if f[1] == "ground"], findings      # the ground is found everywhere in the lot
     m.site_features.append(m.site_features[0])
     findings = []
     assert check.check_sanity(m, findings) >= 1

@@ -40,6 +40,50 @@ class Mesh:
         return len(self.faces)
 
 
+def surface_z(vertices, faces, e, n):
+    """Heights of a triangulated surface (`vertices` x, y, z; `faces` in threes) at points (e, n): the highest of the
+    triangles over each point, NaN where none is. Each point tests only the triangles whose boxes cover its cell of a
+    grid as fine as the triangles' median box, so it finds the triangle the surface has, however it was cut."""
+    V, F = np.asarray(vertices, float), np.asarray(faces, int).reshape(-1, 3)
+    e, n = np.asarray(e, float), np.asarray(n, float)
+    out = np.full(e.size, np.nan)
+    if not len(F) or not e.size:
+        return out.reshape(e.shape)
+    tri = V[F]
+    lo, hi = tri[:, :, :2].min(axis=1), tri[:, :, :2].max(axis=1)
+    size = float(np.median((hi - lo).max(axis=1))) or 1.0
+    base = lo.min(axis=0)
+    i0, i1 = np.floor((lo - base) / size).astype(np.int64), np.floor((hi - base) / size).astype(np.int64)
+    span = i1 - i0 + 1
+    count = span[:, 0] * span[:, 1]
+    face = np.repeat(np.arange(len(F)), count)
+    k = np.arange(count.sum()) - np.repeat(np.cumsum(count) - count, count)
+    width = int(i1[:, 0].max()) + 2
+    key = (i0[face, 0] + k % span[face, 0]) + width * (i0[face, 1] + k // span[face, 0])
+    order = np.argsort(key, kind="stable")
+    key, face = key[order], face[order]
+    pe, pn = e.ravel(), n.ravel()
+    cx, cy = np.floor((pe - base[0]) / size).astype(np.int64), np.floor((pn - base[1]) / size).astype(np.int64)
+    inside_grid = (cx >= 0) & (cy >= 0) & (cx < width)
+    pkey = np.where(inside_grid, cx + width * cy, -1)
+    start, stop = np.searchsorted(key, pkey, "left"), np.searchsorted(key, pkey, "right")
+    many = np.where(inside_grid, stop - start, 0)
+    point = np.repeat(np.arange(pe.size), many)
+    cand = face[np.repeat(start, many) + (np.arange(many.sum()) - np.repeat(np.cumsum(many) - many, many))]
+    a, b, c = tri[cand, 0], tri[cand, 1], tri[cand, 2]
+    x, y = pe[point], pn[point]
+    den = (b[:, 1] - c[:, 1]) * (a[:, 0] - c[:, 0]) + (c[:, 0] - b[:, 0]) * (a[:, 1] - c[:, 1])
+    ok = np.abs(den) > 1e-15
+    den = np.where(ok, den, 1.0)
+    u = ((b[:, 1] - c[:, 1]) * (x - c[:, 0]) + (c[:, 0] - b[:, 0]) * (y - c[:, 1])) / den
+    v = ((c[:, 1] - a[:, 1]) * (x - c[:, 0]) + (a[:, 0] - c[:, 0]) * (y - c[:, 1])) / den
+    w = 1 - u - v
+    hit = ok & (u >= -1e-9) & (v >= -1e-9) & (w >= -1e-9)
+    z = u * a[:, 2] + v * b[:, 2] + w * c[:, 2]
+    np.fmax.at(out, point[hit], z[hit])
+    return out.reshape(e.shape)
+
+
 def signed_area(ring):
     x, y = np.asarray(ring, float)[:, :2].T
     return 0.5 * (np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))

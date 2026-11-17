@@ -3,6 +3,8 @@
 ## Unreleased
 
 - **For site projects:** a site's own code can draw in its builds. `[domus] extensions = ["tools/pegs.py"]` names Python files that define `layers(site)`, which gets the site through `domus.api` and returns layers of the site's own. A build runs them only on a machine that trusts them as they are: `domus site trust` records each file's SHA-256 (`--revoke` drops them), a file changed since is untrusted again, and a build whose extensions aren't all trusted stops and says so. The container image trusts none, the server never imports a site's code, and `build.json` records what ran.
+- **For site projects:** a house's looks are the site's choices. `[house.palette]` adds colours of the site's own, by name. A cladding in `[house.cladding]` is weatherboards in a colour, as before, or `plaster:`, `brick:` or `panel:` before a colour. `[house] roof` draws the roof as `tiles`, `metal` (long-run iron) or a `membrane`. A colour Domus doesn't know is refused with a message saying how to name one, and the defaults are as they were.
+- `domus prep check` reads the ground in the triangles the build drew. Since 2026.11.29 it cut the ground its old way to find a point's triangle, missed about half of them on a lot, and reported holes in the ground that aren't there.
 
 ## 2026.11.31
 

@@ -46,6 +46,28 @@ PALETTE = {
     "unit-grey": "#d3d5d3",  # an outdoor unit, such as a heat pump's
 }
 
+CLADDINGS = ("boards", "plaster", "brick", "panel")      # how a wall's cladding is drawn: `brick:#9c4a3a`
+ROOFS = ("tiles", "metal", "membrane")                    # how the roof is drawn: [house] roof
+
+
+def colours():
+    """The palette and the site's own colours ([house.palette] in data/site.toml), which can add to it or change it."""
+    try:
+        own = settings().get("house", {}).get("palette", {})
+    except OSError:             # no site to read: the palette alone
+        own = {}
+    return {**PALETTE, **own}
+
+
+def material(zone):
+    """A cladding as [house.cladding] gives it: (how it's drawn, its colour). A colour alone is weatherboards in it,
+    and `plaster:<colour>`, `brick:<colour>` or `panel:<colour>` names another cladding."""
+    kind, _, colour = zone.partition(":")
+    if colour and kind in CLADDINGS:
+        return kind, colour
+    return "boards", zone
+
+
 # Which cladding each wall shows where no photo covers it, from [house.cladding] in data/site.toml:
 # face = [above the floor line, below it], or [[from u, above, below], ...] along the face; `default` for the rest.
 def cladding(face_id):
@@ -76,9 +98,38 @@ def lap_shade(zc, datum, board, ppm):
 
 
 def rgb(key):
-    """A palette key's colour, or a colour given as hex ("#rrggbb")."""
-    h = (key if key.startswith("#") else PALETTE[key]).lstrip("#")
+    """A colour by its name in the palette or the site's own colours, or given as hex ("#rrggbb"); a cladding such
+    as `brick:#9c4a3a` gives its colour's."""
+    key = material(key)[1]
+    if not key.startswith("#"):
+        named = colours()
+        if key not in named:
+            from .errors import DomusError
+
+            raise DomusError(f"{key!r} isn't a colour Domus knows: name one of {', '.join(sorted(named))}, add it to "
+                             "[house.palette] in data/site.toml, or give it as #rrggbb")
+        key = named[key]
+    h = key.lstrip("#")
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def cladding_shade(kind, zc, u, datum, board, ppm, rng):
+    """How bright each pixel of a cladding is, rows at heights `zc` and columns at `u` along the face: lapped
+    weatherboards, plaster, brick courses in mortar, or sheet panels with their joints."""
+    if kind == "boards":
+        return np.broadcast_to(lap_shade(zc, datum, board, ppm)[:, None], (len(zc), len(u)))
+    if kind == "plaster":
+        return 0.95 + rng.normal(0, 0.025, (len(zc), len(u)))
+    if kind == "brick":
+        joint = max(0.010, 1.2 / ppm)                           # 10 mm, and never thinner than a pixel
+        course = np.floor((zc - datum) / 0.086)                 # 76 mm bricks and their joints
+        bed = ((zc - datum) % 0.086) < joint
+        shift = (course % 2)[:, None] * 0.115                  # stretcher bond, half a brick on
+        head = ((u[None, :] + shift) % 0.230) < joint
+        tone = 0.9 + 0.12 * np.sin(course[:, None] * 12.9898 + np.floor((u[None, :] + shift) / 0.230) * 78.233) ** 2
+        return np.where(bed[:, None] | head, 1.25, tone)
+    joint = (u % 1.2) < 0.012                                    # panels 1.2 m wide
+    return np.where(joint[None, :], 0.7, 0.97) * np.ones((len(zc), 1))
 
 
 def shade(c, f):
@@ -99,7 +150,8 @@ def draw_face(width, z0, z1, spec, face_id, ppm=PPM, seed=0):
     row = lambda z: (z1 - z) * ppm
     img = np.zeros((H, W, 3), np.float32)
     zc = z1 - (np.arange(H) + 0.5) / ppm                   # height of each pixel row
-    lap = lap_shade(zc, board_datum(spec, z0), boards()[0], ppm)
+    datum, board = board_datum(spec, z0), boards()[0]
+    lap = lap_shade(zc, datum, board, ppm)
     clad = Image.new("L", (W, H), 255)
     cd = ImageDraw.Draw(clad)
     above = (zc >= fl - 0.05)[:, None, None]
@@ -107,7 +159,17 @@ def draw_face(width, z0, z1, spec, face_id, ppm=PPM, seed=0):
         c0 = int(round(u_from * ppm))
         c1 = int(round(zones[k + 1][0] * ppm)) if k + 1 < len(zones) else W
         colours = np.where(above, np.asarray(rgb(up), np.float32), np.asarray(rgb(low), np.float32))
-        img[:, c0:c1, :] = colours * lap[:, None, None]
+        kinds = (material(up)[0], material(low)[0])
+        if kinds == ("boards", "boards"):
+            img[:, c0:c1, :] = colours * lap[:, None, None]
+            continue
+        u = (np.arange(c0, c1) + 0.5) / ppm
+        shades = [cladding_shade(kind, zc, u, datum, board, ppm, rng) for kind in kinds]
+        img[:, c0:c1, :] = colours * np.where(above[:, :, 0], shades[0], shades[1])[:, :, None]
+        for kind, rows in zip(kinds, (zc >= fl - 0.05, zc < fl - 0.05), strict=True):
+            if kind != "boards" and rows.any():                 # only weatherboards take laps over a photo
+                r = np.flatnonzero(rows)
+                cd.rectangle([c0, int(r[0]), c1, int(r[-1]) + 1], fill=0)
     if plinth is not None and plinth > z0:
         r = int(round(row(plinth)))
         noise = rng.normal(0, 6, (max(H - r, 0), W, 1))
@@ -274,6 +336,36 @@ def build_atlas(faces, out_path, ppm=PPM, extra=()):
             f.mesh.uv = np.column_stack([col / ATLAS_W, 1 - row / H])
     atlas.save(out_path, quality=86)
     return pal_uv, sorted(photos)
+
+
+def roof_kind():
+    """How the roof is drawn: [house] roof in data/site.toml, concrete tiles unless given."""
+    kind = settings().get("house", {}).get("roof", "tiles")
+    if kind not in ROOFS:
+        from .errors import DomusError
+
+        raise DomusError(f"[house] roof = {kind!r}: give one of {', '.join(ROOFS)}")
+    return kind
+
+
+def roof_texture(out_path, size=512, metres=2.0):
+    """The roof's repeating texture, as [house] roof names it: returns the metres it covers."""
+    kind = roof_kind()
+    if kind == "tiles":
+        return roof_tiles(out_path, size, metres)
+    rng = np.random.default_rng(7)
+    ppm = size / metres
+    base = np.asarray(rgb(roof_colour()), np.float32)
+    _, xx = np.mgrid[0:size, 0:size] / ppm
+    if kind == "metal":                                     # long-run iron: a rib every 0.2 m down the slope
+        across = (xx % 0.2) / 0.2
+        light = 0.82 + 0.25 * np.clip(1 - np.abs(across - 0.1) / 0.05, 0, 1) - 0.12 * (np.abs(across - 0.14) < 0.02)
+    else:                                                    # a membrane: sheets 1 m wide, their seams raised
+        light = np.where((xx % 1.0) < 0.02, 1.15, 0.95)
+    img = base * light[..., None] + rng.normal(0, 3, (size, size, 1))
+    im = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)[::-1])
+    im.filter(ImageFilter.SMOOTH).save(out_path, quality=86)
+    return metres
 
 
 def roof_colour():

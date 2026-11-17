@@ -88,10 +88,12 @@ only your own tools read under `[local]`.
 | `house.roof_form` | `"hip"` | hip, skillion (one plane rising towards roof_azimuth_deg) or gable (two planes, their ridge on that bearing) |
 | `house.roof_azimuth_deg` |  | The bearing a skillion rises towards, or a gable's ridge runs on |
 | `house.roof_ridge_offset_m` | `0.0` | How far right of the outline's centre a gable's ridge runs |
-| `house.roof_colour` | `"roof"` | The roof's colour: a palette key or hex |
+| `house.roof` | `"tiles"` | How the roof is drawn: tiles, metal (long-run iron) or membrane |
+| `house.roof_colour` | `"roof"` | The roof's colour: a palette key, one of the site's own colours or hex |
+| `house.palette.<colour>` |  | The site's own colours, by name, for the cladding, trim and roof: name = "#rrggbb" |
 | `house.board_m` | `0.15` | The weatherboards' size from one lap to the next, counted up from the plastered base's top |
 | `house.boards_on_photos` | `false` | Draw the boards over the walls' photos too |
-| `house.cladding.<face>` | worked out | face = [above the floor line, below it] in palette keys; `default` for the faces it doesn't name; `default`: The faces it doesn't name (`["boards-beige", "boards-beige"]`) |
+| `house.cladding.<face>` | worked out | face = [above the floor line, below it]: a colour is weatherboards in it, and plaster:, brick: or panel: before a colour names another cladding; `default` for the faces it doesn't name; `default`: The faces it doesn't name (`["boards-beige", "boards-beige"]`) |
 | `[house.trim]` | | A band at the floor line and facings round the windows below it |
 | `house.trim.colour` |  | Its colour |
 | `house.trim.faces` | `[]` | The faces that have it |

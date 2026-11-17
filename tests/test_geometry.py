@@ -130,3 +130,17 @@ def test_a_grid_cell_is_cut_along_its_corners_closer_in_height():
         assert {frozenset(f) for f in out.tolist()} == {frozenset((0, 1, 2)), frozenset((1, 2, 3))}
     with_off = np.array([[0, 1, 4], [1, 3, 4], [3, 2, 4], [2, 0, 4]])
     assert (cut_cells(with_off, cell, h) == with_off).all()
+
+
+def test_a_surface_is_read_in_its_own_triangles():
+    from domus.mesh import surface_z
+
+    # A 1 m square cut along one diagonal, its far corner 1 m high, and a small roof over one corner.
+    v = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 1], [0, 1, 0], [0, 0, 2], [0.2, 0, 2], [0, 0.2, 2]], float)
+    f = np.array([[0, 1, 2], [0, 2, 3], [4, 5, 6]])
+    e, n = np.array([0.75, 0.25, 0.5, 0.05, 1.5]), np.array([0.25, 0.75, 0.5, 0.05, 0.5])
+    z = surface_z(v, f, e, n)
+    assert np.allclose(z[:3], [0.25, 0.25, 0.5]) and z[3] == 2.0 and np.isnan(z[4])     # the highest; none off it
+    cut_the_other_way = surface_z(v, np.array([[0, 1, 3], [1, 2, 3]]), e[:2], n[:2])
+    assert np.allclose(cut_the_other_way, [0.0, 0.0])                                      # it reads the cut it's given
+    assert surface_z(v, f, np.zeros((2, 2)) + 0.5, np.zeros((2, 2)) + 0.5).shape == (2, 2)

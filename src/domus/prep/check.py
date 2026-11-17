@@ -36,10 +36,10 @@ import cv2
 import numpy as np
 import shapely
 from PIL import Image, ImageDraw
-from scipy.spatial import Delaunay, cKDTree
+from scipy.spatial import cKDTree
 from shapely.geometry import LineString, Polygon
 
-from .. import crs, features, geojson, house, raster, terrain, vegetation, walls
+from .. import crs, features, geojson, house, mesh, raster, terrain, vegetation, walls
 from ..crs import ROOT
 from ..sfm_georef import load
 from ..video.georef_sfm import consensus_up, frame_path, frame_ups, tilt_of
@@ -72,10 +72,6 @@ class Model:
         wall_feats = geojson.read_optional(ROOT / "data" / "site" / "walls-existing.geojson")
         self.walls = [walls.from_feature(f) for f in wall_feats]
         self.tin = terrain.build(self.extent, cfg["model"]["terrain_step_m"], self.walls)
-        self._mid = self.tin.vertices[:, :2].mean(axis=0)          # triangulated about its middle, as terrain.build does
-        self._tri = Delaunay(self.tin.vertices[:, :2] - self._mid)
-        kept = set(map(tuple, np.sort(self.tin.faces, axis=1)))
-        self._ok = np.array([tuple(s) in kept for s in np.sort(self._tri.simplices, axis=1)])
         hfc = geojson.read(ROOT / "data" / "site" / "house.geojson")["features"]
         self.hf = {f["properties"]["id"]: f for f in hfc}
         self.parts = lambda *kinds: [f for f in hfc if f["properties"].get("part") in kinds]
@@ -94,17 +90,8 @@ class Model:
         self.lot = Polygon(lot["geometry"]["coordinates"][0])
 
     def tin_z(self, e, n):
-        """Height of the drawn ground (NaN where it has no triangle)."""
-        p = np.column_stack([np.ravel(e), np.ravel(n)]).astype(float) - self._mid
-        s = self._tri.find_simplex(p)
-        out = np.full(len(p), np.nan)
-        ok = s >= 0
-        ok[ok] = self._ok[s[ok]]
-        t = self._tri.transform[s[ok]]
-        b = np.einsum("ijk,ik->ij", t[:, :2, :], p[ok] - t[:, 2, :])
-        bary = np.column_stack([b, 1 - b.sum(1)])
-        out[ok] = (bary * self.tin.vertices[self._tri.simplices[s[ok]], 2]).sum(1)
-        return out.reshape(np.shape(e))
+        """Height of the drawn ground (NaN where it has no triangle), read in the triangles the build drew."""
+        return mesh.surface_z(self.tin.vertices, self.tin.faces, e, n)
 
     def raised_footprint(self):
         """Plan area under modelled objects and vegetation, where a camera need not see ground."""

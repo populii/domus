@@ -77,3 +77,45 @@ def test_boards_are_drawn_over_a_photo_only_where_the_boards_show(site, monkeypa
     between = column[np.setdiff1d(np.arange(30, 180), (rows[:, None] + np.arange(-1, 4)).ravel())]
     assert between.std() < 12                             # and the photo's own lines are gone from between them
     assert abs(column.mean() - photo[:200, 200, 0].mean()) < 8     # as bright overall as the photo was
+
+
+def test_a_site_names_its_own_colours_and_claddings(site, monkeypatch):
+    import pytest
+
+    from domus import house_texture as ht
+    from domus.errors import DomusError
+
+    house = {"palette": {"heritage-red": "#8a2b22"},
+             "cladding": {"default": ["brick:heritage-red", "plaster:#d8d2c4"], "front": ["boards-grey", "panel:#5b6670"]}}
+    monkeypatch.setattr(ht, "settings", lambda: {"house": house})
+    assert ht.rgb("heritage-red") == (0x8A, 0x2B, 0x22) and ht.rgb("brick:heritage-red") == (0x8A, 0x2B, 0x22)
+    assert ht.material("plaster:#d8d2c4") == ("plaster", "#d8d2c4") and ht.material("boards-grey") == ("boards", "boards-grey")
+    with pytest.raises(DomusError, match="isn't a colour Domus knows"):
+        ht.rgb("no-such-colour")
+    img, boards = ht.draw_face(4.0, 0.0, 5.0, spec(), "back")             # brick above the floor line, plaster below
+    a = np.asarray(img, float)
+    assert not boards[: int((5.0 - 3.05) * ht.PPM)].any()               # no laps over a photo on brick or plaster
+    upper = a[int(0.5 * ht.PPM): int(1.5 * ht.PPM), int(1 * ht.PPM): int(3 * ht.PPM)]
+    assert upper[..., 0].mean() > upper[..., 2].mean() + 30              # red brick
+    lower = a[int(2.5 * ht.PPM): int(3.5 * ht.PPM), int(1 * ht.PPM): int(3 * ht.PPM)]   # plaster, 1.5 to 2.5 m up
+    assert upper.std(axis=(0, 1)).max() > 2 * lower.std(axis=(0, 1)).max()   # brick courses, against plain plaster
+    _, front = ht.draw_face(4.0, 0.0, 5.0, spec(), "front")
+    assert front[int(0.5 * ht.PPM)].any()                               # weatherboards above take laps
+
+
+def test_the_roof_is_drawn_as_the_site_names_it(site, tmp_path, monkeypatch):
+    import pytest
+
+    from domus import house_texture as ht
+    from domus.errors import DomusError
+
+    pictures = {}
+    for kind in ht.ROOFS:
+        monkeypatch.setattr(ht, "settings", lambda kind=kind: {"house": {"roof": kind, "roof_colour": "#7a2f2a"}})
+        assert ht.roof_texture(tmp_path / f"{kind}.jpg") == 2.0
+        pictures[kind] = np.asarray(Image.open(tmp_path / f"{kind}.jpg"), float)
+    assert all(abs(p[..., 0].mean() - p[..., 2].mean()) > 20 for p in pictures.values())   # all in the roof's colour
+    assert len({round(float(p.std()), 1) for p in pictures.values()}) == 3                # each drawn its own way
+    monkeypatch.setattr(ht, "settings", lambda: {"house": {"roof": "thatch"}})
+    with pytest.raises(DomusError, match="give one of tiles, metal, membrane"):
+        ht.roof_kind()

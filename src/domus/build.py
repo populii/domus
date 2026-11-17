@@ -631,7 +631,7 @@ def add_house(b):
                          hcfg["eaves_overhang_m"], ground, **house.roof_options(hcfg))
         extra = [k for parts in hm.solids.values() for _, k in parts if k.startswith("#")]
         pal_uv, house_photos = house_texture.build_atlas(hm.faces, OUT / "house-atlas.jpg", extra=extra)
-        tile_m = house_texture.roof_tiles(OUT / "house-roof.jpg")
+        tile_m = house_texture.roof_texture(OUT / "house-roof.jpg")
         hparts, first = {"walls": house.UVMesh(), "eaves": house.UVMesh()}, {}
         for f in hm.faces:
             hparts.setdefault(f.spec.get("layer", "walls"), house.UVMesh()).extend(f.mesh)

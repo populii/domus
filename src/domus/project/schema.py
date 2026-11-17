@@ -116,10 +116,14 @@ SITE = Table("data/site.toml", {
                          "on that bearing)", "hip"),
         "roof_azimuth_deg": Key("The bearing a skillion rises towards, or a gable's ridge runs on"),
         "roof_ridge_offset_m": Key("How far right of the outline's centre a gable's ridge runs", 0.0),
-        "roof_colour": Key("The roof's colour: a palette key or hex", "roof"),
+        "roof": Key("How the roof is drawn: tiles, metal (long-run iron) or membrane", "tiles"),
+        "roof_colour": Key("The roof's colour: a palette key, one of the site's own colours or hex", "roof"),
+        "palette": Map("The site's own colours, by name, for the cladding, trim and roof: name = \"#rrggbb\"",
+                       Key("Its colour, #rrggbb"), "colour"),
         "board_m": Key("The weatherboards' size from one lap to the next, counted up from the plastered base's top", 0.15),
         "boards_on_photos": Key("Draw the boards over the walls' photos too", False),
-        "cladding": Map("face = [above the floor line, below it] in palette keys; `default` for the faces it doesn't name",
+        "cladding": Map("face = [above the floor line, below it]: a colour is weatherboards in it, and plaster:, brick: "
+                        "or panel: before a colour names another cladding; `default` for the faces it doesn't name",
                         Key("[above, below]: the `default` entry's, unless given", COMPUTED), "face",
                         known={"default": Key("The faces it doesn't name", ["boards-beige", "boards-beige"])}),
         "trim": Table("A band at the floor line and facings round the windows below it", {
