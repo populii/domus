@@ -13,6 +13,7 @@
     domus scan FILE                                           bring in a phone LiDAR scan
     domus prep <step>                                         plans, IFC, textures, checks from your documents
     domus serve                                               serve the viewer
+    domus site upgrade                                        write an older site's migrations into its files
 
 Every command but `new` and `demo` works on the site project in the current folder, or the one
 named by --site or the DOMUS_SITE environment variable. Modules are imported only once that's
@@ -25,7 +26,8 @@ import sys
 
 from . import __version__
 
-COMMANDS = ["create", "new", "demo", "fetch", "canopy", "marks", "title", "points", "sketch-worker", "build", "serve", "video", "scan", "prep"]
+COMMANDS = ["create", "new", "demo", "fetch", "canopy", "marks", "title", "points", "sketch-worker", "build", "serve", "video", "scan", "prep",
+            "site"]
 
 
 def choose_site(path):
@@ -94,6 +96,9 @@ def run(command, rest):
     if command == "scan":
         from . import scan
         return scan.main(rest)
+    if command == "site":
+        from .project import upgrade
+        return upgrade.main(rest)
     from . import build
     return build.main()
 

@@ -16,6 +16,7 @@ dependencies = [
     "av>=14",
     "pycolmap>=4.2",
     "laspy[lazrs]>=2.5",
+    "tomlkit>=0.13",
 ]
 
 [project.urls]

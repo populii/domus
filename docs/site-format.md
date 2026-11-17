@@ -25,7 +25,7 @@ Everything else has a default.
 
 | Section | Keys |
 |---|---|
-| `[domus]` | `format`: the site folder's format, 1 today. `domus new` and `domus create` write it, so later versions of Domus can read older sites |
+| `[domus]` | `format`: the site folder's format, 2 today. `domus new` and `domus create` write it, every Domus reads older formats in memory, and `domus site upgrade` writes a site up to this one. `requires`: the oldest Domus that builds the site, such as `">=2026.12.0"` |
 | `[site]` | `title`, `heading`, `subtitle`, `about`, `attribution`: the viewer's text |
 | `[crs]` | `epsg` (default 2193), `label`, `vertical` |
 | `[boundary]` | `main`: the id of the feature in `boundary.geojson` that is the lot, default the first |
@@ -34,8 +34,8 @@ Everything else has a default.
 | `[[drapes]]` | `key`, `label`, `georef`, `px`: a scanned plan to lay on the ground; `shift_m = [east, north]` moves it from where its georeference puts it |
 | `[datums.<key>]` | `label`, `offset_m`: another height datum your plans use, where their level = model height + offset. The viewer reads points in it |
 | `[survey]` | `datum`, `level_column`: the datum and column of levels in `control.csv` |
-| `[house]` | `fl_upper`, `roof_pitch_deg`, `roof_plane_at_wall`, `eaves_overhang_m`, required with `house.geojson`; `roof_form`, `hip` by default: `skillion` is one plane rising towards the bearing `roof_azimuth_deg`, and `gable` is two planes with their ridge on that bearing, through the outline's centre or `roof_ridge_offset_m` to the right of it. For both, `roof_plane_at_wall` is the roof's height over the outline's lowest point; `[house.cladding]`; `board_m`, the weatherboards' size from one lap to the next (0.15 unless given): they are drawn that size, counted up from the top of the plastered base, so they can be counted as a ruler up the wall; `boards_on_photos = true` draws them over the walls' photos too; `[house.cladding]` face = [above the floor line, below it] in palette keys, and `default` for the faces it doesn't name; `[house.trim]` `colour` and `faces`: a band at the floor line and facings round the windows below it on those faces; `roof_colour`; `[house.layers]` (see House parts) |
-| `[services]` | `assumed_depth_m` (id = metres), `colours` (id = hex), `lids`, `printed_line`, `default_note`, `[services.notes]` |
+| `[house]` | `fl_upper`, `roof_pitch_deg`, `roof_plane_at_wall`, `eaves_overhang_m`, required with `house.geojson`; `fl_lower`, a lower floor's level (`fl_upper` unless given); `roof_form`, `hip` by default: `skillion` is one plane rising towards the bearing `roof_azimuth_deg`, and `gable` is two planes with their ridge on that bearing, through the outline's centre or `roof_ridge_offset_m` to the right of it. For both, `roof_plane_at_wall` is the roof's height over the outline's lowest point; `[house.cladding]`; `board_m`, the weatherboards' size from one lap to the next (0.15 unless given): they are drawn that size, counted up from the top of the plastered base, so they can be counted as a ruler up the wall; `boards_on_photos = true` draws them over the walls' photos too; `[house.cladding]` face = [above the floor line, below it] in palette keys, and `default` for the faces it doesn't name; `[house.trim]` `colour` and `faces`: a band at the floor line and facings round the windows below it on those faces; `roof_colour`; `[house.layers]` (see House parts) |
+| `[services]` | `assumed_depth_m` (id = metres), `colours` (id = hex), `lids`, `default_note`, and `[services.notes.<id>]` with `text` (which can use `{lo}`, `{hi}` and `{span}`) and `confidence` |
 | `[ifc]` | A designer's model as extra layers: `meta`, `meshes`, `name`, `id_prefix`, `group`, `source`, `note` |
 | `[labels]` | Names of the layers: `ground`, `marks`, `points`, `dsm`, `lidar`, `readings`, `features_source`, `bed_floor_source` |
 | `[views]` | Extra view buttons: `"Name" = { pos = [x, y, z], target = [x, y, z] }` in viewer metres (x east, y up, z south of the origin) |
@@ -59,7 +59,10 @@ plants, `house.py` for the house.
   A wall with posts, such as `timber`, has one at every point of its line. `open_ends` (`start`, `end`) names an end
   with none, where its boards run on, as behind another wall.
 - **`services.geojson`**: LineStrings for drains. A Point with `line` (a drain's id) and `invert_m` gives a level
-  along it. Without any, a drain's id in `[services] assumed_depth_m` draws it at that depth.
+  along it, and its `label`, if any, shows by it. The points from one document (their `source`) give its levels over
+  their own stretch; where documents overlap, the higher level is used. Without any, a drain's id in
+  `[services] assumed_depth_m` draws it at that depth. A drain's `follow_up` says what's known to be wrong with its
+  levels: the viewer shows it on the pipe, and the options' checks of that drain repeat it.
 - **`title.geojson`**: From `domus title`: the lot's title (`kind` `title`, with `title_no`, `estate`, `type`) and the
   easements on or near it (`kind` `easement`, with `intent` and `on_lot`). Wall options flag a wall that runs into an easement.
 - **`ground-fixes.geojson`**: Polygons where the LiDAR isn't used, and 3D lines and points that stand in for it.

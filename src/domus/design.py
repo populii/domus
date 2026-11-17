@@ -19,6 +19,7 @@ designed ground just beyond each end, so it follows the terraces it joins, and t
 is a ramp between them.
 """
 
+import math
 import tomllib
 from functools import lru_cache
 
@@ -40,7 +41,10 @@ LIDAR_TOLERANCE_M = 0.15     # height uncertainty of the existing ground, for th
 
 @lru_cache
 def settings():
-    return tomllib.loads(SITE.read_text(encoding="utf-8"))
+    """options/_site.toml, at this Domus's format (domus.project.formats)."""
+    from .project import formats
+
+    return formats.options_site(tomllib.loads(SITE.read_text(encoding="utf-8")), crs.site_format())
 
 
 class SiteFrame:
@@ -109,12 +113,10 @@ def house_building():
 
 
 def regrade_settings():
-    """options/_site.toml [regrade] (or [front_garden], its old name): where options may regrade the ground."""
+    """options/_site.toml [regrade]: where options may regrade the ground."""
     cfg = settings()
     if "regrade" in cfg:
         return cfg["regrade"]
-    if "front_garden" in cfg:
-        return cfg["front_garden"]
     raise DomusError(f"{SITE} has no [regrade] section, which says where options may regrade the ground. See docs/options.md.")
 
 
@@ -153,10 +155,17 @@ def _fall(cfg):
     return float(f)
 
 
-# Directions in the frame, as a lawn's fall names them: "north" back along the reference boundary,
-# "south" along it, "east" towards it, "west" in from it. A site picks its boundary so these read
-# close to the compass.
-FALL_DIRS = {"north": (-1, 0), "south": (1, 0), "east": (0, -1), "west": (0, 1)}
+def compass(direction):
+    """The way a terrace falls, from its `fall_to`: a compass word on the site's grid ("north", "east", "south",
+    "west") or a bearing in degrees clockwise from its north, as a unit vector (east, north)."""
+    from .project.formats import COMPASS
+
+    if isinstance(direction, str):
+        if direction not in COMPASS:
+            raise DomusError(f"fall_to = {direction!r}: give north, east, south, west, or a bearing in degrees")
+        return np.array(COMPASS[direction])
+    b = math.radians(float(direction))
+    return np.array([math.sin(b), math.cos(b)])
 
 
 class Terrace:
@@ -176,9 +185,7 @@ class Terrace:
             at = frame().en(np.asarray(cfg["at_so"], float)) if "at_so" in cfg else \
                 np.asarray(cfg.get("at", self.poly.representative_point().coords[0]), float)
             g = _fall(cfg)
-            ds, do = FALL_DIRS[cfg.get("fall_to", "north")]
-            fr = frame()
-            down = ds * fr.along + do * fr.inward   # the direction the terrace falls towards
+            down = compass(cfg.get("fall_to", "north"))   # the direction the terrace falls towards
             self.plane = (float(cfg["level"]), at[:2], g * down)
         self.properties = cfg
 
@@ -544,51 +551,27 @@ def wall_checks(w, points=()):
 
 
 def drain_checks(design, services, depths_by_id, rules):
-    """Cover over the drains after the cuts, and walls crossing drains.
-
-    A drain's invert comes from `invert_m` points naming the drain in `line` and, on the drain
-    named by [services] printed_line in data/site.toml, from points that also give the depth they
-    were read from; where both cover a point the higher invert (less cover) is used. Drains with
-    neither take an assumed depth.
+    """Cover over the drains after the cuts, and walls crossing drains. A drain's levels are worked out as for the
+    pipes the viewer draws (domus.drains), or its assumed depth taken; a drain whose levels are known to be wrong
+    (`follow_up`) says so in every check of it.
     """
-    from shapely.geometry import Point
+    from . import drains
 
     out = []
-    printed_line = crs.settings().get("services", {}).get("printed_line")
-    printed = [(f["geometry"]["coordinates"][:2], float(f["properties"]["invert_m"]))
-               for f in services if "depth_m" in f["properties"] and "invert_m" in f["properties"]]
-    inverts = {}
-    for f in services:
-        pr = f["properties"]
-        if "invert_m" in pr and pr.get("line") and "depth_m" not in pr:
-            inverts.setdefault(pr["line"], []).append((f["geometry"]["coordinates"][:2], float(pr["invert_m"])))
+    points = drains.level_points(services)
     for f in services:
         sid = f["properties"]["id"]
-        if f["geometry"]["type"] != "LineString" or (sid != printed_line and sid not in depths_by_id
-                                                     and sid not in inverts):
+        if f["geometry"]["type"] != "LineString":
             continue
+        found = drains.levels(f["geometry"]["coordinates"], points.get(sid, []), design.existing.sample,
+                              depths_by_id.get(sid), spacing=0.25)
+        if found is None:
+            continue
+        pts, chain, invert, known = found
         line = LineString(np.asarray(f["geometry"]["coordinates"])[:, :2])
-        pts, chain = terrain.resample_line(np.asarray(line.coords), 0.25)
         h0 = design.existing.sample(pts[:, 0], pts[:, 1])
-        # Each source spans its own points only; past both ends the nearest known level carries on.
-        profiles, carried = [], []
-        if sid == printed_line and printed:
-            known = sorted((line.project(Point(xy)), z) for xy, z in printed)
-            z = np.interp(chain, [c for c, _ in known], [z for _, z in known])
-            profiles.append(np.where((chain >= known[0][0]) & (chain <= known[-1][0]), z, np.nan))
-            carried.append(z)
-        if sid in inverts:
-            known = sorted((line.project(Point(xy)), z) for xy, z in inverts[sid])
-            z = np.interp(chain, [c for c, _ in known], [z for _, z in known])
-            profiles.append(np.where((chain >= known[0][0]) & (chain <= known[-1][0]), z, np.nan))
-            carried.append(z)
-        assumed = not profiles
-        if profiles:
-            stack = np.array(profiles)
-            covered = ~np.isnan(stack).all(axis=0)
-            invert = np.where(covered, np.nanmax(np.where(covered, stack, 0.0), axis=0), carried[-1])
-        else:
-            invert = h0 - depths_by_id[sid]
+        assumed = not known
+        follow_up = f["properties"].get("follow_up")
         depth = h0 - invert
         h1 = design.sample(pts[:, 0], pts[:, 1])
         dz = h1 - h0
@@ -603,6 +586,9 @@ def drain_checks(design, services, depths_by_id, rules):
             if cover[k] < rules["drain_cover_m"]:
                 msg["flag"] = (f"cover drops to {cover[k]:.2f} m (under {rules['drain_cover_m']} m)"
                                + (" at its assumed depth" if assumed else ""))
+            if follow_up:
+                msg["follow_up"] = follow_up
+                msg["flag"] = "; ".join([*([msg["flag"]] if "flag" in msg else []), f"its levels are to be followed up: {follow_up}"])
             out.append(msg)
         for w in design.walls:
             x = LineString(w["line"]).intersection(line)
@@ -612,9 +598,11 @@ def drain_checks(design, services, depths_by_id, rules):
                 c = line.project(p)
                 d = float(np.interp(c, chain, depth))
                 z = float(np.interp(c, chain, invert))
+                flag = (f"{w['id']} crosses it (invert {z:.2f}, {d:.2f} m deep{', assumed' if assumed else ''}): "
+                        "bridge the footing over the pipe or sleeve it")
                 out.append({"drain": name, "wall": w["id"], "assumed_depth": assumed,
-                            "flag": f"{w['id']} crosses it (invert {z:.2f}, {d:.2f} m deep{', assumed' if assumed else ''}): "
-                                    "bridge the footing over the pipe or sleeve it"})
+                            **({"follow_up": follow_up} if follow_up else {}),
+                            "flag": flag + (f"; its levels are to be followed up: {follow_up}" if follow_up else "")})
     return out
 
 

@@ -1620,6 +1620,7 @@ function readPoint({ hit, local }) {
     if (info.risers) html += `<br>${esc(info.material)}, ${info.risers} risers of ${fmt(info.riser_m, 2)} m on ${fmt(info.going_m, 2)} m goings, ${fmt(info.width_m, 1)} m wide`;
     else if (info.material) html += `<br>${esc(info.material)}, about ${fmt(info.height_max_m, 2)} m exposed, ${fmt(info.length_m, 1)} m long`;
     if (info.confidence) html += ` <span class="chip">${esc(info.confidence)}</span>`;
+    if (info.follow_up) html += `<br><strong style="color: var(--warn)">Follow up: ${esc(info.follow_up)}</strong>`;
     if (info.note) html += `<br><span class="hint">${esc(info.note)}</span>`;
     if (info.source) html += `<br><span class="hint">Source: ${esc(info.source)}</span>`;
   }
@@ -1962,7 +1963,8 @@ function pipeCrossings(a, b, len) {
       const t = ((cx - a.x) * dz - (cz - a.z) * dx) / den, u = ((cx - a.x) * ez - (cz - a.z) * ex) / den;
       if (t < 0 || t > 1 || u < 0 || u > 1) continue;
       out.push({ s: t * len, y: p[i - 2] + u * (p[i + 1] - p[i - 2]), r: layer.radius, colour: layer.colour,
-        name: layer.name.replace(/, underground$/, "").replace(/ \(.*$/, ""), assumed: layer.info?.confidence === "depth assumed" });
+        name: layer.name.replace(/, underground$/, "").replace(/ \(.*$/, ""), assumed: layer.info?.confidence === "depth assumed",
+        follow_up: layer.info?.follow_up });
     }
   }
   return out;
@@ -2076,7 +2078,7 @@ function drawProfile() {
   for (const c of crossings) {
     const r = Math.max(3.5, (c.r / (hi - lo)) * h);
     svg.append(svgEl("circle", { class: "pipe", cx: sx(c.s), cy: sy(c.y), r, fill: c.colour }));
-    const lbl = `${c.name}${c.depth != null ? `, invert ${f2(c.depth)} m deep` : ""}${c.assumed ? " (assumed)" : ""}`;
+    const lbl = `${c.name}${c.depth != null ? `, invert ${f2(c.depth)} m deep` : ""}${c.assumed ? " (assumed)" : ""}${c.follow_up ? " (follow up)" : ""}`;
     const right = sx(c.s) < m.l + w * 0.6;
     svg.append(svgEl("text", { class: "pipe-lbl", x: sx(c.s) + (right ? r + 4 : -r - 4), y: sy(c.y) + 3.5,
       "text-anchor": right ? "start" : "end" }, lbl));
@@ -2097,7 +2099,7 @@ function drawProfile() {
   // the list in the panel reads the profile as the chart does: the ground at its ends
   const rec = profile.rec;
   rec.text = `${f2(len)} m · ground ${f2(first.g + H0)} to ${f2(last.g + H0)} m, rise ${signed(rise)} m${grade(rise, span)} · steepest ${pct(100 * steep)}`;
-  rec.copy = `Profile ${rec.text}${crossings.length ? `; crosses ${crossings.map((c) => `${c.name} at ${f2(c.s)} m (invert ${c.depth != null ? f2(c.depth) : "?"} m deep${c.assumed ? ", assumed" : ""})`).join(", ")}` : ""}, from ${siteText(profile.a)} to ${siteText(profile.b)}`;
+  rec.copy = `Profile ${rec.text}${crossings.length ? `; crosses ${crossings.map((c) => `${c.name} at ${f2(c.s)} m (invert ${c.depth != null ? f2(c.depth) : "?"} m deep${c.assumed ? ", assumed" : ""}${c.follow_up ? ", follow up" : ""})`).join(", ")}` : ""}, from ${siteText(profile.a)} to ${siteText(profile.b)}`;
   renderMeasures();
   const parts = [`<b>${f2(len)} m</b> long`, `ground <b>${f2(first.g + H0)} → ${f2(last.g + H0)} m</b>`,
     `rise <b>${signed(rise)} m</b>${span > 0.05 ? `, mean <b>${pct((100 * rise) / span)}</b>` : ""}`,

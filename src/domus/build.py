@@ -90,39 +90,27 @@ PIPE_RADIUS = 0.05      # m: 100 mm drains
 
 
 def pipe_layers(svc_feats, frame, ground, colours):
-    """The drains of data/site/services.geojson as pipes below the ground ("pipes" layers: a viewer
-    polyline of the pipe's centre and its radius), at the invert levels the file gives along each line
-    (invert_m points naming the line), straight between them and beyond them level, or at the nearest level's
-    depth where the ground falls away. [services] printed_line in data/site.toml names a drain that takes only
-    the points also giving the depth they were read from; [services] assumed_depth_m gives the others a depth
-    below the ground; [services.notes] says where each drain's levels came from. Other lines are left out."""
-    from shapely.geometry import LineString, Point
+    """The drains of data/site/services.geojson as pipes below the ground ("pipes" layers: a viewer polyline of the
+    pipe's centre and its radius), at the levels domus.drains works out for each, or [services] assumed_depth_m below
+    the ground. [services.notes] says where each drain's levels came from, and a drain's own `follow_up` what's known
+    to be wrong with them. Drains with neither levels nor an assumed depth are left out."""
+    from shapely.geometry import LineString
+
+    from . import drains
 
     by_id = {f["properties"]["id"]: f for f in svc_feats}
     cfg = crs.settings().get("services", {})
-    printed_line, assumed = cfg.get("printed_line"), cfg.get("assumed_depth_m", {})
-    notes = cfg.get("notes", {})
-    inverts = {}
-    for f in svc_feats:
-        p = f["properties"]
-        if "invert_m" in p and (p["line"] != printed_line or "depth_m" in p):
-            inverts.setdefault(p["line"], []).append((f["geometry"]["coordinates"][:2], float(p["invert_m"])))
+    assumed, notes = cfg.get("assumed_depth_m", {}), cfg.get("notes", {})
+    points = drains.level_points(svc_feats)
     out = []
-    for sid in [*inverts, *assumed]:
+    for sid in dict.fromkeys([*points, *assumed]):
         f = by_id.get(sid)
-        if f is None:
+        if f is None or f["geometry"]["type"] != "LineString":
             continue
         p = f["properties"]
-        pts, chain = terrain.resample_line(np.asarray(f["geometry"]["coordinates"], float)[:, :2], 0.5)
-        if sid in inverts:
+        pts, chain, invert, known = drains.levels(f["geometry"]["coordinates"], points.get(sid, []), ground, assumed.get(sid))
+        if known:
             line = LineString(f["geometry"]["coordinates"])
-            known = sorted((line.project(Point(xy)), v) for xy, v in inverts[sid])
-            invert = np.interp(chain, [c for c, _ in known], [v for _, v in known])
-            # beyond the first and last level the pipe keeps that level, or its depth below the ground where
-            # the ground falls away (so a drain running on downhill does not come out of it)
-            g = ground(pts[:, 0], pts[:, 1])
-            for end, side in ((known[0], chain < known[0][0]), (known[-1], chain > known[-1][0])):
-                invert[side] = np.minimum(end[1], g[side] - (np.interp(end[0], chain, g) - end[1]))
             lo, hi = min(v for _, v in known), max(v for _, v in known)
             span = f"{len(known)} of them, between {known[0][0]:.0f} and {known[-1][0]:.0f} m along its {line.length:.0f} m"
             n = {**cfg.get("default_note", {}), **notes.get(sid, {})}
@@ -132,9 +120,10 @@ def pipe_layers(svc_feats, frame, ground, colours):
             depth = ground(pts[:, 0], pts[:, 1]) - invert
         else:
             depth = np.full(len(chain), assumed[sid])
-            invert = ground(pts[:, 0], pts[:, 1]) - depth
             info = {"note": f"Depth not recorded: drawn {assumed[sid]:.1f} m deep to invert.",
                     "confidence": "depth assumed"}
+        if p.get("follow_up"):
+            info["follow_up"] = p["follow_up"]
         z = invert + PIPE_RADIUS
         out.append({"type": "pipes", "id": f"pipe-{sid}", "name": f"{p['name']}, underground",
                     "group": "Services underground", "colour": colours.get(sid, "#2f2f2f"), "radius": PIPE_RADIUS,
@@ -659,7 +648,7 @@ def add_house(b):
                                "texture": "house-roof.jpg", "repeat": True,
                                "info": {"source": hcfg.get("roof_source", "the house's outline and [house] in data/site.toml")}})
         summary["house"] = {**hm.info, "fl_upper": hcfg["fl_upper"],
-                            "fl_lower": round(hcfg["fl_upper"] - (hcfg.get("fl_upper_rel", 0) - hcfg.get("fl_lower_rel", 0)), 3),
+                            "fl_lower": round(hcfg.get("fl_lower", hcfg["fl_upper"]), 3),
                             "photo_textures": house_photos}
 
 
@@ -762,8 +751,11 @@ def add_marks(b):
     for f in svc_feats:
         if f["geometry"]["type"] == "Point":
             e, n = f["geometry"]["coordinates"][:2]
-            lab = f["properties"]["label"]
-            marks.append({"text": f"drain {lab}" if "depth_m" in f["properties"] else lab, "kind": "sewer",
+            p = f["properties"]
+            lab = p.get("label") or (f"IL {float(p['invert_m']):.2f}" if "invert_m" in p else None)
+            if not lab:
+                continue
+            marks.append({"text": f"drain {lab}" if "depth_m" in p else lab, "kind": "sewer",
                           "at": r(frame.xyz([[e, n, float(ground(e, n)[0]) + 0.2]])[0], 2)})
     site_features = b.site_features = features.read_all()
     for f in site_features:

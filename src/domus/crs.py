@@ -23,7 +23,17 @@ NZTM_EPSG = 2193
 
 @lru_cache
 def settings():
-    return tomllib.loads((ROOT / "data" / "site.toml").read_text(encoding="utf-8"))
+    """data/site.toml, at this Domus's format whatever format the site is in (domus.project.formats)."""
+    from .project import formats
+
+    return formats.site(tomllib.loads((ROOT / "data" / "site.toml").read_text(encoding="utf-8")))
+
+
+def site_format():
+    """The format the site's own files are in, as data/site.toml says (settings() has them at this Domus's)."""
+    from .project import formats
+
+    return formats.format_of(tomllib.loads((ROOT / "data" / "site.toml").read_text(encoding="utf-8")))
 
 
 def site_epsg():

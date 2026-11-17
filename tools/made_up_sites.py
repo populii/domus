@@ -1,7 +1,7 @@
 """The made-up sites CI builds with a pull request's base and with its head, so a change to the build can be proved
 without anyone's real property.
 
-    uv run python tools/made_up_sites.py write OUT     # writes OUT/demo, OUT/richer and OUT/abroad
+    uv run python tools/made_up_sites.py write OUT     # writes OUT/demo, OUT/richer, OUT/abroad and OUT/format1
     python tools/made_up_sites.py report DIR           # what moved between DIR/base-<site> and DIR/head-<site>
 
 The sites, all in the sea, so none is a real place:
@@ -14,6 +14,10 @@ The sites, all in the sea, so none is a real place:
   abroad   The demo moved onto the British National Grid (EPSG:27700), rasters and all. Domus reads rasters on New
            Zealand's grid for now, so this one won't build until phase 3 in ARCHITECTURE.md, and the report says so
            rather than failing.
+  format1  The demo as a site in format 1 (Domus 2026.11.26 and before) with what format 2 changed: compass words
+           along a frame at an angle to the grid, [front_garden], floor levels relative to each other, and a drain
+           drawn from its printed levels only. Every Domus reads it as format 1 did, so it never moves. It stays as
+           it is for good: each later format adds a site of its own.
 
 `report` reads what CI leaves in DIR for each side (base and head) and site: the copy it built (`<side>-<site>/`,
 with the model in `viewer/data/`), the build's output (`<side>-<site>.log`) and whether it built
@@ -25,6 +29,7 @@ import argparse
 import contextlib
 import io
 import json
+import math
 import re
 import subprocess
 import sys
@@ -32,7 +37,7 @@ import tomllib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SITES = ("demo", "richer", "abroad")
+SITES = ("demo", "richer", "abroad", "format1")
 EXPECTED = {"abroad": "Expected until Domus reads rasters on their own grid (phase 3 in ARCHITECTURE.md)."}
 # The abroad site's grid: the British National Grid, in the Celtic Sea.
 ABROAD_EPSG, ABROAD_X0, ABROAD_Y0 = 27700, 100000.0, 100000.0
@@ -155,6 +160,78 @@ def move_abroad(root):
     settings.write_text(text, encoding="utf-8", newline="\n")
 
 
+FORMAT_1_OPTION = """name = "F. Falls named the old way"
+short = "F. Old falls"
+description = "Two lawns falling the ways format 1 named them, along a frame at an angle to the grid."
+steps = 0
+keep_existing = []
+
+[[walls]]
+id = "F1"
+name = "Lawn wall"
+material = "timber"
+line = {wall}
+
+[[terraces]]
+id = "upper"
+name = "Upper lawn"
+kind = "lawn"
+level = {upper}
+at = {upper_at}
+fall = "1:40"
+fall_to = "east"
+batter = 2.5
+polygon = {upper_polygon}
+
+[[terraces]]
+id = "lower"
+name = "Lower lawn"
+kind = "lawn"
+level = {lower}
+at = {lower_at}
+fall = "1:50"
+batter = 2.5
+polygon = {lower_polygon}
+"""
+
+
+def make_format_1(root):
+    """The demo, said the way a format 1 site says it (see the module's docstring)."""
+    from domus import demo
+
+    x0, y0 = demo.X0, demo.Y0
+    settings = root / "data" / "site.toml"
+    text = re.sub(r"^format = .*$", "format = 1", settings.read_text(encoding="utf-8"), count=1, flags=re.MULTILINE)
+    text = text.replace("[house]\n", "[house]\nfl_upper_rel = 2.6\nfl_lower_rel = 0.0\n", 1)
+    settings.write_text(text + '\n[services]\nprinted_line = "drain"\n', encoding="utf-8", newline="\n")
+    # The drain's printed levels, at both its ends: the only levels it has.
+    site = root / "data" / "site"
+    services = read_json(site / "services.geojson")
+    for pid, xy, depth in [("drain-top", [x0 + 17, y0 + 11], 0.5), ("drain-bottom", [x0 + 21, y0 + 32], 0.8)]:
+        invert = round(float(demo.ground(*xy)) - depth, 2)
+        services["features"].append(feat("Point", xy, id=pid, line="drain", invert_m=invert, depth_m=depth,
+                                         label=f"drain {depth:.2f} m", source="made up plan"))
+    write_json(site / "services.geojson", services)
+    # options/_site.toml: [front_garden], and a frame 20 degrees off the grid, running from the lot's north-east corner.
+    shared = root / "options" / "_site.toml"
+    origin, b = [x0 + 22, y0 + 30], math.radians(200)
+    toward = [round(origin[0] + 20 * math.sin(b), 3), round(origin[1] + 20 * math.cos(b), 3)]
+    text = shared.read_text(encoding="utf-8").replace("[regrade]", "[front_garden]")
+    text = re.sub(r"^origin = .*$", f"origin = {json.dumps(origin)}", text, count=1, flags=re.MULTILINE)
+    text = re.sub(r"^toward = .*$", f"toward = {json.dumps(toward)}", text, count=1, flags=re.MULTILINE)
+    shared.write_text(text, encoding="utf-8", newline="\n")
+    # The demo's options are drawn in the frame, which has turned; this one is drawn on the site's grid.
+    for path in (root / "options").glob("*.toml"):
+        if not path.name.startswith("_"):
+            path.unlink()
+    level = lambda x, y, up: round(float(demo.ground(x0 + x, y0 + y)) + up, 2)
+    box = lambda a, b, c, d: json.dumps([[x0 + a, y0 + b], [x0 + c, y0 + b], [x0 + c, y0 + d], [x0 + a, y0 + d]])
+    (root / "options" / "f-old-falls.toml").write_text(FORMAT_1_OPTION.format(
+        wall=json.dumps([[x0 + 4, y0 + 18], [x0 + 18, y0 + 18]]), upper=level(11, 22, 0.1),
+        upper_at=json.dumps([x0 + 11, y0 + 22]), upper_polygon=box(4, 18, 18, 27), lower=level(11, 16.5, 0.05),
+        lower_at=json.dumps([x0 + 11, y0 + 16.5]), lower_polygon=box(4, 15.5, 18, 17.9)), encoding="utf-8", newline="\n")
+
+
 def write(out):
     from domus import demo
 
@@ -165,6 +242,7 @@ def write(out):
             demo.main([str(out / name)])
     enrich(out / "richer")
     move_abroad(out / "abroad")
+    make_format_1(out / "format1")
     print(f"Wrote {', '.join(SITES)} to {out}")
 
 

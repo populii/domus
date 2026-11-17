@@ -48,10 +48,24 @@ def restyled(cfg, path):
     return {**base, "stairs": stairs, **own, "walls": walls}
 
 
+def current(cfg):
+    """An option as loaded, at this Domus's format: an older site's are migrated in memory (domus.project.formats)."""
+    from . import crs
+    from .project import formats
+
+    fmt = crs.site_format()
+    if fmt >= formats.FORMAT:
+        return cfg
+    from . import design
+
+    return formats.option(cfg, fmt, design.settings().get("frame"))
+
+
 def load(path):
     cfg = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     if "based_on" in cfg:
         cfg = restyled(cfg, path)
+    cfg = current(cfg)
     return {
         **cfg,
         "id": Path(path).stem,

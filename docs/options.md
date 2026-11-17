@@ -4,7 +4,7 @@ One TOML file per retaining-wall scheme. `domus build` reads every
 `options/*.toml` (names starting with `_` are skipped) and turns each into designed ground, walls
 with levels, lawns and beds, and a row in the viewer's options table (`src/domus/design.py`).
 `_site.toml` holds what they share: the site frame and `[regrade]`, the part of the lot options may regrade
-(the whole lot unless `s_max` or `polygon_so` narrows it; `[front_garden]`, its old name, is read too).
+(the whole lot unless `s_max` or `polygon_so` narrows it).
 
 The quickest way to make one is to sketch it in the viewer: draw the wall, set which side it retains, and press **Make it an option**. That writes `options/sketch-<name>.toml`, which you can then edit. Or copy a file, rename it, change a few numbers, rebuild, and pick it in the viewer.
 
@@ -21,8 +21,11 @@ Options are drawn in metres along and in from one boundary of the lot, named in 
 boundary is square to the house. Any line or polygon can be given in grid coordinates instead
 (`line`, `polygon`).
 
-In a lawn's `fall_to`, `south` means along the boundary (s rising), `north` back along it, `west` in
-from it and `east` towards it. Pick your boundary so those read close to the compass.
+A lawn's `fall_to` is a compass word on the site's grid, `north`, `east`, `south` or `west`, as in sketches and
+house parts, or a bearing in degrees clockwise from north, such as `200`. In a site of format 1, before Domus
+2026.11.27, the words ran along the frame instead: `south` along the boundary, `north` back along it, `west` in from
+it and `east` towards it. Domus still reads them that way there, and `domus site upgrade` writes them as words or
+bearings on the grid.
 
 ## Format
 
@@ -58,7 +61,7 @@ kind = "lawn"           # lawn | planting (sets the look) | ground (a regrade, d
 level = 42.55           # NZVD2016 at `at_so`
 at_so = [7.5, 5.0]
 fall = "1:25"           # or "2%" or 0.02; flat lawn is counted up to 1:20
-fall_to = "north"       # north | south | east | west
+fall_to = "north"       # north | east | south | west on the site's grid, or a bearing in degrees
 batter = 2.5            # edges not on a wall slope back to the ground at 1 : batter
 polygon_so = [[-1.5, 2.4], [5.0, 2.4], [5.0, 0.3], [7.5, 0.3], [7.5, 10.9], [3.0, 10.9], [-1.5, 6.5]]
 

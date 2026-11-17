@@ -1,7 +1,7 @@
 # Site model settings. See docs/site-format.md for everything that can go here.
 
 [domus]
-format = 1          # this site folder's format, so later versions of Domus can read it
+format = {{format}}          # this site folder's format: `domus site upgrade` moves an older one on
 
 [site]
 title = {{name}}

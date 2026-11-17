@@ -20,6 +20,7 @@ import numpy as np
 from pyproj import Transformer
 
 from .errors import DomusError
+from .project import formats
 
 TEMPLATES = Path(__file__).resolve().parent / "templates"
 NZTM = 2193
@@ -83,7 +84,7 @@ def write_project(path, name, ring, note="", about=""):
     (root / "data" / "site.toml").write_text(
         (TEMPLATES / "site.toml").read_text(encoding="utf-8")
         .replace("{{name}}", toml_str(name)).replace("{{extent}}", json.dumps(ext)).replace("{{origin}}", json.dumps(origin))
-        .replace("{{about}}", toml_str(about)),
+        .replace("{{about}}", toml_str(about)).replace("{{format}}", str(formats.FORMAT)),
         encoding="utf-8", newline="\n")
     (root / "data" / "site" / "boundary.geojson").write_text(json.dumps({
         "type": "FeatureCollection", "name": "boundary",

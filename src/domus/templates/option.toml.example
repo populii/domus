@@ -17,6 +17,6 @@ kind = "lawn"                  # lawn | planting
 level = 40.0                   # height at `at_so`: pick one near your ground
 at_so = [7.0, 6.0]
 fall = "1:40"
-fall_to = "north"              # north | south | east | west, in the frame: see docs/options.md
+fall_to = "north"              # north | east | south | west on the site's grid, or a bearing in degrees
 batter = 2.5
 polygon_so = [[2.0, 2.0], [12.0, 2.0], [12.0, 10.0], [2.0, 10.0]]
