@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.30
 
 - **Addresses anywhere:** `domus create` and the address box look for an address in New Zealand first, then anywhere in OpenStreetMap. A place outside New Zealand goes on its UTM zone, with OpenStreetMap's buildings round it and its ground from the Copernicus ground model (GLO-30), which covers the world's land on a 30 m grid: the lie of the land, much rougher than LINZ's LiDAR, and no aerial photo. `domus fetch` gets a site's rasters from the source for where it is: LINZ in New Zealand, Copernicus elsewhere.
 - Importers bring a place in (`domus.importers`): New Zealand's, anywhere's, and your own files (`domus new`). Each writes an ordinary site folder, with `[domus] importer` saying which, and the build never calls one.
