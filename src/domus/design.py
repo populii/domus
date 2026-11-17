@@ -623,7 +623,7 @@ def obstacles():
     from . import features
 
     out = []
-    for f in features.read_all():
+    for f in features.read_all(ROOT):
         g = f["geometry"]
         p = f["properties"]
         if g["type"] == "Point":
@@ -656,7 +656,7 @@ def evaluate(opt, existing=None, step=0.1):
     rules, fg = cfg.get("rules", {}), regrade_settings()
     fr = frame()
     walls = d.wall_levels()
-    walls_mod.set_out(walls)        # the walls of named blocks, set out together: their courses and their bond
+    walls_mod.set_out(walls, terrain.ground())        # the walls of named blocks, set out together: their courses and their bond
     garden = d.garden
     built = [LineString(w["line"]).buffer(w["thickness"] + 0.3) for w in walls] + [st.poly.buffer(0.1) for st in d.stairs]
     wall_zone = unary_union(built) if built else None
@@ -725,7 +725,7 @@ def evaluate(opt, existing=None, step=0.1):
     # Walls: heights, area, checks.
     winfo = []
     for w in walls:
-        m, info = walls_mod.mesh(w)
+        m, info = walls_mod.mesh(w, terrain.ground())
         hmax, flags = wall_checks(w, obstacles())
         flags += easement_checks(w, easement_shapes())
         flags += w.get("set_out", {}).get("notes", [])

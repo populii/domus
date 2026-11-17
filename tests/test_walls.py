@@ -47,10 +47,28 @@ def test_the_face_at_an_open_end_shows_board_ends_not_a_post(site):
     feature = fc["features"][0]
     feature["properties"] = {**feature["properties"], "material": "timber", "open_ends": ["end"]}
     w = walls.from_feature(feature)
-    m, _ = walls.mesh(w)
+    from domus import terrain
+
+    m, _ = walls.mesh(w, terrain.ground())                                      # its toe is read off the site's ground
     start, end = np.asarray(w["line"])[0], np.asarray(w["line"])[-1]
     cap = np.flatnonzero(m.cap)
     at_end = cap[np.hypot(*(m.vertices[cap, :2] - end).T) < np.hypot(*(m.vertices[cap, :2] - start).T)]
     at_start = np.setdiff1d(cap, at_end)
     assert np.all(np.abs(m.uv[at_start, 0]) < 0.1)                                  # the post the picture has at its edge
     assert np.all(np.abs(m.uv[at_end, 0] % 1 - 0.5) < 0.1)                         # the middle of a bay: boards
+
+
+def test_a_wall_reads_no_ground_but_the_one_it_is_given(site):
+    from domus import terrain
+
+    w = {"id": "W", "line": [[0.0, 0.0], [4.0, 0.0]], "side": 1, "thickness": 0.2, "height": 1.0}
+    with pytest.raises(DomusError, match="none was given"):
+        walls.wall_levels(w)
+
+    class Flat:
+        def sample(self, e, n):
+            return np.full(np.shape(e), 40.0)
+
+    _, _, chain, toe, top = walls.wall_levels(w, Flat())
+    assert np.allclose(toe, 40.0) and np.allclose(top, 41.0) and chain[-1] == pytest.approx(4.0)
+    assert terrain.wall_levels is not walls.wall_levels                 # terrain's reads the site's own ground

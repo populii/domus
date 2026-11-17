@@ -87,7 +87,7 @@ class Model:
                               h["eaves_overhang_m"], self.ground, **house.roof_options(h))
         self.ring = np.asarray(self.hf["house-walls"]["geometry"]["coordinates"][0], float)[:-1, :2]
         self.house_poly = Polygon(self.ring)
-        self.site_features = features.read_all()
+        self.site_features = features.read_all(ROOT)
         self.feature_meshes = {}
         for items in features.build(self.site_features, self.ground).values():
             for m, _, p in items:

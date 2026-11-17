@@ -1,4 +1,4 @@
-"""Small GeoJSON helpers. Site data is stored on the site's grid (crs.site_epsg()).
+"""Small GeoJSON helpers. Site data is stored on the site's grid ([crs] epsg in data/site.toml).
 
 GeoJSON (RFC 7946) assumes WGS84 lon/lat; these files carry the legacy `crs` member naming the
 site's grid instead, which GDAL/QGIS honour, so an engineer can drop them into GIS.
@@ -18,11 +18,10 @@ def feature(geometry_type, coordinates, **properties):
     }
 
 
-def collection(features, name, description=""):
-    from . import crs
-
+def collection(features, name, description="", *, epsg):
+    """A layer of `features` on the grid EPSG `epsg` (the site's, which the caller gives)."""
     fc = {"type": "FeatureCollection", "name": name,
-          "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{crs.site_epsg()}"}}}
+          "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{epsg}"}}}
     if description:
         fc["description"] = description
     fc["features"] = features

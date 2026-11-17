@@ -101,6 +101,7 @@ def main(argv=None):
             print(f"{p['name']}: {p['estate']}, {p['type']}")
         else:
             print(f"{p['name']} ({p['intent']}){', on the lot' if p['on_lot'] else ', nearby'}")
-    geojson.write(PATH, geojson.collection(feats, "title", "The lot's title and nearby easements, from LINZ (CC BY 4.0)"))
+    geojson.write(PATH, geojson.collection(feats, "title", "The lot's title and nearby easements, from LINZ (CC BY 4.0)",
+                                           epsg=crs.site_epsg()))
     print(f"{len(feats)} features -> {PATH}. Run domus build, then look in the Boundaries group.")
     return 0

@@ -92,7 +92,7 @@ def wall_texture(m, wall, painted=False):
     """uv and texture fields for a wall layer (domus.walls), its image put in the viewer's data: the
     picture of the wall's own blocks if it names them, else the site's own picture of that kind of wall,
     or one painted for it (always, with `painted`); none for a material drawn plain."""
-    tex = walls.wall_image(wall, OUT, painted)
+    tex = walls.wall_image(wall, OUT, painted, ROOT / "data" / "walls")
     return {"uv": r(m.uv, 4), "texture": tex, "repeat": True} if tex else {}
 
 
@@ -235,7 +235,7 @@ def ground_photo_sampler(E, N):
     shade = np.clip((0.95 * lsun - Lb) / (0.25 * lsun), 0, 1)
     lifted = base * (0.5 + 0.5 * L / np.maximum(Lb, 1))[..., None]
     tu, tv = features.MATERIALS["paving"][2]
-    tex = np.asarray(Image.open(features.TEXTURES / features.MATERIALS["paving"][1]).convert("L"), np.float32)
+    tex = np.asarray(Image.open(ROOT / "data" / "features" / features.MATERIALS["paving"][1]).convert("L"), np.float32)
     ty = ((N / tv) % 1 * tex.shape[0]).astype(int).clip(0, tex.shape[0] - 1)
     tx = ((E / tu) % 1 * tex.shape[1]).astype(int).clip(0, tex.shape[1] - 1)
     grain = _blur(tex, 0.5 * tex.shape[1] * px / tu)[ty, tx] / tex.mean()
@@ -699,9 +699,9 @@ def add_walls(b):
     """Walls, textured from the video frames (domus.walls.MATERIAL_TEXTURES) on the same geometry."""
     frame, layers, summary, wall_defs = b.frame, b.layers, b.summary, b.wall_defs
     wall_info = []
-    walls.set_out(wall_defs)
+    walls.set_out(wall_defs, b.dem)
     for w in wall_defs:
-        m, info = walls.mesh(w)
+        m, info = walls.mesh(w, b.dem)
         info = {"id": w["id"], "name": w["name"], "material": w["material"], "confidence": w["confidence"],
                 **{k: round(v, 2) for k, v in info.items()},
                 "note": w["properties"].get("note", "")}
@@ -807,7 +807,7 @@ def add_marks(b):
                 continue
             marks.append({"text": f"drain {lab}" if "depth_m" in p else lab, "kind": "sewer",
                           "at": r(frame.xyz([[e, n, float(ground(e, n)[0]) + 0.2]])[0], 2)})
-    site_features = b.site_features = features.read_all()
+    site_features = b.site_features = features.read_all(ROOT)
     for f in site_features:
         if f["properties"].get("kind") == "mark":
             e, n = f["geometry"]["coordinates"][:2]
@@ -848,10 +848,10 @@ def add_features(b):
             merged[key][1].setdefault(p.get("name", p.get("id", "")), p.get("confidence", ""))
     for k, ((group, mat, hide_with), (m, named)) in enumerate(sorted(merged.items())):
         names = list(named)
-        tex = features.texture_file(mat)
+        tex = features.texture_file(mat, ROOT / "data" / "features")
         extra = {}
         if tex:
-            (OUT / f"feature-{tex}").write_bytes((features.TEXTURES / tex).read_bytes())
+            (OUT / f"feature-{tex}").write_bytes((ROOT / "data" / "features" / tex).read_bytes())
             extra = {"uv": r(m.uv, 4), "texture": f"feature-{tex}", "repeat": True}
         layers.append({**mesh_json(m, frame, features.MATERIALS[mat][0],
                                    f"{group}, {mat.replace('-', ' ')}: {', '.join(names[:3])}"

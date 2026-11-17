@@ -10,15 +10,12 @@ import hashlib
 import itertools
 import math
 from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 
-from . import terrain
-from .crs import ROOT
 from .errors import DomusError
-from .mesh import Mesh, offset_behind, prism, wall_strip
-
-TEXTURES = ROOT / "data" / "walls"
+from .mesh import Mesh, offset_behind, prism, resample_line, wall_strip
 
 MATERIAL_COLOURS = {
     "concrete": "#a8a49c",
@@ -121,27 +118,86 @@ def open_ends(props):
     return tuple(sorted(set(ends), key=("start", "end").index))
 
 
-def texture_file(material):
-    """The site's own image of the material (a file name in data/walls/), or None."""
+def line_normals(pts):
+    n = len(pts)
+    out = []
+    for i in range(n):
+        a = pts[max(i - 1, 0), :2]
+        b = pts[min(i + 1, n - 1), :2]
+        d = (b - a) / np.hypot(*(b - a))
+        out.append([-d[1], d[0]])
+    return np.array(out)
+
+
+def bay_levels(line, bays, chain):
+    """For a wall whose top is level along each stretch of its line (`bays`, one level per stretch), the level of
+    the bay that ends and of the bay that starts at each distance `chain` along it. The two differ only at a
+    point of the line where the wall steps."""
+    full = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(np.asarray(line, float)[:, :2], axis=0).T))])
+    bays = np.asarray(bays, float)
+    at = np.argmin(np.abs(np.asarray(chain, float)[:, None] - full[None, :]), axis=1)     # the nearest point of the line
+    on = np.abs(np.asarray(chain, float) - full[at]) < 1e-6
+    seg = np.clip(np.searchsorted(full, chain, side="right") - 1, 0, len(bays) - 1)
+    before = np.where(on, bays[np.clip(at - 1, 0, len(bays) - 1)], bays[seg])
+    after = np.where(on, bays[np.clip(at, 0, len(bays) - 1)], bays[seg])
+    return before, after
+
+
+def wall_levels(wall, ground=None, spacing=0.25, probe=0.6):
+    """Resample a wall and work out its toe (low side) and top levels along it.
+
+    `wall` is a dict with `line` (Nx2 or Nx3 site coords), `side` (+1 if the retained, high
+    side is left of the line direction, -1 if right), `thickness`, and either per-vertex
+    `top` heights or a `height` above the toe. The toe comes from the ground model `probe`
+    metres out on the low side (for a battered face, 0.2 m in front of its foot if that is
+    further) unless `toe` is given: `ground` is that model (anything with sample(e, n)).
+
+    With `bay_tops` (a level for each stretch of the line) the top is level along each stretch, and where
+    it steps the point is there twice, once at each level, so the top drops straight down.
+    """
+    pts, chain = resample_line(wall["line"], spacing)
+    nrm = line_normals(pts) * wall["side"]
+    if wall.get("toe") is not None:
+        toe = np.interp(chain, wall["toe_chain"], wall["toe"])
+    else:
+        if ground is None:
+            raise DomusError(f"wall {wall.get('id')}: its toe comes from the ground, and none was given")
+        low = pts[:, :2] - nrm * max(probe, 0.5 * wall.get("batter", 0.0) + 0.2)
+        toe = ground.sample(low[:, 0], low[:, 1])
+    if wall.get("bay_tops") is not None:
+        before, after = bay_levels(wall["line"], wall["bay_tops"], chain)
+        twice = np.repeat(np.arange(len(chain)), np.where(np.isclose(before, after), 1, 2))
+        second = np.concatenate([[False], twice[1:] == twice[:-1]])
+        pts, nrm, chain, toe = pts[twice], nrm[twice], chain[twice], toe[twice]
+        top = np.where(second, after[twice], before[twice])
+    elif wall.get("top") is not None:
+        top = np.interp(chain, wall["top_chain"], wall["top"])
+    else:
+        top = toe + wall["height"]
+    return pts[:, :2], nrm, chain, toe, top
+
+
+def texture_file(material, folder=None):
+    """The site's own image of the material (a file name in its walls' pictures, `folder`: data/walls/), or None."""
     t = MATERIAL_TEXTURES.get(material)
-    return t[0] if t and (TEXTURES / t[0]).exists() else None
+    return t[0] if t and folder and (Path(folder) / t[0]).exists() else None
 
 
 @lru_cache
-def texture_image(material, out, painted=False):
+def texture_image(material, out, painted=False, folder=None):
     """Put the material's wall texture in `out` (the viewer's data) and return its name there: the site's own
     image of that kind of wall, else one painted for it, or the painted one whatever the site has when `painted`
     asks for it (a new wall need not look like the old one the photo is of). None for a material drawn plain."""
     if material not in MATERIAL_TEXTURES:
         return None
     image, size_m, _ = MATERIAL_TEXTURES[material]
-    if texture_file(material) and not painted:
+    if texture_file(material, folder) and not painted:
         name = f"wall-{image}"
-        (out / name).write_bytes((TEXTURES / image).read_bytes())
+        (out / name).write_bytes((Path(folder) / image).read_bytes())
     else:
         from . import wall_looks
 
-        name = f"wall-painted-{image}" if texture_file(material) else f"wall-{image}"
+        name = f"wall-painted-{image}" if texture_file(material, folder) else f"wall-{image}"
         wall_looks.paint(material, out / name, size_m)
     return name
 
@@ -180,11 +236,11 @@ def unit_image(unit, out):
     return name
 
 
-def wall_image(wall, out, painted=False):
+def wall_image(wall, out, painted=False, folder=None):
     """The picture one wall is drawn with, put in `out`: of its own blocks when it names them, else its
     material's (texture_image)."""
     unit = units(wall)
-    return unit_image(unit, out) if unit else texture_image(wall["material"], out, painted)
+    return unit_image(unit, out) if unit else texture_image(wall["material"], out, painted, folder)
 
 
 def texture_u(wall, chain):
@@ -419,7 +475,7 @@ def _caps(chain, top, cuts, corners, length, depth, lap=0.0):
     return best[1]
 
 
-def set_out(walls):
+def set_out(walls, ground=None):
     """Set out the walls of named blocks among `walls` together, as they would be built, and give each its
     `set_out`:
 
@@ -441,7 +497,7 @@ def set_out(walls):
     for w in walls:
         if not units(w) or w.get("batter"):
             continue
-        pts, _, chain, _, top = terrain.wall_levels(w)
+        pts, _, chain, _, top = wall_levels(w, ground)
         if not np.all(np.isfinite(top)):
             continue                                                  # off the ground model: nothing to set it out by
         body = Polygon(np.vstack([pts, offset_behind(pts, w["thickness"], w["side"])[::-1]])).buffer(0)
@@ -670,11 +726,11 @@ def unit_mesh(wall, pts, chain, top, bottom):
     return m
 
 
-def mesh(wall):
+def mesh(wall, ground=None):
     """The wall's mesh; it carries `uv` in copies of its material's texture (MATERIAL_TEXTURES). A wall whose
     image is a bay between posts (timber) gets the posts as blocks standing out from its boards. A wall of named
     blocks is set out block by block (set_out, unit_mesh): on its own, unless its `set_out` is already there."""
-    pts, _, chain, toe, top = terrain.wall_levels(wall)
+    pts, _, chain, toe, top = wall_levels(wall, ground)
     bottom = toe - 0.15  # bury the footing a little so the wall meets the ground cleanly
     info = {
         "length_m": float(chain[-1]),

@@ -47,7 +47,7 @@ import shapely
 from shapely.geometry import MultiPolygon, Polygon
 
 from . import geojson, raster, terrain
-from .crs import ROOT, settings
+from .crs import ROOT, settings, site_epsg
 
 TREES = ROOT / "data" / "site" / "trees.geojson"
 
@@ -1415,7 +1415,7 @@ def map_site():
     cands, grids = map_canopy(extent, removed_areas(read()))
     fc = geojson.collection([as_json(c) for c in cands], "canopy",
                             "Candidate crowns from the LiDAR canopy (surface less ground) and the aerial; "
-                            "data/site/trees.geojson holds the curated features")
+                            "data/site/trees.geojson holds the curated features", epsg=site_epsg())
     out = ROOT / settings().get("rasters", {}).get("canopy", "data/sources/canopy.geojson")
     geojson.write(out, fc)
     kinds = {}

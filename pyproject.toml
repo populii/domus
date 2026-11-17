@@ -74,7 +74,8 @@ forbidden_modules = ["numpy", "scipy", "shapely", "rasterio", "pyproj", "PIL", "
 [[tool.importlinter.contracts]]
 name = "The model's pure parts read no site and know nothing of the app"
 type = "forbidden"
-source_modules = ["domus.house", "domus.house_texture", "domus.mesh", "domus.wall_looks", "domus.drains"]
+source_modules = ["domus.house", "domus.house_texture", "domus.mesh", "domus.wall_looks", "domus.walls", "domus.features",
+                  "domus.drains"]
 forbidden_modules = ["domus.crs", "domus.api", "domus.build", "domus.cli", "domus.serve", "domus.create", "domus.design",
                      "domus.options", "domus.project"]
 

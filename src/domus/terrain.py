@@ -19,9 +19,10 @@ from scipy.interpolate import LinearNDInterpolator
 from scipy.spatial import Delaunay
 from shapely.ops import unary_union
 
-from . import geojson, raster
+from . import geojson, raster, walls
 from .crs import ROOT, settings
 from .mesh import Mesh, cross2, offset_behind, resample_line
+from .walls import bay_levels, line_normals  # noqa: F401 (as they were, here)
 
 FIXES = ROOT / "data" / "site" / "ground-fixes.geojson"
 
@@ -31,17 +32,6 @@ def grid(extent, step):
     es = np.arange(e0, e1 + step / 2, step)
     ns = np.arange(n0, n1 + step / 2, step)
     return np.meshgrid(es, ns)
-
-
-def line_normals(pts):
-    n = len(pts)
-    out = []
-    for i in range(n):
-        a = pts[max(i - 1, 0), :2]
-        b = pts[min(i + 1, n - 1), :2]
-        d = (b - a) / np.hypot(*(b - a))
-        out.append([-d[1], d[0]])
-    return np.array(out)
 
 
 def distance_to_polyline(e, n, line):
@@ -116,50 +106,9 @@ def ground():
     return Ground(raster.dem(), *read_fixes())
 
 
-def bay_levels(line, bays, chain):
-    """For a wall whose top is level along each stretch of its line (`bays`, one level per stretch), the level of
-    the bay that ends and of the bay that starts at each distance `chain` along it. The two differ only at a
-    point of the line where the wall steps."""
-    full = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(np.asarray(line, float)[:, :2], axis=0).T))])
-    bays = np.asarray(bays, float)
-    at = np.argmin(np.abs(np.asarray(chain, float)[:, None] - full[None, :]), axis=1)     # the nearest point of the line
-    on = np.abs(np.asarray(chain, float) - full[at]) < 1e-6
-    seg = np.clip(np.searchsorted(full, chain, side="right") - 1, 0, len(bays) - 1)
-    before = np.where(on, bays[np.clip(at - 1, 0, len(bays) - 1)], bays[seg])
-    after = np.where(on, bays[np.clip(at, 0, len(bays) - 1)], bays[seg])
-    return before, after
-
-
 def wall_levels(wall, spacing=0.25, probe=0.6):
-    """Resample a wall and work out its toe (low side) and top levels along it.
-
-    `wall` is a dict with `line` (Nx2 or Nx3 site coords), `side` (+1 if the retained, high
-    side is left of the line direction, -1 if right), `thickness`, and either per-vertex
-    `top` heights or a `height` above the toe. The toe comes from the ground model `probe`
-    metres out on the low side (for a battered face, 0.2 m in front of its foot if that is
-    further) unless `toe` is given.
-
-    With `bay_tops` (a level for each stretch of the line) the top is level along each stretch, and where
-    it steps the point is there twice, once at each level, so the top drops straight down.
-    """
-    pts, chain = resample_line(wall["line"], spacing)
-    nrm = line_normals(pts) * wall["side"]
-    if wall.get("toe") is not None:
-        toe = np.interp(chain, wall["toe_chain"], wall["toe"])
-    else:
-        low = pts[:, :2] - nrm * max(probe, 0.5 * wall.get("batter", 0.0) + 0.2)
-        toe = ground().sample(low[:, 0], low[:, 1])
-    if wall.get("bay_tops") is not None:
-        before, after = bay_levels(wall["line"], wall["bay_tops"], chain)
-        twice = np.repeat(np.arange(len(chain)), np.where(np.isclose(before, after), 1, 2))
-        second = np.concatenate([[False], twice[1:] == twice[:-1]])
-        pts, nrm, chain, toe = pts[twice], nrm[twice], chain[twice], toe[twice]
-        top = np.where(second, after[twice], before[twice])
-    elif wall.get("top") is not None:
-        top = np.interp(chain, wall["top_chain"], wall["top"])
-    else:
-        top = toe + wall["height"]
-    return pts[:, :2], nrm, chain, toe, top
+    """walls.wall_levels on the site's ground: a wall's points, normals, chainage, toe and top."""
+    return walls.wall_levels(wall, ground(), spacing, probe)
 
 
 def outline_points(poly, spacing=0.2):

@@ -13,7 +13,7 @@ import json
 import numpy as np
 
 from .. import geojson
-from ..crs import ROOT
+from ..crs import ROOT, site_epsg
 from ..errors import DomusError
 from ..georef import apply_affine, find_cross, fit_affine, fit_rigid, fit_similarity, intersect, refine_line
 from . import config
@@ -325,7 +325,7 @@ def _trace_page(job, page):
     desc = job.get("description", "{name}: rotation {rot:.3f} deg, residuals (m) {resid}.").format(
         name=job["name"], rot=np.degrees(rot), resid=np.round(resid, 3).tolist(), **fields)
     out = ROOT / job["out"]
-    geojson.write(out, geojson.collection(features, job["name"], desc))
+    geojson.write(out, geojson.collection(features, job["name"], desc, epsg=site_epsg()))
     print(desc)
     print(f"{len(features)} features -> {out}")
 

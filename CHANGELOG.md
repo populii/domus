@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** the parts of the model that draw the house's looks, the walls and the small features read no site of their own now, and the import rules hold them to it: the build gives them the ground, the settings and the folders of the site's pictures. A site's own code that calls them gives them too. `walls.mesh(wall, ground)` and `walls.set_out(walls, ground)` take the ground (`terrain.ground()`), `walls.texture_file` and `features.texture_file` the folder of the site's pictures, `features.read_all` the site's folder, and the house's drawing a `house_texture.Looks`. `terrain.wall_levels(wall)` reads the site's ground as before, and the models built are unchanged.
+
 ## 2026.11.33
 
 - **For site projects:** `domus prep check` checks the wall options too, with three rules that grew in a real site's own tools: `through` finds ground that comes through an option's walls and flights of steps, or stands over a tread's edge, in the built model; `fixes` finds ground-fix points kept inside an option's wall at or above its top, which show through it; and `blocks` finds block walls not set out in whole units, with a cut piece at a stretch's end or a step, or a cut cap, from each wall's own block size. A site that carries its own copies of these checks can drop them.

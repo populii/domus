@@ -33,16 +33,16 @@ tools/feature_textures.py). A feature's properties:
 - `material` (and `frame_material` for a fence's posts and rails): a key of MATERIALS.
 """
 
+from pathlib import Path
+
 import numpy as np
 from scipy.spatial import Delaunay
 from shapely.geometry import Point, Polygon
 
 from . import geojson, mesh
-from .crs import ROOT
-from .terrain import resample_line
+from .mesh import resample_line
 
 FILES = "features-*.geojson"
-TEXTURES = ROOT / "data" / "features"
 
 # Material -> (colour, texture image in data/features/ or None, metres one copy of the image
 # covers (u along the part, v up it)). Colours are the textures' medians (the layer swatch);
@@ -112,7 +112,8 @@ class Parts(dict):
         self.mesh(mat).add([a, b, c], [(0, 1, 2)], np.asarray(uv_m, float) / (tu, tv))
 
 
-def read_all(root=ROOT):
+def read_all(root):
+    """The site's features: every data/site/features-*.geojson in the site folder `root`, each feature with its file."""
     feats = []
     for path in sorted((root / "data" / "site").glob(FILES)):
         for f in geojson.read(path)["features"]:
@@ -590,7 +591,8 @@ def build(feats, ground):
     return out
 
 
-def texture_file(mat):
-    """The image a material's layer uses (published as viewer/data/feature-<name>), or None."""
+def texture_file(mat, folder):
+    """The image a material's layer uses (published as viewer/data/feature-<name>), if the site's feature pictures
+    (`folder`, data/features/) have it, or None."""
     name = MATERIALS[mat][1]
-    return name if name and (TEXTURES / name).exists() else None
+    return name if name and folder and (Path(folder) / name).exists() else None

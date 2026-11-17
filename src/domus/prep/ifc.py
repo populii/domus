@@ -26,7 +26,7 @@ from shapely.geometry import LineString, MultiPolygon, Polygon
 from shapely.ops import unary_union
 
 from .. import geojson
-from ..crs import ROOT
+from ..crs import ROOT, site_epsg
 from . import config
 
 
@@ -176,7 +176,7 @@ def main():
                 "LineString", [[round(float(x), 3), round(float(y), 3), round(top, 3)] for x, y, _ in axis],
                 id=f"ifc-retaining-wall-{p['id']}", kind="retaining-wall", status=p["status"].lower(),
                 base_m=round(base, 3), top_m=round(top, 3), thickness_m=None if thick is None else round(thick, 3)))
-    fc = geojson.collection(feats, cfg.get("name", out.name), cfg.get("description", ""))
+    fc = geojson.collection(feats, cfg.get("name", out.name), cfg.get("description", ""), epsg=site_epsg())
     fc["fit"] = {"source_sha256": sha, "rotation_deg": round(rot, 5), "shift": [round(float(x), 4) for x in t],
                  "datum_dz": dz, "outline_misfit_median_m": round(med, 3), "outline_misfit_p90_m": round(p90, 3)}
     fc["layers"] = layers
