@@ -76,4 +76,4 @@ def test_read_boundary_takes_lon_lat(tmp_path):
     f.write_text(json.dumps({"type": "Polygon", "coordinates": [[[172.63, -43.53], [172.6302, -43.53], [172.6302, -43.5302], [172.63, -43.53]]]}))
     ring = newsite.read_boundary(f)
     assert ring[0] == ring[-1]
-    assert 1.7e6 < ring[0][0] < 1.8e6 and 5.4e6 < ring[0][1] < 5.5e6
+    assert 1.5e6 < ring[0][0] < 1.6e6 and 5.1e6 < ring[0][1] < 5.2e6
