@@ -1,11 +1,11 @@
-FROM python:3.13-slim AS build
+FROM python:3.14-slim AS build
 RUN pip install --no-cache-dir "uv>=0.8,<1"
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
 RUN uv sync --frozen --no-dev --no-editable --all-extras --python /usr/local/bin/python
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 LABEL org.opencontainers.image.title="domus" \
       org.opencontainers.image.source="https://github.com/populii/domus" \
       net.unraid.docker.icon="https://cdn.jsdelivr.net/gh/populii/domus@main/src/domus/viewer/icon.png" \

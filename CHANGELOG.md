@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The image runs on Python 3.14 (was 3.13), and so does a checkout's default `uv` environment. 3.13 still works.
 - The viewer runs on three.js r187 (was r170), with three-mesh-bvh 0.9.18. Shadows use PCF filtering, as soft PCF is gone from three.
 - The camera is driven by camera-controls instead of three's OrbitControls. Dragging, panning along the ground, the wheel, pinching, the navigation pad, the keys, double-click and saved views work as before, and drags and zooms ease to a stop.
 - A view gizmo at the top right shows north, east, south and up: click a side to look from it, or drag it to turn the view.
