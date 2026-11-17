@@ -20,6 +20,7 @@ is a ramp between them.
 """
 
 import math
+import sys
 import tomllib
 from functools import lru_cache
 
@@ -41,10 +42,13 @@ LIDAR_TOLERANCE_M = 0.15     # height uncertainty of the existing ground, for th
 
 @lru_cache
 def settings():
-    """options/_site.toml, at this Domus's format (domus.project.formats)."""
-    from .project import formats
+    """options/_site.toml, at this Domus's format (domus.project.formats), read through the settings schema."""
+    from .project import formats, schema
 
-    return formats.options_site(tomllib.loads(SITE.read_text(encoding="utf-8")), crs.site_format())
+    shared = formats.options_site(tomllib.loads(SITE.read_text(encoding="utf-8")), crs.site_format())
+    for warning in schema.unknown(shared, schema.OPTIONS_SITE, "options/_site.toml: "):
+        print(f"Warning: {warning}", file=sys.stderr)
+    return schema.Settings(shared, schema.OPTIONS_SITE, "options/_site.toml: ")
 
 
 class SiteFrame:

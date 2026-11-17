@@ -4,6 +4,9 @@ import json
 
 import numpy as np
 
+from domus import __version__
+from domus.build import MODEL_FORMAT
+
 
 def model(built):
     return json.loads((built / "model.json").read_text(encoding="utf-8"))
@@ -19,7 +22,8 @@ def test_build_writes_what_the_viewer_loads(built):
         tex = layer.get("texture")
         if tex:
             assert (built / tex).exists(), layer["id"]
-    assert (built / "build.json").exists()
+    made = json.loads((built / "build.json").read_text(encoding="utf-8"))
+    assert made["domus"] == __version__ and made["model_format"] == MODEL_FORMAT and made["title"] == m["title"]
 
 
 def test_layers_cover_the_demo(built):

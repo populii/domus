@@ -10,6 +10,7 @@ their level = the model's height + offset_m.
 """
 
 import os
+import sys
 import tomllib
 from functools import lru_cache
 from pathlib import Path
@@ -23,10 +24,14 @@ NZTM_EPSG = 2193
 
 @lru_cache
 def settings():
-    """data/site.toml, at this Domus's format whatever format the site is in (domus.project.formats)."""
-    from .project import formats
+    """data/site.toml, at this Domus's format whatever format the site is in (domus.project.formats), read through
+    the settings schema (domus.project.schema): a key the file leaves out reads as its default."""
+    from .project import formats, schema
 
-    return formats.site(tomllib.loads((ROOT / "data" / "site.toml").read_text(encoding="utf-8")))
+    site = formats.site(tomllib.loads((ROOT / "data" / "site.toml").read_text(encoding="utf-8")))
+    for warning in schema.unknown(site, schema.SITE, "data/site.toml: "):
+        print(f"Warning: {warning}", file=sys.stderr)
+    return schema.Settings(site, schema.SITE, "data/site.toml: ")
 
 
 def site_format():

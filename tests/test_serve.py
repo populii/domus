@@ -126,6 +126,56 @@ def test_a_rebuilt_model_is_not_served_from_the_old_one(server, tmp_path):
         assert gzip.decompress(call(server, "GET", "/data/model.json", headers={"Accept-Encoding": "gzip"})[1]) == model
 
 
+def site_built_by(root, domus):
+    """A site whose model the Domus `domus` built: None for one from before build.json said."""
+    (root / "data").mkdir(parents=True)
+    (root / "data" / "site.toml").write_text("", encoding="utf-8")
+    out = root / "viewer" / "data"
+    out.mkdir(parents=True)
+    (out / "model.json").write_text("{}", encoding="utf-8")
+    made = {"title": "A site", "built": "2026-11-01T00:00:00+00:00", "commit": None}
+    (out / "build.json").write_text(json.dumps({**made, **({"domus": domus} if domus else {})}), encoding="utf-8")
+    return out
+
+
+@pytest.mark.parametrize("domus, again", [(serve.__version__, False), ("2026.11.1", True), (None, True)])
+def test_a_model_another_domus_built_is_built_again_when_its_site_is_opened(tmp_path, monkeypatch, domus, again):
+    state = {"now": "idle"}
+    started = []
+    monkeypatch.setattr(serve.BuildJob, "start", lambda self: (started.append(self.root), state.update(now="running")))
+    monkeypatch.setattr(serve.BuildJob, "status", lambda self: {"state": state["now"], "log": ""})
+    out = site_built_by(tmp_path / "site", domus)
+    httpd = serve.make_server("127.0.0.1", 0, [out], tmp_path / "site" / ".domus" / "v.db", root=tmp_path / "site")
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    port = httpd.server_address[1]
+    try:
+        assert call(port, "GET", "/demo")[0] == 200 and started == []        # the demo is never built again
+        status, body, _ = call(port, "GET", "/")
+        assert status == 200 and b'id="view"' in body                          # the model it has, meanwhile
+        assert started == ([tmp_path / "site"] if again else [])
+        call(port, "GET", "/")                                                 # one build at a time
+        state["now"] = "failed"
+        call(port, "GET", "/")                                                 # and a failed one isn't tried again
+        assert len(started) == again
+        assert json.loads(call(port, "GET", "/api/version")[1])["model"].get("domus") == domus
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_a_folder_that_is_not_a_site_is_never_built(tmp_path, monkeypatch):
+    monkeypatch.setattr(serve.BuildJob, "start", lambda self: pytest.fail("built"))
+    out = site_built_by(tmp_path / "site", None)
+    (tmp_path / "site" / "data" / "site.toml").unlink()
+    httpd = serve.make_server("127.0.0.1", 0, [out], tmp_path / "v.db", root=tmp_path / "site")
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        assert call(httpd.server_address[1], "GET", "/")[0] == 200
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
 def test_a_name_it_does_not_know_gets_nothing(server):
     assert call(server, "GET", "/healthz", headers={"Host": "evil.example"})[0] == 403
     assert call(server, "GET", "/healthz", headers={"Host": "localhost:8765"})[0] == 200

@@ -4,7 +4,8 @@
 
 Pages:
     /                         the viewer (viewer/index.html is a page body: the claude.ai Artifact
-                              publish and this server each add the document skeleton)
+                              publish and this server each add the document skeleton). A model another Domus built
+                              is built again when it's opened, one build at a time, and shown as it was meanwhile
     /vendor/...               its bundled libraries
     /data/...                 the built model (crs.OUTPUT), or the bundled demo if nothing is built
     /demo                     the viewer on whatever model there is
@@ -15,7 +16,7 @@ Pages:
     /api/sketch               POST {items}: what a sketch comes to (domus.sketch)
     /api/sketch/option        GET: how its build is going; POST {name, items}: save a sketch as an option and build it
     /healthz                  liveness, for Docker and Traefik
-    /api/version              the app's version and the model's build time
+    /api/version              the app's version, and the model's build.json: when it was built and by which Domus
     /api/user                 who the login proxy says this is (only with DOMUS_TRUST_PROXY=1)
     /api/db/<coll>            GET: the documents of a collection
     /api/db/<coll>/<doc>      GET or PUT: one JSON document
@@ -346,6 +347,7 @@ class BuildJob:
         self.own_output = own_output
         self.proc = None
         self.log = self.root / ".domus" / "build.log"
+        self.tried = None       # the Domus a stale model was last rebuilt for: a failed rebuild waits for the next one
 
     def start(self):
         self.log.parent.mkdir(parents=True, exist_ok=True)
@@ -578,8 +580,34 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 page = NEW_SITE
             else:
                 page = (VIEWER / "index.html").read_text(encoding="utf-8") if self.data_dir() else EMPTY
+                if path != "/demo":
+                    self.rebuild_if_stale()
             return self.send_page(page)
         return super().do_GET()
+
+    def building(self):
+        """True while a model is being made or built here. The server runs one build at a time."""
+        return any(job is not None and job.status()["state"] == "running" for job in (self.creator, self.build_job))
+
+    def rebuild_if_stale(self):
+        """A site's model that another Domus built is built again when the site is opened, one build at a time, and
+        shown as it was meanwhile. A rebuild that fails isn't tried again until the server restarts."""
+        out, job = (self.data_dirs[0] if self.data_dirs else None), self.build_job
+        if out is None or job is None or not (out / "model.json").exists() or not (job.root / "data" / "site.toml").exists():
+            return
+        try:
+            built = json.loads((out / "build.json").read_text(encoding="utf-8")).get("domus")
+        except (OSError, ValueError, AttributeError):
+            built = None
+        if built == __version__:
+            return
+        with CREATE_LOCK:
+            if job.tried == __version__ or self.building():
+                return
+            job.tried = __version__
+            job.start()
+        print(f"{job.root}: {'Domus ' + built if built else 'an older Domus'} built its model, so Domus {__version__} is "
+              f"building it again (log: {job.log}).", file=sys.stderr, flush=True)
 
     def send_page(self, page):
         body = (HEAD + page + "\n</body></html>\n").encode()
@@ -763,7 +791,7 @@ class Sites:
 
     def building(self):
         with self.lock:
-            return any(c["creator"].status()["state"] == "running" for c in self.open.values())
+            return any(c[job].status()["state"] == "running" for c in self.open.values() for job in ("creator", "build_job"))
 
     def listing(self):
         """(name, title, state) of each site."""
@@ -816,6 +844,9 @@ class SitesHandler(Handler):
             self.add_slash = parts.path + "/"
         self.path = (m[2] or "/") + (f"?{parts.query}" if parts.query else "")
         return True
+
+    def building(self):
+        return self.sites.building()
 
     def send_page(self, page):
         if self.in_site:

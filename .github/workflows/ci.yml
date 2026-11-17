@@ -19,6 +19,7 @@ jobs:
           enable-cache: true
       - run: uv sync --frozen --all-extras
       - run: uv run ruff check .
+      - run: uv run lint-imports
       - run: uv run pytest -q
 
   image:

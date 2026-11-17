@@ -11,8 +11,9 @@ from domus import serve
 
 @pytest.fixture
 def server(tmp_path, monkeypatch):
-    started = []
+    started, rebuilt = [], []
     monkeypatch.setattr(serve.Creator, "start", lambda self, address: started.append((self.root.name, address)))
+    monkeypatch.setattr(serve.BuildJob, "start", lambda self: rebuilt.append(self.root.name))
     demo = tmp_path / "demo"
     demo.mkdir()
     (demo / "model.json").write_text('{"who": "demo"}', encoding="utf-8")
@@ -22,7 +23,7 @@ def server(tmp_path, monkeypatch):
         (tmp_path / "sites" / name / "data" / "site.toml").write_text(f'[site]\ntitle = "{title}"\n', encoding="utf-8")
         (tmp_path / "sites" / name / "viewer" / "data" / "model.json").write_text(json.dumps({"who": name}), encoding="utf-8")
     httpd = serve.make_sites_server("127.0.0.1", 0, tmp_path / "sites", demo)
-    httpd.started = started
+    httpd.started, httpd.rebuilt = started, rebuilt
     httpd.folder = tmp_path / "sites"
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     yield httpd
@@ -100,6 +101,18 @@ def test_a_new_address_gets_its_own_folder_and_starts_there(server):
     assert server.started == [("12-example-road-town", "12 Ēxample Road, Town")]
     assert (server.folder / "12-example-road-town").is_dir()
     assert call(server, "POST", "/api/sites", json.dumps({"address": "-x"}))[0] == 400
+
+
+def test_an_old_model_is_built_again_when_its_site_is_opened_but_never_beside_another_build(server):
+    # The fixture's models have no build.json: a Domus from before it said which Domus built them.
+    two = server.RequestHandlerClass.func.sites.get("two")["build_job"]
+    two.status = lambda: {"state": "running"}
+    status, page, _ = call(server, "GET", "/s/one/")
+    assert status == 200 and "No model built yet" not in page and server.rebuilt == []
+    two.status = lambda: {"state": "done"}
+    assert call(server, "GET", "/s/one/")[0] == 200 and server.rebuilt == ["one"]
+    assert call(server, "GET", "/s/one/")[0] == 200 and server.rebuilt == ["one"]     # once while this server runs
+    assert call(server, "GET", "/demo")[0] == 200 and server.rebuilt == ["one"]
 
 
 def test_one_build_at_a_time_and_a_repeated_address_gets_a_new_name(tmp_path):

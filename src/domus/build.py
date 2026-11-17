@@ -22,6 +22,7 @@ from shapely.geometry import LineString
 from shapely.ops import unary_union
 
 from . import (
+    __version__,
     crs,
     design,
     features,
@@ -41,6 +42,7 @@ from .crs import ROOT
 from .georef import invert_affine
 
 POINT_STEP = 0.0025     # m, the video point cloud's storage step
+MODEL_FORMAT = 1        # how model.json says things, for the viewer; build.json records it with the Domus that built it
 
 # House layers: key -> (name, panel colour). A part goes in its kind's layer (house.PARTS) or the one it names
 # (`layer`); [house.layers.<key>] name and colour in data/site.toml name a layer or change these.
@@ -1015,7 +1017,8 @@ def write_model(b):
     }
     (OUT / "model.json").write_text(json.dumps(model, separators=(",", ":")), encoding="utf-8")
     (OUT / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    (OUT / "build.json").write_text(json.dumps({k: model[k] for k in ("title", "built", "commit")}), encoding="utf-8")
+    (OUT / "build.json").write_text(json.dumps({**{k: model[k] for k in ("title", "built", "commit")}, "domus": __version__,
+                                                "model_format": MODEL_FORMAT}), encoding="utf-8")
     size = (OUT / "model.json").stat().st_size / 1e6
     print(f"ground: {len(tin.vertices)} points, {len(tin)} triangles")
     if "house" in summary:

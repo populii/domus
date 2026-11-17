@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** every setting Domus reads from `data/site.toml` and `options/_site.toml` is declared in one place, with its default and a line on what it is, and [docs/site-format.md](docs/site-format.md#settings) lists them all from there. A key Domus doesn't know gets a warning naming the nearest one it does, such as `house.boards_m isn't a setting Domus knows: did you mean board_m?`, where it used to do nothing without a word. Settings only your own tools read go under `[local]`, which Domus leaves alone.
+- `build.json` says which Domus built the model, and the model's format. A model an older Domus built is built again the first time its site is opened, one build at a time, and the old model shows until the new one is ready, so there's no `domus build` to run after an upgrade. If that build fails, the old model stays, `.domus/build.log` says why, and the server tries again only when it's restarted.
+- CI checks the package's import rules (`uv run lint-imports`, set in `pyproject.toml`): the server imports only the standard library, the model's pure parts (house, mesh, wall looks, drains) import nothing that reads a site, and nothing imports the command line or the server. The tests run with `DOMUS_STRICT_SETTINGS=1`, under which reading a setting the schema doesn't declare, or with another default than the schema's, is an error.
+
 ## 2026.11.27
 
 - **For site projects:** sites have a format, now 2: `[domus] format` in `data/site.toml`, which `domus new` and `domus create` write. Domus reads an older site as it is, migrating it in memory, and always will, so nothing has to be run in a container. `domus site upgrade` writes the migration into the site's files, keeping their comments, after copying them to `.domus/upgrade/`. `[domus] requires`, such as `">=2026.12.0"`, names the oldest Domus that builds a site, and a site in a newer format than Domus reads is refused with a message saying so.

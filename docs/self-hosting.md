@@ -89,9 +89,11 @@ http:
 Have the forward-auth middleware pass `X-Forwarded-User` through and set `DOMUS_TRUST_PROXY=1` to label
 sketches with who drew them.
 
-Health checks can use `/healthz`. `/api/version` reports the version and when the model was built.
+Health checks can use `/healthz`. `/api/version` reports the version, and when the model was built and by which Domus.
 
 ## Upgrading
 
-Pull the new tag and recreate the container. `/site` is untouched. The model format can change between
-versions, so run `domus build` after upgrading; `CHANGELOG.md` says when it's needed.
+Pull the new tag and recreate the container. `/site` is untouched. A model an older Domus built is built again the
+first time its site is opened, one build at a time, and the old model shows until the new one is ready. To have it
+ready sooner, run `domus build` in the container after upgrading. If the build fails, the old model stays and the
+site's `.domus/build.log` says why.

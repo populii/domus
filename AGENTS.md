@@ -33,7 +33,10 @@ property's site.
 - `serve.py` uses the standard library only.
 - `prep` steps read everything about a site from its `data/prep.json`.
 - Every layer but the ground and boundary is optional: use `geojson.read_optional`.
-- After changing code: `uv run pytest`, `uv run ruff check .`.
+- Settings are read through the schema in `domus.project.schema`: declare a new one there with its default and help,
+  then `uv run python tools/settings_doc.py` rewrites the tables in docs/site-format.md. The tests fail on a setting
+  the code reads that the schema doesn't declare, or reads with another default than the schema's.
+- After changing code: `uv run pytest`, `uv run ruff check .`, `uv run lint-imports` (the import rules in pyproject.toml).
 
 ## Building a model of a place
 

@@ -10,6 +10,7 @@ import pytest
 _tmp = Path(tempfile.mkdtemp(prefix="domus-tests-"))
 os.environ["DOMUS_SITE"] = str(_tmp / "site")
 os.environ.pop("DOMUS_OUTPUT", None)
+os.environ["DOMUS_STRICT_SETTINGS"] = "1"   # a setting the code reads must be in the schema, with the schema's default
 
 
 @pytest.fixture(scope="session")

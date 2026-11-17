@@ -81,7 +81,7 @@ class Site:
         """data/site.toml, as a dict. It's a copy: changing it changes nothing."""
         from . import crs
 
-        return copy.deepcopy(crs.settings())
+        return copy.deepcopy(dict(crs.settings()))
 
     @property
     def title(self):

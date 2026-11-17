@@ -32,7 +32,11 @@ ifc = ["ifcopenshell>=0.9.0.post1"]
 domus = "domus.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.8"]
+dev = [
+    "import-linter>=2.1",
+    "pytest>=8",
+    "ruff>=0.8",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -54,3 +58,29 @@ extend-exclude = ["src/domus/viewer/vendor"]
 [tool.ruff.lint]
 # int(round(x)) is kept on purpose: x is often a NumPy scalar.
 ignore = ["RUF046"]
+
+# Import rules, checked in CI (uv run lint-imports). See ARCHITECTURE.md.
+[tool.importlinter]
+root_package = "domus"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "The server uses the standard library only, and runs builds and jobs in processes of their own"
+type = "forbidden"
+source_modules = ["domus.serve"]
+forbidden_modules = ["numpy", "scipy", "shapely", "rasterio", "pyproj", "PIL", "cv2", "av", "pycolmap", "laspy", "tomlkit",
+                     "domus.crs", "domus.build", "domus.design", "domus.terrain"]
+
+[[tool.importlinter.contracts]]
+name = "The model's pure parts read no site and know nothing of the app"
+type = "forbidden"
+source_modules = ["domus.house", "domus.mesh", "domus.wall_looks", "domus.drains"]
+forbidden_modules = ["domus.crs", "domus.api", "domus.build", "domus.cli", "domus.serve", "domus.create", "domus.design",
+                     "domus.options", "domus.project"]
+
+[[tool.importlinter.contracts]]
+name = "Only the command line imports the server, and nothing imports the command line"
+type = "forbidden"
+source_modules = ["domus.**"]
+forbidden_modules = ["domus.cli", "domus.serve"]
+ignore_imports = ["domus.cli -> domus.serve"]

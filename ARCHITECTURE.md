@@ -38,6 +38,13 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 4. **Nothing about one property is built into common:** no names, coordinates, documents or one house's looks.
 5. **Real sites stay out of git.**
 
+## Settings and imports
+
+Every setting a site can hold is declared once, with its default and a line of help, in `domus.project.schema`, and the
+code reads settings through it. The tests fail on a setting the code reads that the schema doesn't declare, or reads
+with another default, and docs/site-format.md's tables are written from it. Import rules in pyproject.toml, checked in CI, keep the server on
+the standard library, the model's pure parts free of the site and the app, and the command line on top.
+
 ## The public API
 
 Site tools, a site's own tests and agents use `domus.api` and `domus.testing` ([docs/api.md](docs/api.md)): open a site,
