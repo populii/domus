@@ -203,6 +203,22 @@ plants, `house.py` for the house.
 - **`paved-under-canopy.geojson`**: A Polygon of paving the aerial sees through trees or deep shade. It's painted
   in as paving, using `data/features/paving.jpg`.
 
+### Changing the layers
+
+The layers are curated by hand, and three commands change them in ways you can check and undo. Each says what it
+would change and writes nothing until you add `--apply`; then it copies each file it changes into a folder you name
+(a fresh one each time), writes the new file, reads it back and checks that only what was named changed, and only then
+puts it in place, keeping the file's own layout.
+
+- `domus site shift SPEC.json BACKUP` moves named features by one vector in plan (and their heights, if you like),
+  adding a sentence to each one's `basis`: for a set of features placed from a survey that sits off the rest.
+- `domus site edit SPEC.json BACKUP` sets named features' vertices (in the wall options' frame or on the grid) and
+  properties, adds features and deletes them.
+- `domus site regrade CLOUD SPEC.json BACKUP` gives ground-fix points and lines the levels a placed video's cloud
+  shows, vertex by vertex; one the cloud doesn't see well moves with the read ones near it.
+
+The docstring of `src/domus/project/edits.py` describes each SPEC.json.
+
 ## House parts
 
 Each is a feature in `house.geojson` with a `part`, in addition to its `id`. Heights are in the model's datum; the

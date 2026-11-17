@@ -111,8 +111,29 @@ def main(argv=None):
     up.add_argument("--dry-run", action="store_true", help="say what would change, and write nothing")
     tr = sub.add_parser("trust", help="let this machine's builds run the site's extensions, as they are now")
     tr.add_argument("--revoke", action="store_true", help="stop trusting them")
+    for action, what in (("shift", "move named features of the site's layers by one vector, saying so in their basis"),
+                         ("edit", "change, add or delete named features of the site's layers"),
+                         ("regrade", "give ground-fix points the levels a placed cloud shows")):
+        ed = sub.add_parser(action, help=what)
+        if action == "regrade":
+            ed.add_argument("clouds", help="the cloud: <tag>-dense or <tag>-site in data/video, or several, comma-separated")
+        ed.add_argument("spec", help="what to change: a JSON file (domus.project.edits says what goes in it)")
+        ed.add_argument("backup", help="a fresh folder for the files as they were")
+        ed.add_argument("--apply", action="store_true", help="write the changes (without it, only say what they'd be)")
     args = ap.parse_args(argv)
     from .. import crs
+
+    if args.action in ("shift", "edit", "regrade"):
+        import json
+
+        from . import edits
+
+        spec = json.loads(Path(args.spec).read_text(encoding="utf-8"))
+        if args.action == "regrade":
+            edits.regrade(args.clouds.split(","), spec, args.backup, args.apply)
+        else:
+            getattr(edits, args.action)(spec, args.backup, args.apply)
+        return 0
 
     if args.action == "trust":
         from . import extensions

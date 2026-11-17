@@ -4,6 +4,26 @@
 
 - **For site projects:** `domus prep check` and `site.check()` write their report to the site's `.domus/checks/` (it was `docs/checks/adversarial/`), beside the build cache and out of the site's own documents. A check the site has nothing for is skipped with a note saying why, in the report's `skipped` and in what the command prints: the roof without a house or a surface model, plumb and clouds without placed videos, and through, fixes and blocks without wall options. A site with no house couldn't be checked at all before.
 - A site with wall options and no house builds. Working out its options stopped with an error.
+- `domus prep cloud` reads a placed video's cloud against the ground, cell by cell over a box in the wall options'
+  frame or on the site's grid: the model's ground with its fixes, or the LiDAR's alone. `domus prep cloud-plan` draws
+  the cloud from above in its own colours. Both grew in a real site's own tools, and reproduce them cell for cell and
+  pixel for pixel.
+- `domus prep face-fit` fits a wall's vertical faces in a placed cloud and compares them with the model's lines, and
+  `domus prep frame-points` reads where a placed frame's pixels fall on a wall's plane or a level. They also grew in a
+  real site's tools, and print what those did, line for line.
+- `domus prep overlay` draws the model's parts over frames of a placed clip, through the clip's own cameras: the
+  house, the existing walls, the features, the ground fixes, the boundary, the plants and a wall option's walls, each
+  only where the camera sees it past the house.
+- `domus video two-lens` maps a clip filmed on two lenses again, with a camera for each, from the workspace
+  `domus video reconstruct` left: a phone that switches from its main lens to its wide one part way through a take
+  breaks up a reconstruction made with one camera. It grew in a real site's tool, and writes what that wrote.
+- `domus video sheet` writes contact sheets of a clip's frames, `domus video crop` a piece of a photo at full size, and
+  `domus video picks-edit` sets and drops marks in a picks file behind a backup. They match a real site's own tools
+  byte for byte.
+- **For site projects:** `domus site shift`, `domus site edit` and `domus site regrade` change a site's curated layers
+  (move named features by one vector, set features' vertices and properties, give ground fixes a placed cloud's levels)
+  behind a backup, a read-back and a check that only what was named changed. They grew in a real site's own tools and
+  write what those wrote, byte for byte.
 
 ## 2026.11.34
 

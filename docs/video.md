@@ -61,6 +61,13 @@ docstring at the top of `src/domus/video/georef_sfm.py` gives every kind of cont
 clearly, not lawn that has been regraded or anything under trees, and spread the points out: a short or nearly straight
 line of control can leave the clip tilted about it, which the frames' own vertical (a `plumb` block) prevents.
 
+Three helpers make the marking easier. `domus video sheet sources/raw/frames6/walk sheets/walk 120 180 2` writes
+contact sheets of the frames between two times, a frame every 2 seconds with its name on it (`--registered
+data/video/walk-colmap-sfm.npz`: only the frames the reconstruction placed), for finding the frames to mark.
+`domus video crop photo.jpg piece.jpg 1600 400 300 700 520 --zoom 2` cuts a piece of a photo at full size from the
+corners you read on a copy 1600 pixels across. `domus video picks-edit data/video/picks/walk.json edits.json` sets,
+moves and drops marks in a picks file, keeping it in time order and the old file beside it as a backup.
+
 ## When a clip breaks up
 
 - **It splits into several models** (`<tag>-m2` and so on): a fast turn or a blank stretch broke the chain. Reconstruct
@@ -68,6 +75,11 @@ line of control can leave the clip tilted about it, which the frames' own vertic
 - **Two passes of the same place don't line up**: look for a false match between things that look alike, such as two sets
   of slots. `split` lets you keep the good parts apart.
 - **It falls apart from the start**: check `--focal`. The wrong lens is the usual cause.
+- **The phone switched lenses part way through** (from its main camera to its wide one as you walked closer): one
+  camera can't fit both. `domus video two-lens walk walk-colmap 120 121 1100 630` keeps the reconstruction's features
+  and matches and maps them again with a camera for each lens, from the last second on the main one, the first on the
+  wide one and their focal lengths, and writes `walk-main` and `walk-wide` in one set of coordinates, so a placement
+  of one places the other.
 - **The global mapper joined parts of a long clip wrongly**: re-run with `--mapper incremental`. Features and matches are
   cached, so only the mapping runs again.
 

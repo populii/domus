@@ -80,6 +80,26 @@ domus prep canopy-plot
 `profile` reads the ground along a line and either side of it, a table of levels: `domus prep profile "8,0.4 8,3"
 --offsets -0.5 0 0.5` for a line in the wall options' frame, `--grid` for one on the site's grid.
 
+`cloud` reads a placed video's cloud against the ground, cell by cell over a box: `domus prep cloud walk-dense
+"0,-3 20,6" --cell 1 0.5` prints each cell's cloud ground less the model's, from each point's height over the ground
+(`--by level`: from the cell's own level), and `--against lidar` reads it against the LiDAR's ground model alone, to
+tell a ground fix from the LiDAR. `cloud-plan` draws a cloud from above in its own colours over the same kind of box,
+to lay beside the aerial photo: `domus prep cloud-plan walk-dense "0,-3 20,6" plan.png`, with `--lines` for the
+boundary, the walls and the house.
+
+Two steps help fit the site's parts to a placed video by hand. `face-fit` fits vertical faces in a placed cloud,
+each named in a JSON file with its box in the wall options' frame, the axis it runs along and, to compare, the model's
+line for it: `domus prep face-fit walk-dense faces.json` prints where each face is at both ends of its box, and how far
+the model's line is from it. `frame-points` reads where pixels of a placed frame fall on a wall's plane or on a level,
+for picking a line off a photo: `domus prep frame-points walk levels.json` prints each pixel's place in the frame and its
+height. `domus prep face-fit --help` and `frame-points --help` describe their files.
+
+`overlay` draws the model's parts over frames of a placed clip, through the clip's own cameras, to check each one's
+place against what was filmed: `domus prep overlay walk-colmap checks/overlay t012.500 t045.250` draws the house's
+walls, corners and windows, the existing walls' tops and feet, the features, the ground fixes, the boundary and its
+marks and the plants, each only where the camera sees it past the house (`--only` picks some, `--option NAME` adds a
+wall option's walls).
+
 `check` looks for things floating above or buried in the ground, spikes and holes in the ground, a roof that doesn't fit
 the LiDAR, placed clouds that are tilted or off the ground, and duplicate ids. For the wall options it looks for ground
 that comes through a wall or a flight of steps, or stands over a tread's edge (`through`, in the built model), ground-fix

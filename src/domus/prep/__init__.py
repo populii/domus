@@ -21,6 +21,11 @@ STEPS = {
     "check": ("check", "main", "Adversarial checks of the model against its data, the LiDAR and placed video"),
     "sections": ("sections", "main", "Cross-sections through the point clouds"),
     "profile": ("profile", "main", "The ground along a line, and either side of it"),
+    "cloud": ("cloud", "main", "A placed cloud's ground against the model's or the LiDAR's, cell by cell"),
+    "cloud-plan": ("cloud", "plan_main", "A placed cloud from above, in its own colours"),
+    "face-fit": ("fitting", "face_main", "Fit vertical faces in a placed cloud, against the model's"),
+    "frame-points": ("fitting", "points_main", "Where a placed frame's pixels meet a wall's plane or a level"),
+    "overlay": ("overlay", "main", "The model's parts drawn over frames of a placed clip, to check their places"),
     "canopy-plot": ("canopy_plot", "main", "A plan of candidate tree crowns over the aerial"),
 }
 

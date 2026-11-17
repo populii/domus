@@ -8,6 +8,7 @@ STEPS = {
     "frames": ("extract_frames", "Pull the sharpest frames out of a video"),
     "reconstruct": ("colmap_sfm", "Reconstruct a clip with COLMAP (the one to start with)"),
     "reconstruct-chain": ("video_sfm", "Reconstruct a clip with the built-in chain of views"),
+    "two-lens": ("two_lens", "Map a clip filmed on two lenses again, with a camera for each"),
     "merge": ("merge_sfm", "Join two reconstructions of a clip that share frames"),
     "split": ("split_sfm", "Cut a time span out of a reconstruction"),
     "link": ("link_sfm", "Find what carries one reconstruction into another's frame"),
@@ -17,6 +18,9 @@ STEPS = {
     "dense": ("dense_sfm", "Dense point cloud from a placed reconstruction"),
     "export": ("export_cloud", "Combine the clouds in [video] clouds for the build"),
     "plot": ("plot_video_cloud", "Plan view of a cloud over the aerial, for checking"),
+    "sheet": ("sheet", "Contact sheets of a clip's frames, for finding the ones to mark"),
+    "crop": ("crop", "A piece of a photo at full size, from a smaller copy's corners"),
+    "picks-edit": ("picks_edit", "Add, move or drop marks in a picks file, keeping a backup"),
 }
 
 

@@ -14,6 +14,8 @@
     domus prep <step>                                         plans, IFC, textures, checks from your documents
     domus serve                                               serve the viewer
     domus site upgrade                                        write an older site's migrations into its files
+    domus site shift|edit SPEC BACKUP [--apply]               change the site's layers, keeping what was there
+    domus site regrade CLOUD SPEC BACKUP [--apply]            give ground fixes the levels a placed cloud shows
 
 Every command but `new` and `demo` works on the site project in the current folder, or the one
 named by --site or the DOMUS_SITE environment variable. Modules are imported only once that's
