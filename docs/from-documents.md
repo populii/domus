@@ -78,6 +78,10 @@ domus prep canopy-plot
 ```
 
 `check` looks for things floating above or buried in the ground, spikes and holes in the ground, a roof that doesn't fit
-the LiDAR, placed clouds that are tilted or off the ground, and duplicate ids. It exits 1 if a check fails its tolerance.
+the LiDAR, placed clouds that are tilted or off the ground, and duplicate ids. For the wall options it looks for ground
+that comes through a wall or a flight of steps, or stands over a tread's edge (`through`, in the built model), ground-fix
+points inside an option's wall at or over its top (`fixes`), and block walls that aren't set out in whole units: cut
+pieces at a stretch's ends or a step, and cut caps (`blocks`, with each wall's own block size). It exits 1 if a check
+fails its tolerance.
 It expects a site with a `house.geojson`. `sections` needs a `"sections"` entry naming a reference line, and `canopy-plot`
 draws candidate tree crowns to help you write `trees.geojson`.

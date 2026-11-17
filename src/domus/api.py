@@ -171,8 +171,8 @@ class Site:
         return self.output
 
     def check(self, checks=None, tags=None, plots=False):
-        """Runs the adversarial checks, as domus prep check does: `checks` names some of sanity, roof, plumb and clouds
-        (all of them unless given), `tags` the placed reconstructions for plumb and clouds, and `plots` also writes
+        """Runs the adversarial checks, as domus prep check does: `checks` names some of sanity, roof, plumb, clouds,
+        through, fixes and blocks (all of them unless given), `tags` the placed reconstructions for plumb and clouds, and `plots` also writes
         JPEGs. Returns the report it writes to docs/checks/adversarial/check_model.json in the site: `failures`, how
         many each check failed, and `findings`, each a dict of check, level, object and detail."""
         from .prep import check

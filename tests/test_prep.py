@@ -112,3 +112,44 @@ def test_each_command_keeps_its_own_help(capsys):
     with pytest.raises(SystemExit):
         cli.main(["scan", "--help"])
     assert "phone LiDAR" in capsys.readouterr().out
+
+
+def box(x0, z0, x1, z1, y):
+    """A level square at height y, in viewer metres: positions and indices."""
+    return {"positions": [x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1], "indices": [0, 1, 2, 0, 2, 3]}
+
+
+def test_the_option_checks_find_nothing_wrong_on_the_demo(site, built):
+    from domus.prep import check
+
+    for f in (check.check_through, check.check_fixes, check.check_blocks):
+        findings = []
+        assert f(findings) == 0, findings
+
+
+def test_ground_through_a_wall_or_over_a_tread_is_found(site, tmp_path, monkeypatch):
+    from domus.prep import check
+
+    model = {"origin": [100.0, 200.0, 40.0], "summary": {"options": [{"id": "x", "keep_existing": []}]},
+             "layers": [{"id": "option-x-ground", "type": "mesh", "role": "ground", "option": "x", **box(-5, -5, 5, 5, 1.0)},
+                        {"id": "option-x-W1", "type": "mesh", "option": "x", **box(-1, -1, 1, 1, 0.5)},
+                        {"id": "option-x-steps-1", "type": "mesh", "option": "x", **box(3, 3, 4, 4, 0.9)}]}
+    (tmp_path / "model.json").write_text(json.dumps(model), encoding="utf-8")
+    monkeypatch.setattr(check.crs, "OUTPUT", tmp_path)
+    findings = []
+    assert check.check_through(findings) == 3
+    through = {f[2]: f[3] for f in findings if "comes through" in f[3]}
+    assert set(through) == {"x/W1", "x/steps-1"} and "by up to 0.500 m" in through["x/W1"]
+    assert "height 40.50" in through["x/W1"]                                # where, on the site's heights
+    assert [f for f in findings if "stands over a tread's edge" in f[3] and f[2] == "x/steps-1"]
+    (tmp_path / "model.json").unlink()
+    findings = []
+    assert check.check_through(findings) == 0 and findings[0][1] == "info"
+
+
+def test_a_block_piece_is_whole_half_or_cut():
+    from domus.prep import check
+
+    assert check._piece(3.0, 0, True) == 1.0 and check._piece(3.5, 1, False) == 1.0      # on a joint
+    assert abs(check._piece(3.5, 0, True) - 0.5) < 1e-9 and not check._cut(0.5)          # half a block: a corner's end
+    assert check._cut(check._piece(3.3, 0, True)) and not check._cut(check._piece(3.004, 0, True))

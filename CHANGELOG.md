@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** `domus prep check` checks the wall options too, with three rules that grew in a real site's own tools: `through` finds ground that comes through an option's walls and flights of steps, or stands over a tread's edge, in the built model; `fixes` finds ground-fix points kept inside an option's wall at or above its top, which show through it; and `blocks` finds block walls not set out in whole units, with a cut piece at a stretch's end or a step, or a cut cap, from each wall's own block size. A site that carries its own copies of these checks can drop them.
+
 ## 2026.11.32
 
 - **For site projects:** a site's own code can draw in its builds. `[domus] extensions = ["tools/pegs.py"]` names Python files that define `layers(site)`, which gets the site through `domus.api` and returns layers of the site's own. A build runs them only on a machine that trusts them as they are: `domus site trust` records each file's SHA-256 (`--revoke` drops them), a file changed since is untrusted again, and a build whose extensions aren't all trusted stops and says so. The container image trusts none, the server never imports a site's code, and `build.json` records what ran.

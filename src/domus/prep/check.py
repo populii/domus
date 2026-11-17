@@ -19,6 +19,13 @@ Checks:
   side and too low on the other (about 1.7 cm per metre per degree).
 - clouds: each placed cloud's lowest flat surface per 0.25 m cell against the drawn ground on open
   ground (not under modelled objects or vegetation), and its house-wall points against each face.
+- through: in the built model, ground that comes through a wall option's walls and flights of steps (and the
+  existing walls it keeps), or stands over a tread's edge more than a skin's thickness: the step looks sunk.
+- fixes: ground-fix points a wall option keeps as breaklines inside one of its walls, near its top or above it,
+  where they show through the wall.
+- blocks: block walls set out in whole units: each course of each straight stretch starts and ends with a whole
+  block or half of one, the top course of a bay ends at a step down with a whole block, and the caps are whole.
+  The sizes are each wall's own block's (`unit_m`).
 
 Prints the findings, writes docs/checks/adversarial/check_model.json (and with --plots, JPEGs in
 the same folder) and exits 1 if a check fails its tolerance.
@@ -425,6 +432,250 @@ class PlanImage:
         img.save(path, quality=82)
 
 
+
+# --------------------------------------------------------------------------- the wall options
+
+TOL_THROUGH = 0.004      # m: ground over a wall's or a step's top
+# A tread's edges: (how far out, how much the ground may stand above the tread there). Ground may rise away from a
+# tread, as a lawn beyond a flight's head does, and a lawn's or bed's skin is drawn 12 mm proud of its ground.
+BESIDE_TREAD = ((0.03, 0.015), (0.08, 0.03))
+TOL_FIX_UNDER_TOP = 0.02  # m: a fix point this near a wall's top, or above it, shows through it
+TOL_BLOCK = 0.011         # blocks: a piece this near a whole or half block is one
+
+
+def _triangles(layer):
+    """A mesh layer's triangles in viewer metres, (n, 3 corners, x y z); a lawn left as it is keeps them in `drape`."""
+    src = layer.get("drape", layer)
+    p = np.asarray(src["positions"], float).reshape(-1, 3)
+    return p[np.asarray(src["indices"], int).reshape(-1, 3)]
+
+
+def _height(tri, x, z):
+    """The highest of the triangles `tri` (viewer metres) over each point (x, z): -inf where none is."""
+    if not len(tri) or not len(x):
+        return np.full(len(x), -np.inf)
+    v = tri.reshape(-1, 3)[:, [0, 2, 1]]                # plan x, z and the height up
+    h = mesh.surface_z(v, np.arange(len(v)).reshape(-1, 3), x, z)
+    return np.where(np.isnan(h), -np.inf, h)
+
+
+def _level_faces(tri):
+    """The triangles that look straight up or down."""
+    n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    size = np.linalg.norm(n, axis=1)
+    return tri[(size > 1e-9) & (np.abs(n[:, 1]) > 0.87 * size)]
+
+
+def _top_points(tri, step=0.04):
+    """Points over the level faces of `tri`, a little in from their edges."""
+    out = []
+    for a, b, c in _level_faces(tri):
+        k = max(2, int(np.ceil(np.sqrt(np.linalg.norm(np.cross(b - a, c - a))) / step)))
+        for i in range(k + 1):
+            for j in range(k + 1 - i):
+                u, v = (i + 0.33) / (k + 1), (j + 0.33) / (k + 1)
+                if u + v < 0.98:
+                    out.append(a + u * (b - a) + v * (c - a))
+    return np.asarray(out, float).reshape(-1, 3)
+
+
+def _beside_points(tri, step=0.05):
+    """Points just outside each edge of each level face of `tri`, at the face's height, with how far out they are."""
+    out = []
+    for face in _level_faces(tri):
+        mid = face.mean(axis=0)
+        for i in range(3):
+            a, b = face[i], face[(i + 1) % 3]
+            e = b - a
+            length = float(np.hypot(e[0], e[2]))
+            if length < 1e-6:
+                continue
+            nrm = np.array([e[2], 0.0, -e[0]]) / length
+            if np.dot(nrm, a - mid) < 0:
+                nrm = -nrm
+            for s in np.arange(step / 2, length, step):
+                for d, _ in BESIDE_TREAD:
+                    out.append([*(a + e * (s / length) + nrm * d), d])
+    return np.asarray(out, float).reshape(-1, 4)
+
+
+def _where(model, point):
+    """Where a point in viewer metres is, for a finding: in the options' frame, and its height."""
+    e0, n0, h0 = model["origin"]
+    e, n = point[0] + e0, n0 - point[2]
+    frame = (model.get("summary", {}).get("options_site") or {}).get("frame")
+    if frame:
+        from ..design import SiteFrame
+
+        s, o = SiteFrame(frame["origin"], frame["toward"], frame.get("side", "right")).so(np.array([e, n]))
+        return f"s {s:.2f}, o {o:.2f}, height {point[1] + h0:.2f}"
+    return f"E {e:.2f}, N {n:.2f}, height {point[1] + h0:.2f}"
+
+
+def check_through(findings, tol=TOL_THROUGH):
+    """Ground that comes through an option's walls and flights, or stands over a tread's edge, in the built model."""
+    path = crs.OUTPUT / "model.json"
+    if not path.exists():
+        findings.append(("through", "info", "model", "no model built yet: run domus build first"))
+        return 0
+    model = json.loads(path.read_text(encoding="utf-8"))
+    layers = model["layers"]
+    by_id = {x.get("id"): x for x in layers}
+    fails = 0
+    for o in model.get("summary", {}).get("options", []):
+        oid = o["id"]
+        mine = [x for x in layers if x.get("option") == oid and x.get("type") in ("mesh", "vegetation")
+                and ("positions" in x or "drape" in x)]
+        ground = [(x["id"].replace(f"option-{oid}-", ""), _triangles(x)) for x in mine if x.get("role") in ("ground", "skin")]
+        solids = [x for x in mine if x.get("role") not in ("ground", "skin") and "positions" in x]
+        solids += [by_id[f"wall-{w}"] for w in o.get("keep_existing", []) if f"wall-{w}" in by_id]
+        solid = [(x["id"].replace(f"option-{oid}-", ""), _triangles(x)) for x in solids]
+        tops = [_level_faces(t) for _, t in solid]
+        every_top = np.vstack(tops) if tops else np.zeros((0, 3, 3))
+        for name, t in solid:
+            p = _top_points(t)
+            if not len(p):
+                continue
+            p = p[p[:, 1] >= _height(_level_faces(t), p[:, 0], p[:, 2]) - 1e-6]      # its top, not an underside
+            for gname, g in ground:
+                over = _height(g, p[:, 0], p[:, 2]) - p[:, 1]
+                bad = over > tol
+                if bad.any():
+                    k = int(np.argmax(over))
+                    fails += 1
+                    findings.append(("through", "fail", f"{oid}/{name}", (f"{gname} comes through at {int(bad.sum())} of "
+                                     f"{len(p)} points, by up to {over[k]:.3f} m ({_where(model, p[k])})")))
+            if "steps" not in name:
+                continue
+            lv = _level_faces(t)
+            mids = lv.mean(axis=1)
+            treads = lv[mids[:, 1] >= _height(lv, mids[:, 0], mids[:, 2]) - 1e-6]
+            q = _beside_points(treads)
+            if len(q):
+                q = q[~np.isfinite(_height(every_top, q[:, 0], q[:, 2]))]          # open ground beside the tread
+            for gname, g in ground:
+                if not len(q):
+                    break
+                allowed = np.interp(q[:, 3], [d for d, _ in BESIDE_TREAD], [a for _, a in BESIDE_TREAD])
+                over = _height(g, q[:, 0], q[:, 2]) - q[:, 1] - allowed
+                bad = over > 0
+                if bad.any():
+                    k = int(np.argmax(over))
+                    fails += 1
+                    findings.append(("through", "fail", f"{oid}/{name}", (f"{gname} stands over a tread's edge at "
+                                     f"{int(bad.sum())} of {len(q)} points, by up to {over[k]:.3f} m more than allowed "
+                                     f"({_where(model, q[k, :3])})")))
+    return fails
+
+
+def check_fixes(findings):
+    """Ground-fix points an option keeps (where it leaves the ground as it is) that stand inside one of its walls,
+    near its top or above it: the build keeps them as breaklines, so they show through the wall."""
+    from .. import design, options
+
+    g = terrain.ground()
+    if not len(g.points):
+        return 0
+    fr, fails = design.frame(), 0
+    for opt in options.load_all():
+        res = design.evaluate(opt)
+        pts = g.points
+        kept = pts[np.abs(res["design"].drawn(pts[:, 0], pts[:, 1]) - pts[:, 2]) < 0.01]
+        for w in res["walls"]:
+            wd = w["def"]
+            line, _, _, _, top = terrain.wall_levels(wd)
+            body = Polygon(np.vstack([line, mesh.offset_behind(line, wd["thickness"], wd["side"])[::-1]])).buffer(0.03)
+            for p in kept[shapely.contains_xy(body, kept[:, 0], kept[:, 1])]:
+                k = int(np.argmin(np.hypot(line[:, 0] - p[0], line[:, 1] - p[1])))
+                over = float(p[2] - top[k])
+                if over > -TOL_FIX_UNDER_TOP:
+                    s, o = fr.so(p[None, :2])[0]
+                    fails += 1
+                    findings.append(("fixes", "fail", f"{opt['id']}/{w['id']}", (f"a ground-fix point at s {s:.2f}, o {o:.2f} "
+                                     f"is {p[2]:.2f}, the wall's top there {top[k]:.2f} ({over:+.2f} m): move or drop it")))
+    return fails
+
+
+def _piece(u, parity, before):
+    """The length, in blocks, of the piece of a course that ends (`before`) or starts at `u` along a stretch."""
+    v = round((u - 0.5 * parity) % 1.0, 6) % 1.0
+    if v < TOL_BLOCK or v > 1 - TOL_BLOCK:
+        return 1.0
+    return v if before else 1.0 - v
+
+
+def _cut(x):
+    return not (abs(x - 1.0) < TOL_BLOCK or abs(x - 0.5) < TOL_BLOCK)
+
+
+def _cut_piece(findings, where, metres, at):
+    findings.append(("blocks", "fail", where, f"a course has a cut piece {metres * 1000:.0f} mm long {at}"))
+    return 1
+
+
+def check_blocks(findings):
+    """Block walls set out in whole units: every course of each stretch starts and ends with a whole block or half
+    of one (the end of a corner unit), the top course of a bay ends at a step down with a whole block, and the caps
+    are whole units. Each wall's block (`unit_m`) gives the sizes."""
+    from .. import design, options
+
+    fr, fails = design.frame(), 0
+    for opt in options.load_all():
+        res = design.evaluate(opt)
+        for w in res["walls"]:
+            d = w["def"]
+            unit = walls.units(d)
+            if not unit or "set_out" not in d:
+                continue
+            length, height, cap, _ = unit
+            so = d["set_out"]
+            pts, _, chain, _, top = terrain.wall_levels(d)
+            cuts, u0, rate = so["cuts"], so["u0"], so["rate"]
+            where = f"{opt['id']}/{w['id']}"
+            for k in range(len(u0)):
+                c0, c1 = cuts[k], cuts[k + 1]
+                for h0, h1 in so.get("hidden", []):        # a length inside another wall's face, which that wall draws
+                    if h0 <= c0 + 1e-6 < h1:
+                        c0 = h1
+                    if h0 < c1 - 1e-6 <= h1:
+                        c1 = h0
+                ua, ub = (u0[k] + rate[k] * (c - cuts[k]) for c in (c0, c1))
+                s, o = fr.so(pts[int(np.argmin(np.abs(chain - c0)))][None, :2])[0]
+                for p in (0, 1):
+                    if _cut(_piece(ua, p, False)):
+                        fails += _cut_piece(findings, where, _piece(ua, p, False) * length, f"at the start of stretch {k} (s {s:.2f}, o {o:.2f})")
+                    if _cut(_piece(ub, p, True)):
+                        fails += _cut_piece(findings, where, _piece(ub, p, True) * length, f"at the end of stretch {k}")
+                blocks = abs(ub - ua)
+                if abs(blocks * 2 - round(blocks * 2)) > 2 * TOL_BLOCK:
+                    fails += 1
+                    findings.append(("blocks", "fail", where, (f"stretch {k} is {blocks * length * 1000:.0f} mm, not a whole "
+                                     "number of half blocks")))
+            for i in range(len(chain) - 1):                # a step in the top: the chain has its point twice
+                if abs(chain[i + 1] - chain[i]) < 1e-9 and abs(top[i + 1] - top[i]) > 1e-6:
+                    hi, lo = max(top[i], top[i + 1]), min(top[i], top[i + 1])
+                    down_along = top[i] > top[i + 1]
+                    side = chain[i] - 1e-6 if down_along else chain[i] + 1e-6
+                    k = int(np.clip(np.searchsorted(cuts, side, side="right") - 1, 0, len(u0) - 1))
+                    u = u0[k] + rate[k] * (chain[i] - cuts[k])
+                    level = hi - cap
+                    while level > lo - cap + 1e-6:
+                        parity = int(round((so["datum"] - level) / height)) % 2
+                        x = _piece(u, parity, before=bool(down_along) == (rate[k] > 0))
+                        if abs(x - 1.0) >= TOL_BLOCK:
+                            fails += _cut_piece(findings, where, x * length,
+                                                f"at the step from {hi:.2f} down to {lo:.2f}, in the course with its top at {level:.2f}")
+                        level -= height
+            for c0, c1, joints in so.get("caps") or []:
+                sizes = np.diff(joints)
+                odd = [s for s in sizes if abs(s - length) > 0.01 * length]
+                if odd:
+                    fails += 1
+                    findings.append(("blocks", "fail", where, (f"the cap from {c0:.2f} to {c1:.2f} m along it has "
+                                     f"{len(odd)} cut units: ") + ", ".join(f"{s * 1000:.0f} mm" for s in odd)))
+    return fails
+
+
 # --------------------------------------------------------------------------- main
 
 def placed_tags():
@@ -433,7 +684,7 @@ def placed_tags():
                   and (VID / p.name.replace("-georef.json", "-site.npz")).exists())
 
 
-CHECKS = ("sanity", "roof", "plumb", "clouds")
+CHECKS = ("sanity", "roof", "plumb", "clouds", "through", "fixes", "blocks")
 
 
 def run(checks=CHECKS, tags=None, plots=False):
@@ -452,6 +703,9 @@ def run(checks=CHECKS, tags=None, plots=False):
         fails["plumb"] = check_plumb(tags, findings)
     if "clouds" in checks:
         fails["clouds"] = check_clouds(m, tags, findings, plots)
+    for name, check in (("through", check_through), ("fixes", check_fixes), ("blocks", check_blocks)):
+        if name in checks:
+            fails[name] = check(findings)
     report = {"run": time.strftime("%Y-%m-%d %H:%M"), "failures": fails,
               "findings": [dict(zip(("check", "level", "object", "detail"), f)) for f in findings]}
     (OUT / "check_model.json").write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
