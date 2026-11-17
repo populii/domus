@@ -224,6 +224,8 @@ OPTIONS_SITE = Table("options/_site.toml", {
     "rules": Table("Checks every option is held to", {
         "drain_cover_m": Key("Least cover over a drain under lawn after a cut", 0.3),
     }),
+    "local": Map("Anything a site keeps for its own tools or records: Domus doesn't read it or warn about it",
+                 Key("Anything"), "key"),
 })
 
 

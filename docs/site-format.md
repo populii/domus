@@ -173,6 +173,7 @@ only your own tools read under `[local]`.
 | `defaults.thickness_m` | required | A wall's thickness |
 | `[rules]` | | Checks every option is held to |
 | `rules.drain_cover_m` | `0.3` | Least cover over a drain under lawn after a cut |
+| `local.<key>` |  | Anything a site keeps for its own tools or records: Domus doesn't read it or warn about it |
 
 <!-- settings: end -->
 

@@ -49,6 +49,9 @@ def test_an_unknown_key_gets_a_warning_naming_the_nearest_known_one():
                               schema.SITE, "data/site.toml: ")
     assert warnings == ["data/site.toml: house.boards_m isn't a setting Domus knows: did you mean board_m?",
                         "data/site.toml: survey_offset isn't a setting Domus knows."]
+    # options/_site.toml keeps a site's own notes under [local] too, in the options' frame
+    assert schema.unknown({"regrade": {"driveway_so": [[0, 0], [1, 1]]}, "local": {"driveway_so": [[0, 0], [1, 1]]}},
+                          schema.OPTIONS_SITE, "options/_site.toml: ") ==         ["options/_site.toml: regrade.driveway_so isn't a setting Domus knows."]
 
 
 def test_the_doc_says_what_the_schema_says():

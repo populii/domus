@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** `options/_site.toml` takes a `[local]` table too, as `data/site.toml` does: a site's own notes
+  in the wall options' frame, which Domus doesn't read or warn about.
+
 ## 2026.11.35
 
 - **For site projects:** `domus prep check` and `site.check()` write their report to the site's `.domus/checks/` (it was `docs/checks/adversarial/`), beside the build cache and out of the site's own documents. A check the site has nothing for is skipped with a note saying why, in the report's `skipped` and in what the command prints: the roof without a house or a surface model, plumb and clouds without placed videos, and through, fixes and blocks without wall options. A site with no house couldn't be checked at all before.
