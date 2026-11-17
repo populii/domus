@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.36
 
 - **For site projects:** `options/_site.toml` takes a `[local]` table too, as `data/site.toml` does: a site's own notes
   in the wall options' frame, which Domus doesn't read or warn about.
