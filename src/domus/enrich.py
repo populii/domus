@@ -50,6 +50,28 @@ SOURCES = [
 ]
 
 
+# The same, said for anywhere: where New Zealand's documents and services have names of their own.
+ANYWHERE = {
+    "boundary": ("Title and survey plan", None, "Your title and its survey plan: from your solicitor, or the land registry.", None),
+    "lim": ("Council property report",
+            ("Often the single best document: consents, drainage plans, hazards, and sometimes old survey drawings."),
+            "Your council or local authority, where it offers one. It may take several working days.", None),
+    "drains": (None, None, ("Your property file, your council's GIS map, and the local service for locating underground "
+                            "pipes and cables before digging."), None),
+}
+
+
+def sources(in_nz):
+    """SOURCES, worded for New Zealand or for anywhere."""
+    if in_nz:
+        return SOURCES
+    out = []
+    for i, t, why, where, how, pat in SOURCES:
+        title, why2, where2, how2 = ANYWHERE.get(i, (None, None, None, None))
+        out.append((i, title or t, why2 or why, where2 or where, how2 or how, pat))
+    return out
+
+
 def has_any(pattern):
     return any(p.is_file() and re.search(pattern, p.name, re.IGNORECASE) for p in (ROOT / "sources" / "raw").rglob("*")) \
         if (ROOT / "sources" / "raw").is_dir() else False
@@ -67,8 +89,13 @@ def checklist(cfg):
         "photos": (ROOT / "data" / "house" / "faces.json").exists() or (ROOT / "data" / "features").is_dir(),
         "ifc": "ifc" in cfg,
     }
+    from .crs import site_to_lonlat
+    from .newsite import in_new_zealand
+
+    e0, n0, e1, n1 = cfg["model"]["extent"]
+    here = sources(in_new_zealand(*site_to_lonlat((e0 + e1) / 2, (n0 + n1) / 2)))
     return [{"id": i, "title": t, "why": why, "where": where, "how": how, "found": bool(found.get(i) or has_any(pat))}
-            for i, t, why, where, how, pat in SOURCES]
+            for i, t, why, where, how, pat in here]
 
 
 def _boundary_is_public():

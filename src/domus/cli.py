@@ -70,8 +70,8 @@ def run(command, rest):
         from . import serve
         return serve.main(rest)
     if command == "fetch":
-        from . import linz
-        return linz.main()
+        from . import importers
+        return importers.fetch()
     if command == "canopy":
         from . import vegetation
         return vegetation.map_site()

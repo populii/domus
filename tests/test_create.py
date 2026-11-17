@@ -180,3 +180,15 @@ def test_the_address_box_wont_touch_a_site_with_a_project(box):
     status, _ = call(port, "POST", "/api/create", json.dumps({"address": "12 Example Street"}), {"Content-Type": "application/json"})
     assert status == 409 and not started
     assert b"Build a 3D model" not in call(port, "GET", "/")[1]
+
+
+def test_a_site_of_its_own_builds_into_its_own_folder(tmp_path, monkeypatch):
+    import subprocess
+
+    seen = []
+    monkeypatch.setattr(subprocess, "run", lambda cmd, check, env: seen.append(env))
+    monkeypatch.setenv("DOMUS_SITE", str(tmp_path / "mounted"))
+    monkeypatch.setenv("DOMUS_OUTPUT", str(tmp_path / "mounted" / "out"))
+    create.run_step(tmp_path / "new", "--step", "rest")                 # as `domus create ADDRESS new` in a container
+    create.run_step(tmp_path / "mounted", "--step", "rest")
+    assert "DOMUS_OUTPUT" not in seen[0] and seen[1]["DOMUS_OUTPUT"] == str(tmp_path / "mounted" / "out")

@@ -43,25 +43,25 @@ class Tables:
         self.help, self.item = help, item
 
 
-LINZ = "Ground model, surface model and aerial photo: LINZ and its data partners (CC BY 4.0)."
-
 SITE = Table("data/site.toml", {
     "domus": Table("The site folder itself", {
         "format": Key("The site folder's format. `domus new` and `domus create` write it; every Domus reads older ones, "
                       "and `domus site upgrade` writes a site up to its own", 1),
         "requires": Key('The oldest Domus that builds the site, such as ">=2026.12.0"'),
+        "importer": Key("Where the place came in from: nz (LINZ's data), osm (OpenStreetMap's and the Copernicus "
+                        "ground model) or manual (its own boundary and rasters)"),
     }),
     "site": Table("The viewer's text", {
         "title": Key("The site's name", "Site model"),
         "heading": Key("The viewer's heading: the title, unless given", COMPUTED),
         "subtitle": Key("A line under the heading", ""),
         "about": Key("A paragraph about the site", ""),
-        "attribution": Key("Where the data came from, shown in the viewer", LINZ),
+        "attribution": Key("Where the data came from, shown in the viewer", ""),
     }),
     "crs": Table("The site's grid and heights", {
-        "epsg": Key("The grid's EPSG code", 2193),
+        "epsg": Key("The grid's EPSG code, in metres, such as 2193 for NZTM2000", REQUIRED),
         "label": Key("The grid's name for people: its own name and EPSG code, unless given", COMPUTED),
-        "vertical": Key("The height datum's name", "NZVD2016"),
+        "vertical": Key("The height datum's name, as the viewer shows it: none named unless given", ""),
     }),
     "boundary": Table("The lot", {
         "main": Key("The id of the feature in boundary.geojson that is the lot, the first unless given; the others are "

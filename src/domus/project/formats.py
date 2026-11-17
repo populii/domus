@@ -14,6 +14,10 @@ Format 2:
 - `[front_garden]` in options/_site.toml is `[regrade]`.
 - `[house] fl_lower` is written down, not worked out from `fl_upper_rel` and `fl_lower_rel`.
 - `[services] printed_line` has gone: a drain's levels count by the document they come from (domus.drains).
+
+Format 3:
+- `[crs] epsg`, `[crs] vertical` and `[site] attribution` have no New Zealand defaults. A site in format 2 or before
+  that leaves them out gets what it always had, written down: NZTM2000 (EPSG:2193), NZVD2016 and LINZ's credit line.
 """
 
 import copy
@@ -23,8 +27,11 @@ import re
 from .. import __version__
 from ..errors import DomusError
 
-FORMAT = 2
+FORMAT = 3
 COMPASS = {"north": (0.0, 1.0), "east": (1.0, 0.0), "south": (0.0, -1.0), "west": (-1.0, 0.0)}
+# What format 2 and before took for a site that didn't say: the LINZ data's own grid, height datum and credit line.
+NZTM, NZ_VERTICAL = 2193, "NZVD2016"
+LINZ_CREDIT = "Ground model, surface model and aerial photo: LINZ and its data partners (CC BY 4.0)."
 
 
 def format_of(site):
@@ -140,6 +147,18 @@ def option_1(option, frame):
     return notes
 
 
+def site_2(site):
+    """data/site.toml, format 2 to 3: what format 2 took from New Zealand for a site that didn't say, written down."""
+    notes = []
+    for table, key, value in (("crs", "epsg", NZTM), ("crs", "vertical", NZ_VERTICAL), ("site", "attribution", LINZ_CREDIT)):
+        if table not in site:
+            site[table] = {}
+        if key not in site[table]:
+            site[table][key] = value
+            notes.append(f"[{table}] {key} = {value!r}, which format 2 took for a site that didn't say")
+    return notes
+
+
 # Reading in memory: each file at this Domus's format, from the format the site is in.
 
 def site(raw):
@@ -148,6 +167,8 @@ def site(raw):
     out = copy.deepcopy(raw)
     if format_of(raw) < 2:
         site_1(out)
+    if format_of(raw) < 3:
+        site_2(out)
     out.setdefault("domus", {})["format"] = FORMAT
     return out
 

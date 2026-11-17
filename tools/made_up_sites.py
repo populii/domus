@@ -1,7 +1,7 @@
 """The made-up sites CI builds with a pull request's base and with its head, so a change to the build can be proved
 without anyone's real property.
 
-    uv run python tools/made_up_sites.py write OUT     # writes OUT/demo, OUT/richer, OUT/abroad and OUT/format1
+    uv run python tools/made_up_sites.py write OUT     # writes OUT/demo, OUT/richer, OUT/abroad, OUT/format1 and OUT/format2
     python tools/made_up_sites.py report DIR           # what moved between DIR/base-<site> and DIR/head-<site>
 
 The sites, all in the sea, so none is a real place:
@@ -18,6 +18,8 @@ The sites, all in the sea, so none is a real place:
            along a frame at an angle to the grid, [front_garden], floor levels relative to each other, and a drain
            drawn from its printed levels only. Every Domus reads it as format 1 did, so it never moves. It stays as
            it is for good: each later format adds a site of its own.
+  format2  The demo as a site in format 2 (Domus 2026.11.29 and before) with what format 3 changed: no [crs] and no
+           credit line, which format 2 took from New Zealand. It stays as it is for good too.
 
 `report` reads what CI leaves in DIR for each side (base and head) and site: the copy it built (`<side>-<site>/`,
 with the model in `viewer/data/`), the build's output (`<side>-<site>.log`) and whether it built
@@ -39,7 +41,7 @@ import tomllib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SITES = ("demo", "richer", "abroad", "format1")
+SITES = ("demo", "richer", "abroad", "format1", "format2")
 TWIN_M = 0.0015         # how far the abroad site's model may be from the demo's: the same site on another grid
 IMAGE_MEAN, IMAGE_MAX = 0.5, 16      # and its pictures: the mean and largest difference in a colour, out of 255
 # The abroad site's grid: the British National Grid, in the Celtic Sea.
@@ -235,6 +237,15 @@ def make_format_1(root):
         lower_at=json.dumps([x0 + 11, y0 + 16.5]), lower_polygon=box(4, 15.5, 18, 17.9)), encoding="utf-8", newline="\n")
 
 
+def make_format_2(root):
+    """The demo, said the way a format 2 site that leaves New Zealand to be assumed says it."""
+    settings = root / "data" / "site.toml"
+    text = re.sub(r"^format = .*$", "format = 2", settings.read_text(encoding="utf-8"), count=1, flags=re.MULTILINE)
+    text = re.sub(r"^attribution = .*\n", "", text, count=1, flags=re.MULTILINE)
+    text = re.sub(r"\n\[crs\]\n(?:\w+ = .*\n)+", "\n", text, count=1)
+    settings.write_text(text, encoding="utf-8", newline="\n")
+
+
 def write(out):
     from domus import demo
 
@@ -246,6 +257,7 @@ def write(out):
     enrich(out / "richer")
     move_abroad(out / "abroad")
     make_format_1(out / "format1")
+    make_format_2(out / "format2")
     print(f"Wrote {', '.join(SITES)} to {out}")
 
 
@@ -383,6 +395,10 @@ def twin(demo, abroad):
 
     ma, mb = read_json(demo / "model.json"), read_json(abroad / "model.json")
     a, b = from_origin(ma), from_origin(mb)
+    for m in (a, b):            # the checklist speaks of each country's own documents: only what it lists, and finds, count
+        for source in m.get("enrich", {}).get("sources", []):
+            for key in ("title", "why", "where", "how"):
+                source.pop(key, None)
     swap = {b[k]: a[k] for k in ("crs", "vertical", "title") if isinstance(b.get(k), str) and b.get(k)}
     drop = ("built", "commit")
     out = [f"model.json{d}" for d in twin_diffs({k: v for k, v in a.items() if k not in drop},

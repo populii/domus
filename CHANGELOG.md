@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Addresses anywhere:** `domus create` and the address box look for an address in New Zealand first, then anywhere in OpenStreetMap. A place outside New Zealand goes on its UTM zone, with OpenStreetMap's buildings round it and its ground from the Copernicus ground model (GLO-30), which covers the world's land on a 30 m grid: the lie of the land, much rougher than LINZ's LiDAR, and no aerial photo. `domus fetch` gets a site's rasters from the source for where it is: LINZ in New Zealand, Copernicus elsewhere.
+- Importers bring a place in (`domus.importers`): New Zealand's, anywhere's, and your own files (`domus new`). Each writes an ordinary site folder, with `[domus] importer` saying which, and the build never calls one.
+- **For site projects:** sites are in format 3. `[crs] epsg`, `[crs] vertical` and `[site] attribution` have no New Zealand defaults any more: a site in format 2 or before that leaves them out gets NZTM2000, NZVD2016 and LINZ's credit line, as it always did, and `domus site upgrade` writes them in. A format 3 site without `[crs] epsg` is refused with a message saying what to add.
+- The "Improve this model" checklist names New Zealand's documents and services (a LIM, LINZ's title search, beforeUdig) only for a site in New Zealand, and says what to look for anywhere else.
+- `domus create ADDRESS PATH` builds into PATH's own `viewer/data`, as `--site` does. In the container it used to build into the mounted site's model, whatever PATH was.
+
 ## 2026.11.29
 
 - **Sites anywhere:** Domus reads each raster on its own grid, the one its file names, so a site's ground model, surface model and photos can come on any grid. A file that names none is taken to be on the site's, and heights in a band that says it's in feet are read in metres. Domus used to take every raster to be on NZTM2000.

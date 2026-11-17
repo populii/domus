@@ -22,7 +22,7 @@ import numpy as np
 import shapely
 from shapely.geometry import Polygon
 
-from . import newsite, publicdata
+from . import importers, newsite, publicdata
 
 STAND_IN_M = 24.0        # side of the stand-in lot when the source has no parcels
 OVERHANG_M = 0.4
@@ -67,16 +67,28 @@ def scaffold(root, found):
         h = STAND_IN_M / 2
         lot = [[x - h, y + h], [x + h, y + h], [x + h, y - h], [x - h, y - h], [x - h, y + h]]
         note = f"{found['source']}. A square round the address: replace it with the real boundary."
-    about = ("Built automatically from public data: " + found["source"] + ". LiDAR and aerial photo from LINZ. "
+    importer = found.get("importer", "nz")
+    rasters = "LiDAR and aerial photo from LINZ" if importer == "nz" else "the ground from the Copernicus 30 m ground model"
+    about = (f"Built automatically from public data: {found['source']}; {rasters}. "
              "A first model, not a survey: the house's walls and roof are estimates.")
-    root = newsite.write_project(root, found["address"].split(",")[0], lot, note, about)
+    more = {} if importer == "nz" else {"vertical": osm_importer().VERTICAL, "attribution": osm_importer().CREDIT}
+    root = newsite.write_project(root, found["address"].split(",")[0], lot, note, about,
+                                 epsg=found.get("epsg", newsite.NZTM), importer=importer, **more)
     (root / "data" / "public-lookup.json").write_text(json.dumps(found, indent=1) + "\n", encoding="utf-8", newline="\n")
     return lot
 
 
+def osm_importer():
+    from .importers import osm
+
+    return osm
+
+
 def fc(name, features):
-    return {"type": "FeatureCollection", "name": name, "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::2193"}},
-            "features": features}
+    from . import crs
+
+    return {"type": "FeatureCollection", "name": name,
+            "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{crs.site_epsg()}"}}, "features": features}
 
 
 def write_json(path, value):
@@ -294,8 +306,11 @@ def draft_trees(site, vegetation):
 
 
 def run_step(root, *args):
-    """A step in its own process: modules read the site's path when imported."""
+    """A step in its own process: modules read the site's path when imported. A site other than the one DOMUS_SITE
+    names builds into its own viewer/data, as with --site, whatever a container's DOMUS_OUTPUT says."""
     env = {**os.environ, "DOMUS_SITE": str(root)}
+    if Path(root).resolve() != Path(os.environ.get("DOMUS_SITE", ".")).resolve():
+        env.pop("DOMUS_OUTPUT", None)
     try:
         subprocess.run([sys.executable, "-m", "domus.create", *args], check=True, env=env)
     except subprocess.CalledProcessError as e:
@@ -315,7 +330,7 @@ def main(argv=None):
         print("Carrying on with the build of this address")
     else:
         try:
-            found = publicdata.lookup(args.address)
+            found = importers.lookup(args.address)
         except publicdata.NotFound as e:
             raise SystemExit(str(e)) from e
         except publicdata.Ambiguous as e:
@@ -331,25 +346,27 @@ def main(argv=None):
 
 def rest():
     """Runs with DOMUS_SITE set: fetch, draft, build."""
-    from . import build, crs, linz
+    from . import build, crs
     from .crs import ROOT
 
     found = json.loads((ROOT / "data" / "public-lookup.json").read_text(encoding="utf-8"))
     lot = json.loads((ROOT / "data" / "site" / "boundary.geojson").read_text(encoding="utf-8"))["features"][0]["geometry"]["coordinates"][0]
-    linz.main()
-    if publicdata.linz_key():
+    importers.fetch()
+    nz = found.get("importer", "nz") == "nz"
+    if nz and publicdata.linz_key():
         from . import title
 
         try:
             title.main([])
         except OSError as e:
             print(f"LINZ's title and easements didn't load ({e}); carrying on without them")
-    from . import points
+    if nz:
+        from . import points
 
-    try:
-        points.main([])
-    except (OSError, SystemExit) as e:
-        print(f"No point cloud ({e}); the roof is fitted to the 1 m surface model")
+        try:
+            points.main([])
+        except (OSError, SystemExit) as e:
+            print(f"No point cloud ({e}); the roof is fitted to the 1 m surface model")
     draft_layers(ROOT, found, lot, found["source"])
     crs.settings.cache_clear()    # the draft added [house]
     build.main()

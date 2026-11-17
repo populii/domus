@@ -48,6 +48,8 @@ def plan(root):
             if changed:
                 docs[path] = doc
                 notes += [f"options/{path.name}: {n}" for n in changed]
+    if fmt < 3:
+        notes += [f"data/site.toml: {n}" for n in formats.site_2(site)]
     if "domus" in site:
         site["domus"]["format"] = formats.FORMAT
     else:

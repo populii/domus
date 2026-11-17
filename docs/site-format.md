@@ -34,16 +34,17 @@ only your own tools read under `[local]`.
 | `[domus]` | | The site folder itself |
 | `domus.format` | `1` | The site folder's format. `domus new` and `domus create` write it; every Domus reads older ones, and `domus site upgrade` writes a site up to its own |
 | `domus.requires` |  | The oldest Domus that builds the site, such as ">=2026.12.0" |
+| `domus.importer` |  | Where the place came in from: nz (LINZ's data), osm (OpenStreetMap's and the Copernicus ground model) or manual (its own boundary and rasters) |
 | `[site]` | | The viewer's text |
 | `site.title` | `"Site model"` | The site's name |
 | `site.heading` | worked out | The viewer's heading: the title, unless given |
 | `site.subtitle` | `""` | A line under the heading |
 | `site.about` | `""` | A paragraph about the site |
-| `site.attribution` | `"Ground model, surface model and aerial photo: LINZ and its data partners (CC BY 4.0)."` | Where the data came from, shown in the viewer |
+| `site.attribution` | `""` | Where the data came from, shown in the viewer |
 | `[crs]` | | The site's grid and heights |
-| `crs.epsg` | `2193` | The grid's EPSG code |
+| `crs.epsg` | required | The grid's EPSG code, in metres, such as 2193 for NZTM2000 |
 | `crs.label` | worked out | The grid's name for people: its own name and EPSG code, unless given |
-| `crs.vertical` | `"NZVD2016"` | The height datum's name |
+| `crs.vertical` | `""` | The height datum's name, as the viewer shows it: none named unless given |
 | `[boundary]` | | The lot |
 | `boundary.main` | worked out | The id of the feature in boundary.geojson that is the lot, the first unless given; the others are neighbours, rights of way and the like |
 | `[model]` | | The area modelled |

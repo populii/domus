@@ -29,7 +29,9 @@ uv run domus --site site fetch
 This finds the newest LINZ survey covering your extent, reads just your patch and records what it used in
 `data/linz-sources.json`. If LINZ has no 1 m LiDAR for your area, it stops and says so.
 
-LINZ covers New Zealand only. Anywhere, you can bring your own GeoTIFFs instead: `data/lidar/dem.tif` (the ground
+LINZ covers New Zealand only. Elsewhere `domus fetch` gets the Copernicus ground model instead, which covers the
+world's land on a 30 m grid: enough for the lie of the land, not for a wall's footing. Anywhere, you can bring your own
+GeoTIFFs instead: `data/lidar/dem.tif` (the ground
 model, required), `data/lidar/dsm.tif` (the surface model: roofs and trees) and `data/aerial/aerial.tif` (a photo),
 both optional. They can be on any grid, as each file's own header says: Domus reads each one on its own grid. One
 that names no grid is taken to be on the site's. Heights in a band that says it's in feet are read in metres. Name

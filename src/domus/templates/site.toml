@@ -2,6 +2,7 @@
 
 [domus]
 format = {{format}}          # this site folder's format: `domus site upgrade` moves an older one on
+importer = {{importer}}          # where the place came in from: nz, osm, or manual (your own boundary and rasters)
 
 [site]
 title = {{name}}

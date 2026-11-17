@@ -32,10 +32,12 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 
 1. **The build is a pure function of the site folder.** The same folder, with the same version of Domus, builds the
    same model on any machine.
-2. **Places come in through public-data sources that write an ordinary site folder.** Today that's New Zealand's
-   LINZ, with OpenStreetMap when there's no key. Your own boundary and rasters work too, anywhere: a site is on a
-   grid in metres, each raster is read on its own grid, and the build works from the site's origin, so the same
-   site on any grid builds the same model.
+2. **Places come in through importers that write an ordinary site folder** (`domus.importers`): New Zealand's
+   (LINZ, with OpenStreetMap when there's no key), anywhere's (OpenStreetMap and the Copernicus ground model), and your
+   own boundary and rasters (`domus new`). The site's grid, its heights' datum and its credit line are data in the
+   site, not defaults in common. A site is on a grid in metres, each raster is read on its own grid, and the build
+   works from the site's origin, so the same site on any grid builds the same model. The build never calls an
+   importer.
 3. **A site says its format.** `[domus] format` in `data/site.toml` lets later versions of Domus read older sites:
    each migrates an older site in memory, for good, and `domus site upgrade` writes the migration into its files.
 4. **Nothing about one property is built into common:** no names, coordinates, documents or one house's looks.

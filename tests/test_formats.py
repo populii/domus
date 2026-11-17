@@ -93,3 +93,34 @@ def test_upgrading_writes_what_was_read_and_keeps_the_comments(old_site, tmp_pat
 
 def test_a_new_site_is_in_this_domus_s_format(site):
     assert formats.format_of(read(site / "data" / "site.toml")) == formats.FORMAT
+
+
+def test_a_format_2_site_keeps_what_it_took_from_new_zealand(old_site, tmp_path, capsys):
+    import shutil
+
+    from domus.project.formats import LINZ_CREDIT
+
+    two = old_site.parent / "format2"
+    raw = read(two / "data" / "site.toml")
+    assert formats.format_of(raw) == 2 and "crs" not in raw
+    site = formats.site(raw)
+    assert site["crs"] == {"epsg": 2193, "vertical": "NZVD2016"} and site["site"]["attribution"] == LINZ_CREDIT
+    # A site that says them keeps its own.
+    abroad = formats.site({"domus": {"format": 2}, "crs": {"epsg": 27700, "vertical": ""}, "site": {"attribution": ""}})
+    assert abroad["crs"] == {"epsg": 27700, "vertical": ""} and abroad["site"]["attribution"] == ""
+    # Upgraded, it says them in its own file.
+    copy = tmp_path / "two"
+    shutil.copytree(two, copy, ignore=shutil.ignore_patterns("viewer", ".domus"))
+    assert upgrade.upgrade(copy) == 0
+    assert "[crs] epsg = 2193" in capsys.readouterr().out
+    new = read(copy / "data" / "site.toml")
+    assert new["crs"]["epsg"] == 2193 and new["site"]["attribution"] == LINZ_CREDIT and new == formats.site(raw)
+
+
+def test_a_format_3_site_names_its_grid(site, monkeypatch):
+    from domus import crs
+
+    assert crs.site_epsg() == 2193
+    monkeypatch.setattr(crs, "settings", lambda: {"crs": {}})
+    with pytest.raises(DomusError, match=r"\[crs\] epsg is missing"):
+        crs.site_epsg()

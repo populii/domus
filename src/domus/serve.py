@@ -104,8 +104,9 @@ EMPTY = PAGE_STYLE + """<main><section><!--back--><h1>No model built yet</h1>
 <p>This site project has no built model. Run <code>domus build</code>, then reload.</p></section></main>"""
 NEW_SITE = PAGE_STYLE + """<main><section><!--back-->
 <h1>Build a 3D model of your place</h1>
-<p>Enter a New Zealand address. Domus finds its boundary and buildings, fetches LINZ's LiDAR and aerial photo, and builds the
-model. It takes a few minutes.</p>
+<p>Enter an address. In New Zealand Domus finds its boundary and buildings and fetches LINZ's LiDAR and aerial photo;
+anywhere else it takes OpenStreetMap's buildings and a 30 m ground model, a rougher start. Then it builds the model,
+which takes a few minutes.</p>
 <form id="f"><label for="a">Address</label>
 <input id="a" required maxlength="200" autocomplete="street-address">
 <div class="row"><button class="go">Build the model</button> <a href="./demo">or look at a made-up demo</a></div></form>
@@ -149,7 +150,7 @@ SITES_PAGE = PAGE_STYLE + """<main><section><h1>Domus</h1><p class="state">3D si
 @SITES@
 </section>
 <section><h2>Build a new one</h2>
-<p>Enter a New Zealand address. Domus finds its boundary and buildings, fetches LINZ's LiDAR and aerial photo, and builds the model. It takes a few minutes.</p>
+<p>Enter an address. In New Zealand Domus finds its boundary and buildings and fetches LINZ's LiDAR and aerial photo; anywhere else it takes OpenStreetMap's buildings and a 30 m ground model, a rougher start. Then it builds the model, which takes a few minutes.</p>
 <form id="f"><label for="a">Address</label>
 <input id="a" required maxlength="200" autocomplete="street-address">
 <div class="row"><button class="go">Build the model</button> <a href="demo">or look at a made-up demo</a></div></form>

@@ -21,7 +21,7 @@ Commands need the site named: `docker exec domus domus --site /sites/<name> buil
 |---|---|---|
 | `DOMUS_PORT` | `8765` | Port to serve on |
 | `DOMUS_TRUST_PROXY` | `0` | `1` takes the user's name from `X-Forwarded-User`, for labelling sketches. Set it only behind a login proxy that sets that header itself |
-| `DOMUS_LINZ_KEY` | unset | Free LINZ Data Service key, for real boundaries and buildings. Without it, address lookups go to OpenStreetMap |
+| `DOMUS_LINZ_KEY` | unset | Free LINZ Data Service key, for real boundaries and buildings in New Zealand. Without it, and for addresses elsewhere, address lookups go to OpenStreetMap |
 | `DOMUS_SITES` | unset | A folder of sites: one container serves them all, as below |
 | `DOMUS_ALLOWED_HOSTS` | unset | Comma-separated host names the server answers to, such as `domus.example.com`. IP addresses and localhost always work; any other name gets a 403 |
 | `DOMUS_MAX_SITES` | `100` | How many sites the address box can make on a many-site server |

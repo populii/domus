@@ -482,7 +482,7 @@ def option_layers(opt, res, frame, extent, cfg, existing_walls, lawns=(), existi
     levels = np.arange(np.floor(np.nanmin(H)), np.ceil(np.nanmax(H)) + 0.01, 0.25)
     cs = terrain.contours(E, N, H, levels)
     segs = [[(x0, y0, lv + 0.03), (x1, y1, lv + 0.03)] for lv in levels for x0, y0, x1, y1 in cs[lv]]
-    out.append({**lines_json(segs, frame, "#3d3a33", f"{opt['short']}: contours 0.25 m{datum_note(cfg.get('crs', {}).get('vertical', 'NZVD2016'))}", "z"),
+    out.append({**lines_json(segs, frame, "#3d3a33", f"{opt['short']}: contours 0.25 m{datum_note(cfg.get('crs', {}).get('vertical', ''))}", "z"),
                 "id": f"option-{oid}-contours", "role": "contours", **tag,
                 "labels": [{"text": f"{lv:.0f}", "at": r(frame.xyz([[*cs[lv][len(cs[lv]) // 2][:2], lv + 0.1]])[0], 2)}
                            for lv in levels if abs(lv - round(lv)) < 1e-6 and cs.get(lv)]})
@@ -951,7 +951,7 @@ def main():
     wall_feats = geojson.read_optional(ROOT / "data" / "site" / "walls-existing.geojson")
     b = SimpleNamespace(cfg=cfg, extent=extent, frame=Frame(origin), dem=dem, origin=origin,
                         ground=lambda e, n: dem.sample(np.atleast_1d(e), np.atleast_1d(n)),
-                        labels=cfg.get("labels", {}), vertical=cfg.get("crs", {}).get("vertical", "NZVD2016"),
+                        labels=cfg.get("labels", {}), vertical=cfg.get("crs", {}).get("vertical", ""),
                         wall_defs=[walls.from_feature(f) for f in wall_feats], layers=[], summary={})
     add_ground(b)
     add_contours(b)
@@ -1018,7 +1018,7 @@ def write_model(b):
         "summary": summary,
         "lot": {"area_m2": round(float(abs(np.dot(lot_ring[:-1, 0], np.roll(lot_ring[:-1, 1], -1))
                                           - np.dot(lot_ring[:-1, 1], np.roll(lot_ring[:-1, 0], -1))) / 2), 1)},
-        "attribution": site.get("attribution", "Ground model, surface model and aerial photo: LINZ and its data partners (CC BY 4.0)."),
+        "attribution": site.get("attribution", ""),
         "about": site.get("about", ""),
         "views": cfg.get("views", {}),
         "snap": snap_targets(b.origin),

@@ -2,7 +2,8 @@
 
 LINZ holds the authoritative address, parcel and building layers for all of New Zealand, with a free API key from
 https://data.linz.govt.nz in DOMUS_LINZ_KEY. Without one this falls back to OpenStreetMap, which needs no key but has no
-parcels and patchier buildings, and which means the address goes to OpenStreetMap's public servers.
+parcels and patchier buildings, and which means the address goes to OpenStreetMap's public servers. OpenStreetMap also
+finds an address anywhere else (domus.importers).
 
 Every call here goes out to the internet, so only `domus create` and the web app's address box make them.
 """
@@ -142,10 +143,12 @@ def from_linz(address, key):
             "buildings": buildings, "source": "LINZ NZ Addresses, NZ Primary Parcels and NZ Building Outlines (CC BY 4.0)"}
 
 
-def overpass_buildings(x, y, reach=50.0):
-    """OpenStreetMap's building outlines within `reach` metres, on NZTM, and the one the point falls in first."""
-    lon0, lat0 = TO_LONLAT.transform(x - reach, y - reach)
-    lon1, lat1 = TO_LONLAT.transform(x + reach, y + reach)
+def overpass_buildings(x, y, reach=50.0, epsg=2193):
+    """OpenStreetMap's building outlines within `reach` metres of (x, y) on the grid `epsg`, on that grid."""
+    to_lonlat = Transformer.from_crs(epsg, 4326, always_xy=True)
+    to_site = Transformer.from_crs(4326, epsg, always_xy=True)
+    lon0, lat0 = to_lonlat.transform(x - reach, y - reach)
+    lon1, lat1 = to_lonlat.transform(x + reach, y + reach)
     q = f'[out:json][timeout:25];way["building"]({lat0},{lon0},{lat1},{lon1});out geom;'
     # Overpass's public servers are often busy: try the next, after a pause.
     for k, server in enumerate(OVERPASS):
@@ -158,19 +161,26 @@ def overpass_buildings(x, y, reach=50.0):
             time.sleep(5)
     out = []
     for el in data.get("elements", []):
-        pts = [TO_NZTM.transform(p["lon"], p["lat"]) for p in el.get("geometry", [])]
+        pts = [to_site.transform(p["lon"], p["lat"]) for p in el.get("geometry", [])]
         if len(pts) >= 4 and pts[0] == pts[-1]:
             out.append([[round(a, 3), round(b, 3)] for a, b in pts])
     return out
 
 
-def from_osm(address):
-    """The same from OpenStreetMap. It has no parcels, so `parcel` is None."""
-    q = urllib.parse.urlencode({"q": address, "format": "jsonv2", "limit": 5, "countrycodes": "nz"})
-    rows = _get(f"{NOMINATIM}?{q}")
+def from_osm(address, countrycodes="nz"):
+    """The same from OpenStreetMap, in New Zealand, or anywhere with `countrycodes` None: on NZTM2000 in New Zealand
+    and on the UTM zone elsewhere, which `epsg` names, with the address's `lonlat`. It has no parcels, so `parcel` is
+    None."""
+    from .newsite import grid_for
+
+    q = {"q": address, "format": "jsonv2", "limit": 5, **({"countrycodes": countrycodes} if countrycodes else {})}
+    rows = _get(f"{NOMINATIM}?{urllib.parse.urlencode(q)}")
     if not rows:
         raise NotFound(f"OpenStreetMap has no address like {address!r}.")
-    points = [TO_NZTM.transform(float(r["lon"]), float(r["lat"])) for r in rows]
+    lon, lat = float(rows[0]["lon"]), float(rows[0]["lat"])
+    epsg = grid_for(lon, lat)
+    to_site = Transformer.from_crs(4326, epsg, always_xy=True)
+    points = [to_site.transform(float(r["lon"]), float(r["lat"])) for r in rows]
     x, y = points[0]
     # It can answer with several records of one place; records far apart are different places.
     far = [r["display_name"] for r, (a, b) in zip(rows, points) if (a - x) ** 2 + (b - y) ** 2 > SAME_PLACE_M ** 2]
@@ -178,12 +188,12 @@ def from_osm(address):
         raise Ambiguous(address, [rows[0]["display_name"], *far])
     time.sleep(1)    # OpenStreetMap's usage policy: one request a second
     try:
-        buildings = overpass_buildings(x, y)
+        buildings = overpass_buildings(x, y, epsg=epsg)
     except OSError as e:
         print(f"OpenStreetMap's buildings didn't load ({e}); carrying on without them")
         buildings = []
     return {"address": rows[0].get("display_name", address), "point": [round(x, 3), round(y, 3)], "parcel": None,
-            "parcel_name": None, "buildings": buildings,
+            "parcel_name": None, "buildings": buildings, "epsg": epsg, "lonlat": [lon, lat],
             "source": "OpenStreetMap contributors (ODbL 1.0); the lot is a stand-in, as it has no parcels"}
 
 

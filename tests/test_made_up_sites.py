@@ -49,6 +49,12 @@ def test_the_abroad_site_is_the_demo_on_another_grid(sites):
         assert dem.bounds.left - b[0] == pytest.approx(nz.bounds.left - a[0])
 
 
+def test_the_format_2_site_leaves_new_zealand_to_be_assumed(sites):
+    s, demo = settings(sites / "format2"), settings(sites / "demo")
+    assert s["domus"]["format"] == 2 and "crs" not in s and "attribution" not in s["site"]
+    assert {k: v for k, v in s.items() if k not in ("domus", "crs", "site")} == {k: v for k, v in demo.items() if k not in ("domus", "crs", "site")}
+
+
 def test_it_wont_write_over_a_folder_with_something_in_it(tmp_path):
     (tmp_path / "keep.txt").write_text("mine", encoding="utf-8")
     with pytest.raises(SystemExit, match="isn't empty"):

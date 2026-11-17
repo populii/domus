@@ -2,7 +2,8 @@
 
 # Domus
 
-**Type in a New Zealand address. Get a 3D model of the place in your browser.**
+**Type in an address. Get a 3D model of the place in your browser.** New Zealand gets the best of it, from LINZ's open
+data; anywhere else gets a rougher start.
 
 Domus grew out of a very ordinary problem: a sloping section, a tired retaining wall, and no good way to picture what could
 replace it. Drawings are expensive, and it's hard to argue about a wall you can't see. It turns out New Zealand publishes a
@@ -75,6 +76,11 @@ uv run domus --site site serve
 ```
 
 If that address exists in more than one town, Domus asks which you meant. Adding the suburb or town skips the question.
+
+Outside New Zealand, Domus finds the address and the buildings round it in OpenStreetMap, puts the site on its UTM zone,
+and fetches the ground from the Copernicus ground model, which covers the world's land at 30 m. That gives you the lie of
+the land rather than the detail LINZ's 1 m LiDAR does, and the lot is a stand-in square until you draw the real one.
+Bring your own ground model and photo if you have them: [docs/new-site.md](docs/new-site.md) says how.
 
 ### Get a free LINZ key first
 
@@ -183,14 +189,17 @@ Pretty much nothing, and only when you ask:
 
 - The viewer's libraries are bundled, so looking at a model makes no outside calls.
 - `domus create`, `domus fetch`, `domus marks` and `domus title` download from LINZ's public data.
-- `domus create` sends the address you typed to LINZ, or to OpenStreetMap without a key.
+- `domus create` sends the address you typed to LINZ, or to OpenStreetMap without a key or outside New Zealand.
+- Outside New Zealand, `domus create` and `domus fetch` read the Copernicus ground model's open copy on AWS, which tells
+  AWS roughly where the site is.
 - `domus create` and `domus points` ask OpenTopography for the point cloud tiles over the site, which tells it roughly where the site is.
 
 ## What it can't do yet
 
 Being honest about the rough edges:
 
-- New Zealand only, since it leans on LINZ data. Other coordinate systems are configured per site, but there's no fetching elsewhere.
+- Outside New Zealand the public data is much rougher: a 30 m ground model, OpenStreetMap's buildings, no parcels and no
+  aerial photo. Your own LiDAR and photos, on any grid, make the model as good as New Zealand's.
 - Drafted houses are simple: a hip, gable or skillion roof fitted to the LiDAR, plain walls, and neighbours as flat-topped blocks.
 - It knows when your documents are there, but doesn't read them for you.
 - Council data such as drains, hazards and zoning isn't fetched yet.

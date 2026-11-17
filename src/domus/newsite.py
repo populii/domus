@@ -26,13 +26,12 @@ from pyproj.database import query_utm_crs_info
 
 from .errors import DomusError
 from .project import formats
+from .project.formats import LINZ_CREDIT, NZ_VERTICAL
 
 TEMPLATES = Path(__file__).resolve().parent / "templates"
 NZTM = 2193
 MARGIN_M = 15.0
-NZ_VERTICAL = "NZVD2016"
 LABELS = {NZTM: "NZGD2000 / New Zealand Transverse Mercator (EPSG:2193)"}     # as sites have always named it
-LINZ_CREDIT = "Ground model, surface model and aerial photo: LINZ and its data partners (CC BY 4.0)."
 
 
 def in_metres(crs):
@@ -122,9 +121,10 @@ def toml_str(s):
     return json.dumps(s, ensure_ascii=False)
 
 
-def write_project(path, name, ring, note="", about="", epsg=NZTM):
-    """A new site project at `path`, its lot `ring` on the grid EPSG `epsg`. A site in New Zealand gets the LINZ
-    data's height datum and credit line; one elsewhere leaves them for its own data to fill in."""
+def write_project(path, name, ring, note="", about="", epsg=NZTM, importer="manual", vertical=None, attribution=None):
+    """A new site project at `path`, its lot `ring` on the grid EPSG `epsg`, brought in by `importer`. A site in New
+    Zealand gets the LINZ data's height datum and credit line, unless `vertical` and `attribution` say otherwise; one
+    elsewhere leaves them for its own data to fill in."""
     root = Path(path)
     if (root / "data" / "site.toml").exists():
         raise DomusError(f"{root} already has a site project")
@@ -137,9 +137,10 @@ def write_project(path, name, ring, note="", about="", epsg=NZTM):
     (root / "data" / "site.toml").write_text(
         (TEMPLATES / "site.toml").read_text(encoding="utf-8")
         .replace("{{name}}", toml_str(name)).replace("{{extent}}", json.dumps(ext)).replace("{{origin}}", json.dumps(origin))
-        .replace("{{about}}", toml_str(about)).replace("{{format}}", str(formats.FORMAT))
-        .replace("{{attribution}}", toml_str(LINZ_CREDIT if nz else "")).replace("{{epsg}}", str(epsg))
-        .replace("{{crs_label}}", toml_str(LABELS.get(epsg, f"{grid.name} (EPSG:{epsg})"))).replace("{{vertical}}", toml_str(NZ_VERTICAL if nz else "")),
+        .replace("{{about}}", toml_str(about)).replace("{{format}}", str(formats.FORMAT)).replace("{{importer}}", toml_str(importer))
+        .replace("{{attribution}}", toml_str(attribution if attribution is not None else LINZ_CREDIT if nz else ""))
+        .replace("{{epsg}}", str(epsg)).replace("{{crs_label}}", toml_str(LABELS.get(epsg, f"{grid.name} (EPSG:{epsg})")))
+        .replace("{{vertical}}", toml_str(vertical if vertical is not None else NZ_VERTICAL if nz else "")),
         encoding="utf-8", newline="\n")
     (root / "data" / "site" / "boundary.geojson").write_text(json.dumps({
         "type": "FeatureCollection", "name": "boundary",

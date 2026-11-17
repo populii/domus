@@ -3,8 +3,8 @@
 A site project is a folder holding data/site.toml, data/site/*.geojson, options/ and so on. Its
 path comes from the DOMUS_SITE environment variable, or the current folder.
 
-Site data is on the grid named by [crs] epsg in data/site.toml, heights on [crs] vertical.
-LINZ LiDAR and aerial photos: NZTM2000 (EPSG:2193), heights NZVD2016.
+Site data is on the grid named by [crs] epsg in data/site.toml, heights on [crs] vertical. Rasters are read on
+their own grids (domus.raster).
 A site can list other height datums its documents use: [datums.<key>] label, offset_m, where
 their level = the model's height + offset_m.
 """
@@ -42,7 +42,14 @@ def site_format():
 
 
 def site_epsg():
-    return settings().get("crs", {}).get("epsg", NZTM_EPSG)
+    """The site's grid, [crs] epsg. Since site format 3 it has no default: older sites get NZTM2000 as they did."""
+    epsg = settings().get("crs", {}).get("epsg")
+    if epsg is None:
+        from .errors import DomusError
+
+        raise DomusError("data/site.toml: [crs] epsg is missing. Give the site's grid as its EPSG code, such as 2193 "
+                         "for NZTM2000 or 27700 for the British National Grid")
+    return int(epsg)
 
 
 def label():
