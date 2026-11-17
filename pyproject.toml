@@ -75,7 +75,7 @@ forbidden_modules = ["numpy", "scipy", "shapely", "rasterio", "pyproj", "PIL", "
 name = "The model's pure parts read no site and know nothing of the app"
 type = "forbidden"
 source_modules = ["domus.house", "domus.house_texture", "domus.mesh", "domus.wall_looks", "domus.walls", "domus.features",
-                  "domus.drains", "domus.tin", "domus.vegetation"]
+                  "domus.drains", "domus.tin", "domus.vegetation", "domus.scheme"]
 forbidden_modules = ["domus.crs", "domus.api", "domus.build", "domus.cli", "domus.serve", "domus.create", "domus.design",
                      "domus.options", "domus.project"]
 
