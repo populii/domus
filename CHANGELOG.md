@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.38
 
 - **For site projects:** Domus's package is laid out by what each part does: `geo/` (grids, rasters, GeoJSON, meshes,
   fits), `model/` (the ground, house, walls, features, plants, drains), `options/` (the wall options), `build/`,
