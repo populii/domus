@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>domus</Name>
+  <Repository>ghcr.io/populii/domus:latest</Repository>
+  <Registry>https://github.com/populii/domus/pkgs/container/domus</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Project>https://github.com/populii/domus</Project>
+  <Overview>3D site models built from LINZ LiDAR, for comparing retaining wall options in the browser. Asks for an address when the Site folder is empty, then builds the model from public data. There is no login in the app: keep it off the internet, or put a login proxy in front. See docs/self-hosting.md.</Overview>
+  <Category>Tools:Utilities</Category>
+  <WebUI>http://[IP]:[PORT:8765]/</WebUI>
+  <Icon>https://cdn.jsdelivr.net/gh/populii/domus@main/src/domus/viewer/icon.png</Icon>
+  <ExtraParams>--restart=unless-stopped --read-only --tmpfs /tmp --security-opt=no-new-privileges --cap-drop=ALL --memory=8g</ExtraParams>
+  <Config Name="Web port" Target="8765" Default="8765" Mode="tcp" Description="The viewer." Type="Port" Display="always" Required="true" Mask="false">8765</Config>
+  <Config Name="Site" Target="/site" Default="/mnt/cache/appdata/domus/site" Mode="rw" Description="The site project: data, options, the built model and saved sketches. Sketches are SQLite, so use a direct pool path rather than /mnt/user. Owned by nobody:users." Type="Path" Display="always" Required="true" Mask="false">/mnt/cache/appdata/domus/site</Config>
+  <Config Name="LINZ API key" Target="DOMUS_LINZ_KEY" Default="" Mode="" Description="Free key from data.linz.govt.nz, for real boundaries and buildings. Without it, addresses go to OpenStreetMap and the lot is a stand-in square." Type="Variable" Display="always" Required="false" Mask="true"></Config>
+  <Config Name="Allowed host names" Target="DOMUS_ALLOWED_HOSTS" Default="" Mode="" Description="Comma-separated names to answer to besides IP addresses and localhost, such as your login proxy's." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Trust login proxy" Target="DOMUS_TRUST_PROXY" Default="0" Mode="" Description="1 to take the user's name from a login proxy's X-Forwarded-User header, for labelling sketches. Leave 0 without a proxy." Type="Variable" Display="advanced" Required="false" Mask="false">0</Config>
+</Container>

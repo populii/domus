@@ -1,0 +1,367 @@
+<title>Domus scan</title>
+<style>
+html, body { height: 100%; background: #101418; color: #f4f6f3; font: 15px system-ui, sans-serif; overscroll-behavior: none; }
+#start { max-width: 34rem; margin: 0 auto; padding: 1.2rem 1rem; line-height: 1.45; }
+#start h1 { font-size: 1.4rem; margin: 0 0 .5rem; }
+#start ol { padding-left: 1.2rem; }
+button { font: inherit; padding: .7rem 1rem; border-radius: 6px; border: 1px solid #5d6871; background: #27313a; color: inherit; }
+button.go { background: #2a7de1; border-color: #2a7de1; font-weight: 600; }
+#stage { position: fixed; inset: 0; display: none; background: #000; }
+#stage video, #stage canvas.fill { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#hud { position: absolute; left: 0; right: 0; bottom: 0; padding: .6rem .8rem calc(.6rem + env(safe-area-inset-bottom)); background: rgba(10, 14, 18, .78); }
+#stop { font-size: 14px; line-height: 1.35; min-height: 2.6em; }
+#row { display: flex; gap: .5rem; margin-top: .5rem; align-items: center; flex-wrap: wrap; }
+#warn { position: absolute; top: calc(.6rem + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); background: #b3261e; padding: .35rem .7rem; border-radius: 6px; font-weight: 600; display: none; }
+#map { position: absolute; top: calc(.6rem + env(safe-area-inset-top)); right: .6rem; width: 112px; height: 112px; background: rgba(10, 14, 18, .7); border-radius: 6px; }
+#pct { font-variant-numeric: tabular-nums; }
+#result { white-space: pre-wrap; }
+</style>
+
+<div id="start">
+  <h1>Scan this site</h1>
+  <p id="intro">Walk the route with your phone. Dots show where to point it next, and they fill in as you cover them. The video goes straight into this site, and with AR tracking it lands in the model by itself.</p>
+  <ol>
+    <li>Keep to land you're allowed on.</li>
+    <li>Hold the phone steady, and turn and walk slowly.</li>
+    <li>Point at walls, steps, the foot of banks and the ground under trees.</li>
+  </ol>
+  <p id="problem" role="alert"></p>
+  <p><button class="go" id="basic">Start scanning</button></p>
+  <p><button id="ar" hidden>Start with AR tracking</button></p>
+  <p id="arNote" hidden style="font-size:13px;opacity:.8">AR tracks where you walk, so targets pin to real places and the map shows the gaps. Stand at stop 1, face along the pink line's first leg, then start.</p>
+  <p id="result" role="status"></p>
+  <p><a href="./" style="color:#8cc0ff">Back to the model</a></p>
+</div>
+
+<div id="stage">
+  <video id="cam" playsinline muted></video>
+  <canvas id="overlay" class="fill"></canvas>
+  <div id="warn" role="alert"></div>
+  <canvas id="map" width="224" height="224"></canvas>
+  <div id="hud">
+    <div id="stop"></div>
+    <div id="row">
+      <button id="next">Next stop</button>
+      <button class="go" id="finish">Finish and upload</button>
+      <span id="pct"></span>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js" } }
+</script>
+<script type="module">
+import { createCoverage, angleDelta, buildRoute, sharpness, speedWarning, gapShare, pinToWorld } from "./scan-core.js";
+
+const $ = (id) => document.getElementById(id);
+const say = (t) => { $("result").textContent = t; };
+const STAMP = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
+let model, route, coverage, stopIndex = 0, recorder, chunks = [], heading = null, pitch = 0, rate = 0, sharp = null;
+let track = [], poses = [], running = false, session = null, recStarted = null, focalPx = null;
+
+async function load() {
+  if (!isSecureContext) $("problem").textContent = "Phones only allow the camera on https pages. Open this page at your https address.";
+  try {
+    model = await (await fetch("data/model.json")).json();
+  } catch { $("problem").textContent = "No model to scan yet: build one first."; $("basic").disabled = true; return; }
+  route = buildRoute(model);
+  if (!route) { $("intro").textContent += " This site has no suggested route, so walk it as you see fit."; route = { stops: [], path: [] }; }
+  if (navigator.xr && await navigator.xr.isSessionSupported("immersive-ar").catch(() => false)) {
+    $("ar").hidden = false;
+    $("arNote").hidden = false;
+  }
+}
+
+function showStop() {
+  const s = route.stops[stopIndex];
+  $("stop").textContent = s ? `${s.n}. ${s.text}` : "Keep going, then finish when you've covered what matters.";
+  $("next").hidden = stopIndex >= route.stops.length - 1;
+  coverage = createCoverage(heading ?? 0);
+}
+
+function warn(text) {
+  $("warn").textContent = text || "";
+  $("warn").style.display = text ? "block" : "none";
+}
+
+function chooseType() {
+  return ["video/mp4", "video/webm;codecs=vp9", "video/webm"].find((t) => window.MediaRecorder?.isTypeSupported(t)) || "";
+}
+
+function startRecording(stream) {
+  const mimeType = chooseType();
+  recorder = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 6_000_000 });
+  chunks = [];
+  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  recorder.start(1000);
+}
+
+async function upload() {
+  say("Uploading. Keep this page open.");
+  if (recorder && recorder.state !== "inactive") {
+    await new Promise((res) => { recorder.onstop = res; recorder.stop(); });
+  }
+  if (!chunks.length) { say("Nothing was recorded, so there's nothing to upload."); return; }
+  const blob = new Blob(chunks, { type: recorder.mimeType || "video/webm" });
+  try {
+    const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+    let r = await fetch(`api/scan/${STAMP}.${ext}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: blob });
+    if (!r.ok) throw new Error((await r.json()).error);
+    const name = (await r.json()).file;
+    if (poses.length) {
+      r = await fetch(`api/scan/${STAMP}-poses.json`, { method: "POST", headers: { "Content-Type": "application/octet-stream" },
+        body: JSON.stringify({ started: recStarted, focal_px: focalPx, frames: poses }) });
+      if (!r.ok) throw new Error((await r.json()).error);
+    }
+    say(`Saved ${Math.round(blob.size / 1e6)} MB. Processing it now: you can close this page, and this can take a while.`);
+    chunks = [];
+    await fetch("api/scan-job", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ file: name }) });
+    follow();
+  } catch (e) {
+    say(`The upload didn't finish (${e.message}). Stay on this page and press the button to try again.`);
+    $("basic").textContent = "Try the upload again";
+    $("basic").onclick = upload;
+  }
+}
+
+async function follow() {
+  const j = await (await fetch("api/scan-job")).json();
+  say(j.log || "Starting.");
+  if (j.state === "running") setTimeout(follow, 5000);
+  else if (j.state === "failed") say(`That stopped. The last lines say why:\n${j.log}`);
+}
+
+function drawMap(pos) {
+  const c = $("map"), g = c.getContext("2d");
+  g.clearRect(0, 0, c.width, c.height);
+  const pts = route.path;
+  if (!pts.length) return;
+  const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  const k = 196 / Math.max(x1 - x0, z1 - z0, 1), P = (p) => [14 + (p[0] - x0) * k, 14 + (p[1] - z0) * k];
+  g.lineWidth = 3;
+  g.strokeStyle = "#ff3d9a";
+  g.beginPath();
+  pts.forEach((p, i) => g[i ? "lineTo" : "moveTo"](...P(p)));
+  g.stroke();
+  if (track.length) {
+    g.strokeStyle = "#57e389";
+    g.beginPath();
+    track.forEach((p, i) => g[i ? "lineTo" : "moveTo"](...P(p)));
+    g.stroke();
+    const [a, b] = P(pos || track[track.length - 1]);
+    g.fillStyle = "#fff";
+    g.beginPath();
+    g.arc(a, b, 6, 0, 7);
+    g.fill();
+    $("pct").textContent = `${Math.round(100 * (1 - gapShare(pts, track)))}% of the route`;
+  }
+}
+
+// ---- without AR: the compass and tilt sensors place the dots
+function onOrientation(e) {
+  const h = e.webkitCompassHeading ?? (e.alpha != null ? 360 - e.alpha : null);
+  if (h != null) heading = h;
+  if (e.beta != null) pitch = e.beta - 90;
+}
+function onMotion(e) {
+  const r = e.rotationRate;
+  if (r) rate = Math.hypot(r.alpha || 0, r.beta || 0, r.gamma || 0);
+}
+
+function drawDots() {
+  if (!running || session) return;
+  const c = $("overlay"), g = c.getContext("2d");
+  c.width = innerWidth;
+  c.height = innerHeight;
+  const hfov = 60, deg = c.width / hfov;
+  if (heading != null) coverage.look(heading, pitch, rate);
+  for (const t of coverage.targets) {
+    const x = c.width / 2 + angleDelta(t.yaw, heading ?? 0) * deg, y = c.height / 2 - (t.pitch - pitch) * deg;
+    if (x < -30 || x > c.width + 30 || y < -30 || y > c.height + 30) continue;
+    g.beginPath();
+    g.arc(x, y, 18, 0, 7);
+    g.lineWidth = 4;
+    g.strokeStyle = t.done ? "#57e389" : "#fff";
+    if (t.done) { g.fillStyle = "rgba(87, 227, 137, .45)"; g.fill(); }
+    g.stroke();
+  }
+  g.strokeStyle = "#ffcf33";
+  g.lineWidth = 3;
+  g.strokeRect(c.width / 2 - 14, c.height / 2 - 14, 28, 28);
+  if (coverage.next() && heading != null) {
+    const d = angleDelta(coverage.next().yaw, heading);
+    if (Math.abs(d) > hfov / 2) {
+      g.fillStyle = "#fff";
+      g.font = "600 34px system-ui";
+      g.textAlign = "center";
+      g.fillText(d > 0 ? "→" : "←", c.width / 2 + (d > 0 ? 110 : -110), c.height / 2 + 12);
+    }
+  }
+  const done = coverage.targets.filter((t) => t.done).length;
+  $("pct").textContent = `${done} of ${coverage.targets.length} here`;
+  warn(speedWarning(rate, sharp));
+  requestAnimationFrame(drawDots);
+}
+
+function sampleSharpness() {
+  const v = $("cam");
+  if (!running || session || !v.videoWidth) { if (running && !session) setTimeout(sampleSharpness, 500); return; }
+  const c = document.createElement("canvas");
+  c.width = 160;
+  c.height = 90;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.drawImage(v, 0, 0, 160, 90);
+  sharp = sharpness(g.getImageData(0, 0, 160, 90));
+  setTimeout(sampleSharpness, 500);
+}
+
+async function startBasic() {
+  try {
+    if (window.DeviceOrientationEvent?.requestPermission) await DeviceOrientationEvent.requestPermission();
+    if (window.DeviceMotionEvent?.requestPermission) await DeviceMotionEvent.requestPermission();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    const v = $("cam");
+    v.srcObject = stream;
+    await v.play();
+    addEventListener("deviceorientationabsolute", onOrientation);
+    addEventListener("deviceorientation", onOrientation);
+    addEventListener("devicemotion", onMotion);
+    $("start").style.display = "none";
+    $("stage").style.display = "block";
+    running = true;
+    startRecording(stream);
+    showStop();
+    drawMap();
+    drawDots();
+    sampleSharpness();
+  } catch (e) {
+    $("problem").textContent = `The camera didn't start (${e.name || e.message}). Check the browser's permission for this site.`;
+  }
+}
+
+async function finishBasic() {
+  running = false;
+  warn("");
+  $("stage").style.display = "none";
+  $("start").style.display = "block";
+  await upload();
+  $("cam").srcObject?.getTracks().forEach((t) => t.stop());
+}
+
+// ---- with AR: WebXR tracks the phone, and the camera image is recorded as it goes
+async function startAR() {
+  const THREE = await import("three");
+  let s;
+  try {
+    s = await navigator.xr.requestSession("immersive-ar", { requiredFeatures: ["local"], optionalFeatures: ["dom-overlay", "camera-access", "local-floor"], domOverlay: { root: $("stage") } });
+  } catch (e) {
+    $("problem").textContent = `AR didn't start (${e.message}). Use the plain scan instead.`;
+    return;
+  }
+  session = s;
+  $("start").style.display = "none";
+  $("stage").style.display = "block";
+  $("cam").style.display = "none";
+  $("overlay").style.display = "none";
+  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  renderer.xr.enabled = true;
+  renderer.xr.setReferenceSpaceType("local");
+  await renderer.xr.setSession(s);
+  const gl = renderer.getContext(), scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
+  const binding = s.enabledFeatures?.includes("camera-access") && window.XRWebGLBinding ? new XRWebGLBinding(s, gl) : null;
+  if (!binding) warn("This phone won't share the camera with AR, so no video is being saved");
+
+  // A 2D canvas fed from the camera image, recorded at a few frames a second: enough for reconstruction.
+  const rec = document.createElement("canvas"), rg = rec.getContext("2d");
+  let fb = null, recording = false, lastGrab = 0;
+  const STOP_COL = 0xff3d9a, DONE_COL = 0x57e389;
+  let pins = null, origin = null;
+
+  // three's own loop, so its XR camera follows the phone when the scene is drawn.
+  renderer.setAnimationLoop((time, xf) => {
+    if (session !== s || !xf) return;
+    const space = renderer.xr.getReferenceSpace();
+    const pose = space && xf.getViewerPose(space);
+    if (!pose) { warn("Tracking lost: point at something with detail and move slowly"); return; }
+    const m = pose.transform.matrix, pos = [m[12], m[13], m[14]], fwd = [-m[8], -m[9], -m[10]];
+    if (!origin) {
+      // The start: this spot is stop 1, and this way is along the route's first leg.
+      origin = { pos, fwd };
+      pins = pinToWorld(route, pos, fwd);
+      for (const p of pins) {
+        const dot = new THREE.Mesh(new THREE.SphereGeometry(.18, 16, 12), new THREE.MeshBasicMaterial({ color: STOP_COL }));
+        dot.position.set(p.world[0], pos[1] - .3, p.world[1]);
+        p.mesh = dot;
+        scene.add(dot);
+      }
+    }
+    const here = [pos[0], pos[2]];
+    const r = pinToWorld.invert(route, origin, here);
+    if (!track.length || Math.hypot(here[0] - track[track.length - 1][2], here[1] - track[track.length - 1][3]) > .25) {
+      track.push([r[0], r[1], here[0], here[1]]);
+      drawMap(r);
+    }
+    for (const p of pins) {
+      if (Math.hypot(p.world[0] - here[0], p.world[1] - here[1]) < 2 && !p.reached) {
+        p.reached = true;
+        p.mesh.material.color.set(DONE_COL);
+        stopIndex = Math.max(stopIndex, p.index);
+        showStop();
+      }
+    }
+    if (recording) poses.push({ t: Math.round(time), x: +r[0].toFixed(3), z: +r[1].toFixed(3), y: +(pos[1] - origin.pos[1]).toFixed(3) });
+    // Grab the camera image, about five times a second.
+    const view = pose.views[0];
+    if (binding && view.camera && time - lastGrab > 190) {
+      lastGrab = time;
+      const tex = binding.getCameraImage(view.camera);
+      const w = view.camera.width, h = view.camera.height;
+      if (tex && w) {
+        if (!fb) {
+          fb = gl.createFramebuffer();
+          rec.width = w;
+          rec.height = h;
+        }
+        const prev = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        const px = new Uint8ClampedArray(w * h * 4);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, prev);
+        const img = new ImageData(px, w, h);
+        // readPixels comes bottom row first
+        createImageBitmap(img, { imageOrientation: "flipY" }).then((b) => { rg.drawImage(b, 0, 0); b.close?.(); });
+        if (!recording) {
+          recording = true;
+          recStarted = time;
+          // The camera's focal length in pixels, from its projection.
+          focalPx = +(view.projectionMatrix[0] * w / 2).toFixed(1);
+          startRecording(rec.captureStream(5));
+        }
+      }
+    }
+    renderer.render(scene, camera);
+  });
+  s.addEventListener("end", () => { renderer.setAnimationLoop(null); if (session === s) finishAR(); });
+  showStop();
+  drawMap();
+}
+
+async function finishAR() {
+  const s = session;
+  session = null;
+  await s?.end().catch(() => {});
+  warn("");
+  $("stage").style.display = "none";
+  $("start").style.display = "block";
+  await upload();
+}
+
+$("basic").onclick = startBasic;
+$("ar").onclick = startAR;
+$("next").onclick = () => { stopIndex = Math.min(stopIndex + 1, route.stops.length - 1); showStop(); };
+$("finish").onclick = () => (session ? finishAR() : finishBasic());
+load();
+</script>

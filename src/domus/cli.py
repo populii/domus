@@ -1,0 +1,95 @@
+"""The `domus` command.
+
+    domus create "12 Example Street, Christchurch"              build a model from an address and public data
+    domus new PATH --name "My place" --centre -43.53,172.63   start a site project
+    domus demo PATH                                           write the made-up demo site
+    domus fetch                                               get its ground and aerial from LINZ
+    domus canopy                                              map tree crowns from the LiDAR
+    domus marks                                               add LINZ's survey marks around the lot
+    domus title                                               add the lot's title and nearby easements from LINZ
+    domus points [--ground]                                   get the classified LiDAR point cloud over the site
+    domus build                                               build the model
+    domus video <step>                                        turn site videos into point clouds
+    domus scan FILE                                           bring in a phone LiDAR scan
+    domus prep <step>                                         plans, IFC, textures, checks from your documents
+    domus serve                                               serve the viewer
+
+Every command but `new` and `demo` works on the site project in the current folder, or the one
+named by --site or the DOMUS_SITE environment variable. Modules are imported only once that's
+set, because they read it when imported.
+"""
+
+import argparse
+import os
+import sys
+
+from . import __version__
+
+COMMANDS = ["create", "new", "demo", "fetch", "canopy", "marks", "title", "points", "sketch-worker", "build", "serve", "video", "scan", "prep"]
+
+
+def choose_site(path):
+    """--site is the whole project, so its build goes there too, whatever a container's DOMUS_OUTPUT says."""
+    os.environ["DOMUS_SITE"] = path
+    os.environ.pop("DOMUS_OUTPUT", None)
+
+
+def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):     # NZ addresses have macrons, which a Windows console's encoding can't print
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    argv = list(sys.argv[1:] if argv is None else argv)
+    ap = argparse.ArgumentParser(prog="domus", description="3D site models for comparing retaining wall options.")
+    ap.add_argument("--version", action="version", version=__version__)
+    ap.add_argument("--site", help="the site project's folder (default: DOMUS_SITE, or the current folder)")
+    ap.add_argument("command", choices=COMMANDS)
+    # Everything after the command is the command's own, --help included.
+    k = next((i for i, a in enumerate(argv) if a in COMMANDS), len(argv))
+    args, rest = ap.parse_args(argv[:k + 1]), argv[k + 1:]
+    if args.site:
+        choose_site(args.site)
+    if args.command == "create":
+        from . import create
+        return create.main(rest)
+    if args.command == "new":
+        from . import newsite
+        return newsite.main(rest)
+    if args.command == "demo":
+        from . import demo
+        return demo.main(rest)
+    if args.command == "serve":
+        from . import serve
+        return serve.main(rest)
+    if args.command == "fetch":
+        from . import linz
+        return linz.main()
+    if args.command == "canopy":
+        from . import vegetation
+        return vegetation.map_site()
+    if args.command == "sketch-worker":
+        from . import sketch
+        return sketch.main()
+    if args.command == "marks":
+        from . import marks
+        return marks.main(rest)
+    if args.command == "title":
+        from . import title
+        return title.main(rest)
+    if args.command == "points":
+        from . import points
+        return points.main(rest)
+    if args.command == "video":
+        from . import video
+        return video.main(rest)
+    if args.command == "prep":
+        from . import prep
+        return prep.main(rest)
+    if args.command == "scan":
+        from . import scan
+        return scan.main(rest)
+    from . import build
+    return build.main()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

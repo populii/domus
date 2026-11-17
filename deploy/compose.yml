@@ -1,0 +1,27 @@
+# One site here; for many in one container, see "Many sites in one container" in docs/self-hosting.md.
+# Run the app. With an empty ./site it asks for an address, and /demo shows a made-up site.
+#
+#   docker compose -f deploy/compose.yml up -d        then open http://localhost:8765
+#
+# There is no login in the app, so the port is bound to this machine only. To reach it from
+# elsewhere, put a login proxy in front: see docs/self-hosting.md.
+services:
+  domus:
+    image: ghcr.io/populii/domus:${DOMUS_VERSION:-latest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8765:8765"
+    environment:
+      # A free key from data.linz.govt.nz, for real boundaries and buildings. Without it, addresses go to OpenStreetMap.
+      - DOMUS_LINZ_KEY=${DOMUS_LINZ_KEY:-}
+      # Host names to answer to besides IP addresses and localhost, such as your login proxy's.
+      - DOMUS_ALLOWED_HOSTS=${DOMUS_ALLOWED_HOSTS:-}
+    volumes:
+      - ${DOMUS_SITE_DIR:-./site}:/site
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

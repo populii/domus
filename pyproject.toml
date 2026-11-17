@@ -1,0 +1,55 @@
+[project]
+name = "domus"
+dynamic = ["version"]
+description = "3D site models from LINZ LiDAR for comparing retaining wall options, viewed in the browser"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.1",
+    "scipy>=1.14",
+    "pillow>=11",
+    "pyproj>=3.7",
+    "rasterio>=1.4",
+    "shapely>=2.0",
+    "opencv-python-headless>=4.10",
+    "av>=14",
+    "pycolmap>=4.2",
+    "laspy[lazrs]>=2.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/populii/domus"
+Issues = "https://github.com/populii/domus/issues"
+Changelog = "https://github.com/populii/domus/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+plans = ["pdfplumber>=0.11"]
+ifc = ["ifcopenshell>=0.9.0.post1"]
+
+[project.scripts]
+domus = "domus.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/domus/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/domus"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 130
+extend-exclude = ["src/domus/viewer/vendor"]
+
+[tool.ruff.lint]
+# int(round(x)) is kept on purpose: x is often a NumPy scalar.
+ignore = ["RUF046"]

@@ -1,0 +1,24 @@
+name: Something's wrong
+description: Domus did the wrong thing, or stopped
+body:
+  - type: markdown
+    attributes:
+      value: "Issues are public, so please leave out your address, plans, photos and API keys. A security problem goes through [private reporting](../security/advisories/new)."
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From `/api/version`, or `domus --version`
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repeat
+    attributes:
+      label: How can we repeat it?
+      description: On the demo site if you can.

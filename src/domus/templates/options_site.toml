@@ -1,0 +1,30 @@
+# Settings shared by every wall option (files starting with "_" aren't options). Change a
+# setting here and rebuild: every option is re-checked the same way.
+
+[frame]
+# Options are drawn in a site frame lined up with one boundary, so a wall "1.8 m in from the
+# boundary" is o = 1.8:
+#   s = metres along the boundary from `origin` towards `toward`;
+#   o = metres in from that line, into the lot (on the right looking along it).
+# `domus new` starts this on the lot's longest edge; move it to whichever edge suits.
+origin = {{frame_origin}}
+toward = {{frame_toward}}
+
+[regrade]
+# Where options may regrade the ground, and where flat lawn is counted: the lot, less the house and a
+# margin round it. Narrow it with s_max (only where s is under it) or polygon_so (a polygon in (s, o)).
+# polygon_so = [[0.0, 0.0], [20.0, 0.0], [20.0, 12.0], [0.0, 12.0]]
+house_margin_m = 0.6
+# Ground slope that still counts as flat lawn (rise over run): 1:20.
+flat_slope = 0.05
+# A driveway or other load beside the lot, for the surcharge check: a polygon in (s, o).
+# driveway_so = [[0.0, 0.0], [20.0, 0.0], [20.0, -4.0], [0.0, -4.0]]
+
+[defaults]
+upstand_m = 0.1        # how far a wall's top stands above the ground it retains
+batter = 2.5           # unretained terrace edges slope back to the ground at 1 vertical : 2.5 horizontal
+thickness_m = 0.25
+
+[rules]
+# Least cover over a drain under lawn after a cut.
+drain_cover_m = 0.3

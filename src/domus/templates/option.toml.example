@@ -1,0 +1,22 @@
+# Copy this to a name ending in .toml, change the numbers and rebuild. See docs/options.md.
+name = "A. One low wall"       # the viewer's heading for it
+short = "A. One low wall"      # its button
+description = "A timber wall holding a level lawn."
+keep_existing = []             # ids of existing walls it keeps; the rest are removed
+
+[[walls]]
+id = "L1"
+name = "Lawn wall"
+material = "timber"            # timber | block | segmental | gabion | crib | stone | concrete
+line_so = [[2.0, 2.0], [12.0, 2.0]]   # its face, as (metres along the boundary, metres in from it)
+
+[[terraces]]
+id = "lawn"
+name = "Lawn"
+kind = "lawn"                  # lawn | planting
+level = 40.0                   # height at `at_so`: pick one near your ground
+at_so = [7.0, 6.0]
+fall = "1:40"
+fall_to = "north"              # north | south | east | west, in the frame: see docs/options.md
+batter = 2.5
+polygon_so = [[2.0, 2.0], [12.0, 2.0], [12.0, 10.0], [2.0, 10.0]]

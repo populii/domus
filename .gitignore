@@ -1,0 +1,25 @@
+# Python / uv
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Site projects never go in this repo: keep yours in a folder or repo of its own.
+/sites/
+/site/
+.domus/
+
+# Build outputs
+build/
+dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# An agent's local notes: what's shared goes in AGENTS.md.
+CLAUDE.md
+CLAUDE.local.md

@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --all-extras
+      - run: uv run ruff check .
+      - run: uv run pytest -q
+
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Build the image
+        run: docker build -t domus:ci .
+      - name: Serve the demo from it, as Unraid would run it
+        run: |
+          mkdir -m 777 site
+          docker run -d --name smoke --read-only --tmpfs /tmp --cap-drop=ALL -p 8765:8765 -v "$PWD/site:/site" domus:ci
+          for _ in $(seq 1 20); do curl -sf localhost:8765/healthz && break; sleep 1; done
+          curl -sf localhost:8765/ | grep -q 'Build a 3D model'
+          curl -sf localhost:8765/demo | grep -q 'id="view"'
+          curl -sf localhost:8765/data/model.json | grep -q 'Demo site'
+          curl -sf localhost:8765/vendor/three/three.module.js -o /dev/null
+          curl -sf -X PUT -H 'Content-Type: application/json' -d '{"a":1}' localhost:8765/api/db/sketches/current
+          curl -sf localhost:8765/api/db/sketches/current | grep -q '"a": 1'
+      - name: Build a site inside it
+        run: |
+          docker exec smoke domus demo /tmp/check
+          docker exec -e DOMUS_SITE=/tmp/check -e DOMUS_OUTPUT=/tmp/check/out smoke domus build
+      - if: failure()
+        run: docker logs smoke

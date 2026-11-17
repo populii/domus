@@ -1,0 +1,12 @@
+name: An idea
+description: Something Domus could do
+body:
+  - type: markdown
+    attributes:
+      value: "Issues are public, so please leave out your address, plans and photos."
+  - type: textarea
+    id: what
+    attributes:
+      label: What are you trying to do, and what gets in the way?
+    validations:
+      required: true

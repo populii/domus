@@ -1,0 +1,3151 @@
+<title>Domus</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout, as on a drawing sheet: the model fills the sheet, the title block runs along the foot of it, and
+   one panel at a time opens from a rail at the side (a bottom sheet on phones). */
+:root {
+  --paper: #eef0ec;      /* page and panel ground */
+  --panel: #f8f9f6;
+  --ink: #1b2733;        /* text and rules */
+  --muted: #5d6871;
+  --rule: #cfd5d3;
+  --accent: #0e6f86;     /* survey teal: controls, focus */
+  --accent-ink: #ffffff;
+  --warn: #a8560c;       /* placeholder / unconfirmed */
+  --warn-bg: #f6e7d4;
+  --sky: #dce5e8;        /* model-space background */
+  --on-ground: #2e2b25;  /* labels drawn over the terrain (same in both themes) */
+  --drain: #9b2f2c;
+  --measure: #e0480c;    /* measurement lines, points and labels in the model */
+  --ground: #8a7254;     /* the ground in profile charts */
+  --chrome: color-mix(in srgb, var(--panel) 90%, transparent);  /* toolbars over the model */
+  --font-display: Bahnschrift, "DIN Alternate", "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1518; --panel: #141c20; --ink: #dde6e9; --muted: #95a3a9; --rule: #2a363c;
+    --accent: #43b9d6; --accent-ink: #062027; --warn: #f0a650; --warn-bg: #3a2a16; --sky: #0b1114;
+    --measure: #ff8a45; --ground: #b89d76;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1518; --panel: #141c20; --ink: #dde6e9; --muted: #95a3a9; --rule: #2a363c;
+  --accent: #43b9d6; --accent-ink: #062027; --warn: #f0a650; --warn-bg: #3a2a16; --sky: #0b1114;
+  --measure: #ff8a45; --ground: #b89d76;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 14px;
+  overflow: hidden;
+}
+.app { display: grid; grid-template: minmax(0, 1fr) auto / minmax(0, 1fr) auto; height: 100%; }
+.stage { position: relative; min-width: 0; background: var(--sky); }
+#view { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.panel { display: flex; flex-direction: row-reverse; background: var(--panel); border-left: 1px solid var(--rule); min-height: 0; }
+.rail { display: flex; flex-direction: column; gap: 2px; width: 64px; padding: 6px 4px; border-left: 1px solid var(--rule); flex: none; }
+.rail button {
+  display: grid; justify-items: center; gap: 3px; border: 0; border-radius: 4px; padding: 8px 0 6px;
+  font: 500 11.5px var(--font-body); color: var(--muted); touch-action: manipulation;
+}
+.rail button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.rail button[aria-selected="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.rail svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.rail-help { margin-top: auto; }
+.tabs { width: 320px; overflow-y: auto; }
+.panel.collapsed .tabs { display: none; }
+.tabpanel > section {
+  padding: 14px 16px; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px;
+}
+.tabpanel > section:last-child { border-bottom: 0; }
+.tabpanel details > summary { justify-self: start; }
+
+/* The title block: small labelled cells, as along the foot of a survey plan. */
+.sheet {
+  grid-column: 1 / -1; display: flex; align-items: stretch; min-width: 0;
+  background: var(--panel); border-top: 1px solid var(--ink); padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.cell { display: grid; align-content: center; gap: 1px; padding: 5px 14px; border-right: 1px solid var(--rule); white-space: nowrap; min-width: 0; font-size: 13px; }
+.cell:last-child { border-right: 0; margin-left: auto; border-left: 1px solid var(--rule); }
+.cell .k { font-size: 11px; color: var(--muted); }
+.cell.back { color: var(--accent); text-decoration: none; font-weight: 500; }
+.cell.back:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.cell.title { grid-template-columns: auto auto; column-gap: 8px; align-items: baseline; }
+.cell.title .k { grid-column: 1 / -1; }
+.cell.title h1 { font: 600 19px/1.1 var(--font-display); margin: 0; overflow: hidden; text-overflow: ellipsis; }
+.cell.title .sub { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.north-cell { padding: 2px 8px; }
+.scale { min-width: 170px; }
+.scalerow { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.scalerow .bar { height: 6px; border: 1.5px solid var(--ink); border-top: 0; max-width: 120px; }
+.pointer { min-width: 24ch; }
+.grid-cell { font-size: 12px; }
+.datum { font-family: var(--font-data); font-size: 12px; color: var(--muted); line-height: 1.5; }
+h2 {
+  font-family: var(--font-display); font-weight: 600; font-size: 16px; margin: 0; color: var(--ink);
+}
+.views { display: flex; flex-wrap: wrap; gap: 6px; }
+button, .seg label {
+  font: 500 13px var(--font-body); color: var(--ink); background: transparent;
+  border: 1px solid var(--rule); border-radius: 3px; padding: 5px 9px; cursor: pointer;
+}
+button:hover, .seg label:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible + span, .seg input:focus-visible + label {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg input:checked + label { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.layers { display: grid; gap: 4px; }
+.group > summary { display: flex; align-items: center; gap: 8px; color: var(--ink); padding: 3px 0; margin: 0; }
+.group > summary input { margin: 0; accent-color: var(--accent); }
+.group-count { margin-left: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.group .layer { padding: 2px 0 2px 21px; }
+.enrich-item { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: start; margin-bottom: 8px; }
+.enrich-item details { grid-column: 2; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.enrich-item summary { cursor: pointer; }
+.enrich-item p { margin: 3px 0; }
+.walk-steps { margin: 6px 0; padding-left: 20px; font-size: 13px; line-height: 1.45; }
+.group-name { font-family: var(--font-display); font-weight: 600; font-size: 14px; }
+.layer { display: grid; grid-template-columns: 18px 22px minmax(0, 1fr); align-items: center; gap: 6px; cursor: pointer; }
+.layer input { margin: 0; accent-color: var(--accent); }
+.swatch { width: 22px; height: 10px; border-radius: 2px; border: 1px solid rgba(0,0,0,0.15); }
+.swatch.line { height: 0; border: 0; border-top: 3px solid; border-radius: 0; }
+.layer-name { min-width: 0; overflow-wrap: anywhere; line-height: 1.3; }
+.readout { font-family: var(--font-data); font-size: 12.5px; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-variant-numeric: tabular-nums; }
+.copyrow { display: flex; gap: 6px; margin-top: 6px; }
+.copyrow[hidden] { display: none; }
+.copyrow input {
+  flex: 1; min-width: 0; font: 12px var(--font-data); color: var(--ink); background: transparent;
+  border: 1px solid var(--rule); border-radius: 3px; padding: 4px 6px;
+}
+.hint { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.feature { font-size: 13px; line-height: 1.45; }
+.feature strong { font-weight: 600; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: 4px 6px 4px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-family: var(--font-display); font-weight: 600; font-size: 12.5px; letter-spacing: 0.04em; color: var(--muted); }
+td.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chip {
+  display: inline-block; font: 600 10.5px var(--font-body); letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--warn); background: var(--warn-bg); border-radius: 3px; padding: 1px 5px;
+}
+.chip.ok { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.opt-table { font-size: 12px; }
+.opt-table th, .opt-table td { padding-right: 8px; }
+.opt-table th[data-opt] { cursor: pointer; text-decoration: underline dotted; }
+.opt-table .on { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.opt-table td:first-child { color: var(--muted); white-space: nowrap; }
+.opt-table td.num { padding-right: 6px; }
+.flags { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.45; }
+.flags li + li { margin-top: 2px; }
+.check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; cursor: pointer; }
+.check input { accent-color: var(--accent); margin: 0; }
+.legend { display: flex; gap: 8px; align-items: center; font: 11.5px var(--font-data); color: var(--muted); }
+.legend[hidden] { display: none; }
+.legend .ramp { width: 140px; height: 10px; border-radius: 2px; border: 1px solid var(--rule);
+  background: linear-gradient(90deg, rgb(196,84,22), rgb(226,170,130) 40%, #e9e6dd 50%, rgb(140,175,215) 60%, rgb(38,104,176)); }
+.opt-desc { margin: 0 0 6px; font-size: 13px; line-height: 1.45; }
+.opt-nums { font-family: var(--font-data); font-size: 12.5px; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0 0 6px; }
+.opt-nums dt { color: var(--muted); }
+.opt-nums dd { margin: 0; font-variant-numeric: tabular-nums; }
+details > summary { cursor: pointer; font-size: 13px; color: var(--accent); margin: 4px 0; }
+.sk-list { display: grid; gap: 8px; }
+.sk-list:empty::before { content: "Nothing drawn yet."; color: var(--muted); font-size: 13px; }
+.sk-item { border: 1px solid var(--rule); border-radius: 4px; padding: 8px; display: grid; gap: 6px; font-size: 13px; }
+.sk-item .sk-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sk-item .sk-head input { flex: 1 1 8em; min-width: 0; }
+.sk-item .sk-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sk-item input, .sk-item select, #sketchNote {
+  font: 12.5px var(--font-body); color: var(--ink); background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 3px 5px;
+}
+.sk-item input[type="number"] { width: 5.5em; font-family: var(--font-data); }
+.sk-item .sk-read { font: 12px var(--font-data); color: var(--muted); line-height: 1.45; }
+.sk-item.sel { border-color: var(--measure); box-shadow: inset 0 0 0 1px var(--measure); }
+.sk-swatch { width: 12px; height: 12px; border-radius: 2px; flex: none; }
+.sk-live { font-size: 12.5px; display: grid; gap: 3px; border-top: 1px dashed var(--rule); padding-top: 6px; }
+.sk-live strong { font-family: var(--font-data); font-weight: 500; }
+.sk-live .flag { color: var(--warn); }
+#sketchOptionName { flex: 1; min-width: 0; }
+#sketchNote { width: 100%; box-sizing: border-box; resize: vertical; }
+.notes { font-size: 13px; line-height: 1.5; color: var(--ink); }
+.notes p { margin: 0; }
+.foot { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.north { width: 36px; height: 36px; pointer-events: auto; cursor: pointer; color: var(--ink); }
+/* What sits over the model's top left: what the tool wants next. */
+.over {
+  position: absolute; z-index: 2; top: 10px; left: max(10px, env(safe-area-inset-left, 0px)); right: 56px;
+  display: grid; justify-items: start; gap: 6px; pointer-events: none;
+}
+.status { font: 500 13px var(--font-body); color: var(--muted); }
+.status:empty { display: none; }
+.inspector {
+  position: absolute; z-index: 3; left: max(10px, env(safe-area-inset-left, 0px)); bottom: 10px; width: min(300px, calc(100% - 20px));
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 10px 12px; display: grid; gap: 6px; max-height: 60%; overflow-y: auto;
+}
+.inspector #inspectorClose { position: absolute; top: 3px; right: 3px; }
+.inspector .feature { padding-right: 26px; }
+.stage.has-profile .inspector { bottom: 256px; }
+/* The wall options, a button each, over the foot of the model: one click from any scheme to any other, whatever panel is open. */
+.optbar {
+  position: absolute; z-index: 2; left: 10px; right: 10px; bottom: 10px; width: fit-content; margin-inline: auto;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; padding: 4px;
+  background: color-mix(in srgb, var(--chrome) 88%, transparent); border: 1px solid var(--rule); border-radius: 4px;
+}
+.optbar button { padding: 4px 10px; font-size: 12.5px; white-space: nowrap; }
+.optbar button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.stage.has-profile .optbar { bottom: 256px; }
+.lbl {
+  font: 500 11px var(--font-data); color: var(--ink); background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid var(--rule); border-radius: 2px; padding: 1px 4px; white-space: nowrap; transform: translateY(-8px);
+}
+.lbl.contour { background: none; border: 0; color: var(--on-ground); font-size: 10px; padding: 0; }
+.lbl.sewer { color: var(--drain); }
+.lbl.measure { color: var(--measure); border-color: var(--measure); font-weight: 500; }
+.lbl.measure.live { border-style: dashed; }
+
+/* Over the model: the navigation pad (right) and the profile strip (bottom). */
+.navpad {
+  display: flex; gap: 2px; padding: 3px; z-index: 2; pointer-events: auto;
+  background: var(--chrome); border: 1px solid var(--rule); border-radius: 4px;
+}
+.toolgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 4px; }
+.toolgrid .ib { flex-direction: column; height: auto; padding: 8px 2px 6px; border-color: var(--rule); }
+.navpad {
+  position: absolute; top: 10px; right: max(10px, env(safe-area-inset-right, 0px)); flex-direction: column;
+}
+.navpad .sep { background: var(--rule); flex: none; }
+.navpad .sep { height: 1px; margin: 2px 3px; }
+.ib {
+  display: inline-flex; align-items: center; gap: 5px; min-width: 32px; height: 32px; padding: 0 7px;
+  border: 1px solid transparent; border-radius: 3px; background: transparent; color: var(--ink);
+  font: 500 12.5px var(--font-body); justify-content: center; touch-action: manipulation;
+}
+.ib svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.ib:hover { border-color: var(--rule); }
+.ib[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.navpad .ib { padding: 0; width: 32px; }
+.toolhint {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  font: 500 12.5px var(--font-body); color: var(--ink);
+}
+.draw-entry { pointer-events: auto; background: var(--chrome); border: 1px solid var(--rule); border-radius: 3px; padding: 2px 6px; }
+.draw-entry input { width: 7.5em; font: 500 12.5px var(--font-data); color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--rule); margin-left: 4px; }
+#snapDot { position: fixed; z-index: 2; pointer-events: none; transform: translate(-50%, -50%); width: 12px; height: 12px; border: 2px solid var(--measure); border-radius: 50%; }
+#snapDot.line { border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); }
+#snapDot span { position: absolute; left: 16px; top: -6px; white-space: nowrap; background: var(--chrome); color: var(--ink); border: 1px solid var(--rule); border-radius: 3px; padding: 1px 5px; font: 500 11.5px var(--font-body); }
+#snapDot.line span { transform: rotate(-45deg); transform-origin: left center; }
+.toolhint span:empty { display: none; }
+.toolhint span { background: var(--chrome); border: 1px solid var(--rule); border-radius: 3px; padding: 3px 7px; }
+.toolhint button { pointer-events: auto; background: var(--panel); padding: 3px 8px; }
+.cursor { font: 500 12px var(--font-data); color: var(--ink); font-variant-numeric: tabular-nums; min-height: 1.3em; }
+
+.profile {
+  position: absolute; z-index: 3; left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
+  bottom: 10px; height: 236px; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 4px;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 8px 10px 6px;
+}
+.profile-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.profile-head h2 { color: var(--ink); }
+.profile-stats { font: 12px var(--font-data); color: var(--muted); font-variant-numeric: tabular-nums; flex: 1 1 280px; min-width: 0; }
+.profile-stats b { color: var(--ink); font-weight: 500; }
+.profile-tools { display: flex; gap: 6px; align-items: center; }
+.profile-tools label { display: inline-flex; gap: 5px; align-items: center; font-size: 12.5px; cursor: pointer; }
+.profile-tools input { accent-color: var(--accent); margin: 0; }
+.profile svg { width: 100%; height: 100%; display: block; overflow: visible; touch-action: none; }
+.profile .axis { font: 10.5px var(--font-data); fill: var(--muted); }
+.profile .grid { stroke: var(--rule); stroke-width: 1; }
+.profile .gfill { fill: color-mix(in srgb, var(--ground) 38%, transparent); stroke: none; }
+.profile .gline { fill: none; stroke: var(--ground); stroke-width: 1.8; }
+.profile .sline { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+.profile .pipe { stroke: var(--panel); stroke-width: 1.5; }
+.profile .pipe-lbl { font: 500 11px var(--font-body); fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
+.profile .cross { stroke: var(--measure); stroke-width: 1; }
+.profile .cross-lbl { font: 500 11px var(--font-data); fill: var(--measure); }
+
+.measures { display: grid; gap: 4px; }
+.measures:empty::before { content: "Nothing measured yet. Pick a tool, then click on the model."; color: var(--muted); font-size: 13px; }
+.mrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px; align-items: start; font-size: 12.5px; line-height: 1.4; padding: 3px 0; border-bottom: 1px dashed var(--rule); }
+.mrow .what { min-width: 0; overflow-wrap: anywhere; }
+.mrow .what b { font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: 0.03em; margin-right: 4px; }
+.mrow .ib { min-width: 26px; height: 26px; padding: 0 4px; }
+.mrow .ib svg { width: 15px; height: 15px; }
+.mrow.open .what { cursor: pointer; text-decoration: underline dotted; }
+.rowbtns { display: flex; flex-wrap: wrap; gap: 6px; }
+.slider { display: grid; grid-template-columns: auto minmax(0, 1fr) 3.2em; gap: 8px; align-items: center; font-size: 13px; }
+.slider input { width: 100%; accent-color: var(--accent); margin: 0; }
+.slider output { font: 12px var(--font-data); text-align: right; font-variant-numeric: tabular-nums; }
+.inline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.inline input[type="text"], .inline input[type="number"] {
+  font: 12.5px var(--font-data); color: var(--ink); background: transparent; border: 1px solid var(--rule);
+  border-radius: 3px; padding: 4px 6px; min-width: 0; width: 9.5em;
+}
+.saved { display: flex; flex-wrap: wrap; gap: 6px; }
+.saved .chipbtn { display: inline-flex; border: 1px solid var(--rule); border-radius: 3px; }
+.saved .chipbtn button { border: 0; border-radius: 0; }
+.saved .chipbtn button + button { border-left: 1px solid var(--rule); padding: 5px 7px; color: var(--muted); }
+.keys { font-size: 12.5px; line-height: 1.5; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; }
+.keys dt { font-family: var(--font-data); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.keys dd { margin: 0; }
+#help { border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); color: var(--ink); width: min(560px, calc(100vw - 32px)); padding: 16px 18px; }
+#help::backdrop { background: rgb(0 0 0 / 0.35); }
+.help-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+@media (max-width: 1180px) { .grid-cell, .pointer { display: none; } .cell:nth-last-child(3) { margin-left: auto; } }
+@media (max-width: 900px) { .cell.wide { display: none; } }
+@media (max-width: 760px) {
+  .app { grid-template: minmax(0, 1fr) auto auto / minmax(0, 1fr); }
+  .panel { flex-direction: column-reverse; border-left: 0; border-top: 1px solid var(--rule); }
+  .rail { flex-direction: row; width: auto; border-left: 0; border-top: 1px solid var(--rule); }
+  .rail button { flex: 1; }
+  .rail-help { margin-top: 0; }
+  .tabs { width: auto; max-height: 46vh; }
+  .sheet { order: -1; grid-row: 2; }
+  .panel { grid-row: 3; }
+  .cell { padding: 4px 10px; }
+  .cell .k { display: none; }
+  .cell.title { flex: 1; }
+  /* Fingers pinch and twist, so the pad keeps only what they can't do. */
+  .navpad .sep, #fullscreen, .navpad [data-nav="in"], .navpad [data-nav="out"], .navpad [data-nav="left"], .navpad [data-nav="right"], .navpad [data-nav="up"], .navpad [data-nav="down"] { display: none; }
+  .profile { height: 210px; }
+  .stage.has-profile .inspector { bottom: 230px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="app">
+  <div class="stage" id="stage">
+    <canvas id="view" aria-label="3D model of the site"></canvas>
+    <div class="labels" id="labels"></div>
+    <div class="over">
+    <div class="toolhint" id="toolhint" aria-live="polite"><span id="hintText"></span><label class="draw-entry" id="drawEntryBox" hidden>Length <input id="drawEntry" inputmode="decimal" autocomplete="off" placeholder="3.2 or 3.2@45" aria-label="Length in metres, and optionally a bearing after an at sign"></label><button type="button" id="finishBtn" hidden>Finish</button><button type="button" id="cancelBtn" hidden>Cancel</button><button type="button" id="toolDone" hidden>Done</button></div>
+      <div class="status" id="status">Loading the site model…</div>
+    </div>
+    <div class="optbar" id="optionBar" role="radiogroup" aria-label="Wall option shown" hidden></div>
+    <div id="snapDot" hidden><span></span></div>
+    <div class="navpad" id="navpad" role="toolbar" aria-label="Move the view" aria-orientation="vertical">
+      <button type="button" class="ib" data-nav="in" title="Zoom in (+)" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button type="button" class="ib" data-nav="out" title="Zoom out (−)" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+      <span class="sep" aria-hidden="true"></span>
+      <button type="button" class="ib" data-nav="left" title="Rotate left (Q)" aria-label="Rotate left"><svg viewBox="0 0 24 24"><path d="M5 11a7.5 7.5 0 1 1 2.2 6.3"/><path d="M4.5 5v6h6"/></svg></button>
+      <button type="button" class="ib" data-nav="right" title="Rotate right (E)" aria-label="Rotate right"><svg viewBox="0 0 24 24"><path d="M19 11a7.5 7.5 0 1 0-2.2 6.3"/><path d="M19.5 5v6h-6"/></svg></button>
+      <button type="button" class="ib" data-nav="up" title="Look from higher (R)" aria-label="Look from higher"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
+      <button type="button" class="ib" data-nav="down" title="Look from lower (F)" aria-label="Look from lower"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      <span class="sep" aria-hidden="true"></span>
+      <button type="button" class="ib" id="panMode" aria-pressed="false" title="Drag to pan instead of rotating" aria-label="Drag to pan"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg></button>
+      <span class="sep" aria-hidden="true"></span>
+      <button type="button" class="ib" data-nav="home" title="Overview (H)" aria-label="Overview"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7M6 9.5V20h12V9.5"/></svg></button>
+      <button type="button" class="ib" data-nav="plan" title="Plan, north up" aria-label="Plan, north up"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M12 7l3 6h-6z"/></svg></button>
+      <button type="button" class="ib" id="fullscreen" hidden title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    </div>
+    <div class="inspector" id="inspector" hidden aria-live="polite">
+      <button type="button" class="ib" id="inspectorClose" title="Close" aria-label="Close the point details"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="feature" id="feature"></div>
+      <dl class="readout" id="readout"></dl>
+      <div class="copyrow" id="copyrow" hidden>
+        <input id="copytext" readonly aria-label="The point you clicked, to paste into a comment">
+        <button type="button" id="copybtn">Copy</button>
+      </div>
+    </div>
+    <div class="profile" id="profile" hidden>
+      <div class="profile-head">
+        <h2>Profile</h2>
+        <div class="profile-stats" id="profileStats"></div>
+        <div class="profile-tools">
+          <label><input type="checkbox" id="cutToggle"> Cut the model along it</label>
+          <button type="button" id="cutFlip" disabled>Flip</button>
+          <button type="button" class="ib" id="profileClose" title="Close the profile" aria-label="Close the profile"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+      </div>
+      <svg id="profileChart" role="img" aria-label="Ground profile along the line"></svg>
+    </div>
+  </div>
+
+  <aside class="panel" id="panel">
+    <div class="rail" role="tablist" aria-label="Panels">
+      <button type="button" role="tab" data-tab="view" aria-controls="tab-view"><svg viewBox="0 0 24 24"><path d="M12 4l9 5-9 5-9-5z"/><path d="M3 14l9 5 9-5"/></svg>View</button>
+      <button type="button" role="tab" data-tab="measure" aria-controls="tab-measure"><svg viewBox="0 0 24 24"><path d="M3 16L16 3l5 5L8 21z"/><path d="M7 12l2 2M10 9l3 3M13 6l2 2"/></svg>Measure</button>
+      <button type="button" role="tab" data-tab="design" aria-controls="tab-design"><svg viewBox="0 0 24 24"><path d="M4 20l1-5L16 4l4 4L9 19z"/><path d="M14 6l4 4"/></svg>Design</button>
+      <button type="button" role="tab" data-tab="site" aria-controls="tab-site"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7M6 9.5V20h12V9.5"/></svg>Site</button>
+      <button type="button" class="rail-help" id="helpOpen" title="Moving around and keys (?)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.1 1-1.1 1.8M12 17h.01"/></svg>Help</button>
+    </div>
+    <div class="tabs">
+      <div class="tabpanel" id="tab-view" role="tabpanel">
+        <section>
+          <h2>Views</h2>
+      <div class="views" id="views"></div>
+      <div class="saved" id="saved"></div>
+      <form class="inline" id="saveForm">
+        <input type="text" id="saveName" placeholder="Name this view" maxlength="40" aria-label="Name for this view">
+        <button type="submit">Save view</button>
+      </form>
+          <details>
+            <summary>Go to coordinates</summary>
+      <form class="inline" id="gotoForm">
+        <input type="number" id="gotoE" placeholder="mE" step="0.01" aria-label="Easting to go to">
+        <input type="number" id="gotoN" placeholder="mN" step="0.01" aria-label="Northing to go to">
+        <button type="submit">Go to</button>
+      </form>
+          </details>
+        </section>
+        <section>
+          <h2>Ground</h2>
+          <div class="seg" id="drape" role="radiogroup" aria-label="Ground drape"></div>
+          <div class="slider">
+            <label for="groundOpacity">Opacity</label>
+            <input type="range" id="groundOpacity" min="0" max="100" step="5" value="100">
+            <output id="groundOpacityOut" for="groundOpacity">100%</output>
+          </div>
+          <div class="hint">Turn it down to see what's below the ground, such as drains. Below 50%, clicks go through it.</div>
+          <div class="inline"><span>Vertical scale</span><div class="seg" id="exag" role="radiogroup" aria-label="Vertical exaggeration"></div></div>
+        </section>
+        <section>
+          <h2>Layers</h2>
+          <div class="layers" id="layers"></div>
+        </section>
+      </div>
+
+      <div class="tabpanel" id="tab-measure" role="tabpanel" hidden>
+        <section>
+          <h2>Measure</h2>
+          <div class="toolgrid" role="toolbar" aria-label="Measuring tools">
+        <button type="button" class="ib" data-tool="distance" aria-pressed="false" title="Distance between two points (D)"><svg viewBox="0 0 24 24"><path d="M5 19L19 5"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/></svg><span class="tl">Distance</span></button>
+        <button type="button" class="ib" data-tool="path" aria-pressed="false" title="Length of a path (P)"><svg viewBox="0 0 24 24"><path d="M3 19l6-6 4 3 8-10"/><circle cx="3" cy="19" r="1.4"/><circle cx="9" cy="13" r="1.4"/><circle cx="13" cy="16" r="1.4"/><circle cx="21" cy="6" r="1.4"/></svg><span class="tl">Path</span></button>
+        <button type="button" class="ib" data-tool="area" aria-pressed="false" title="Area in plan (A)"><svg viewBox="0 0 24 24"><path d="M4 18L7 6l11 2 2 9z"/><path d="M9 14l3-3M12 16l5-5" stroke-width="1.2"/></svg><span class="tl">Area</span></button>
+        <button type="button" class="ib" data-tool="height" aria-pressed="false" title="Height between two points (V)"><svg viewBox="0 0 24 24"><path d="M5 3h14M5 21h14M12 6v12M9 9l3-3 3 3M9 15l3 3 3-3"/></svg><span class="tl">Height</span></button>
+        <button type="button" class="ib" data-tool="profile" aria-pressed="false" title="Ground profile along a line (L)"><svg viewBox="0 0 24 24"><path d="M3 20h18M3 20V4"/><path d="M5 16l4-5 3 3 4-6 4 4"/></svg><span class="tl">Profile</span></button>
+          </div>
+          <h2>Measurements</h2>
+          <div class="measures" id="measures"></div>
+          <div class="rowbtns"><button type="button" id="copyMeasures" hidden>Copy all</button><button type="button" id="clearAll">Remove all</button></div>
+          <div class="hint">Each measurement is only as good as the layer it lands on. The layer notes say how far to trust it.</div>
+        </section>
+      </div>
+
+      <div class="tabpanel" id="tab-design" role="tabpanel" hidden>
+    <section id="optionsPanel" hidden>
+      <h2>Retaining wall options</h2>
+      <div class="seg" id="optionPick" role="radiogroup" aria-label="Wall option shown"></div>
+      <label class="check"><input type="checkbox" id="cutfillToggle"> Colour the ground by cut and fill</label>
+      <div class="legend" id="cutfillLegend" hidden><span>cut</span><span class="ramp"></span><span>fill</span><span>0–1 m, lines every 0.25 m</span></div>
+      <div class="feature" id="optionCard"></div>
+      <div style="overflow-x:auto"><table class="opt-table" id="optionsTable"></table></div>
+    </section>
+        <section id="sketchPanel">
+          <h2>Your sketch</h2>
+          <div class="toolgrid" role="toolbar" aria-label="Drawing tools">
+        <button type="button" class="ib" data-tool="sketchwall" aria-pressed="false" title="Sketch a wall: click along it (W)"><svg viewBox="0 0 24 24"><path d="M3 17h18M3 13h18M3 17v-4M9 17v-4M15 17v-4M21 17v-4M6 13V9M12 13V9M18 13V9M3 9h18"/></svg><span class="tl">Wall</span></button>
+        <button type="button" class="ib" data-tool="sketcharea" aria-pressed="false" title="Sketch a level area: lawn, bed or path (G)"><svg viewBox="0 0 24 24"><path d="M3 15l9-5 9 5-9 5z"/><path d="M7 9.5V6M12 7V3.5M17 9.5V6" stroke-width="1.3"/></svg><span class="tl">Level area</span></button>
+          </div>
+          <div class="hint">Pick a tool, then click along it on the model. Click a finished one to reshape it: drag its corners, or pull the orange handles up and down. The sketch saves as you go.</div>
+          <div class="rowbtns">
+            <button type="button" id="sketchUndo" title="Undo (Ctrl+Z)">Undo</button>
+            <button type="button" id="sketchRedo" title="Redo (Ctrl+Y)">Redo</button>
+          </div>
+      <div class="sk-list" id="sketchList"></div>
+      <div class="sk-live" id="sketchLive" hidden aria-live="polite"></div>
+      <div class="sk-row" id="sketchOption" hidden><input id="sketchOptionName" aria-label="Name for the option" placeholder="Name this as an option"><button type="button" id="sketchOptionSave">Make it an option</button></div>
+      <textarea id="sketchNote" rows="3" placeholder="Anything else? e.g. steps here, keep the big tree, wall in stone" aria-label="Notes"></textarea>
+          <div class="rowbtns">
+            <button type="button" id="sketchSend">Save a copy</button>
+            <button type="button" id="sketchCopy">Copy as text</button>
+            <button type="button" id="sketchClear">Clear sketch</button>
+          </div>
+          <div class="hint" id="sketchStatus" aria-live="polite"></div>
+        </section>
+      </div>
+
+      <div class="tabpanel" id="tab-site" role="tabpanel" hidden>
+        <section class="notes">
+          <h2>About this model</h2>
+          <p id="aboutModel"></p>
+        </section>
+        <section>
+          <h2>Existing walls</h2>
+          <div style="overflow-x:auto"><table id="walls"><thead><tr><th>Wall</th><th>Length</th><th>Exposed</th></tr></thead><tbody></tbody></table></div>
+        </section>
+    <section id="enrich" hidden>
+      <h2>Improve this model</h2>
+      <div class="hint" id="enrichCount"></div>
+      <div id="enrichList" style="margin-top:8px"></div>
+      <h2 style="margin-top:12px">Recommended video walk</h2>
+      <div class="hint" id="walkSummary"></div>
+      <button type="button" id="walkShow" style="margin-top:6px" aria-pressed="false">Show the route</button>
+      <button type="button" id="walkScan" style="margin-top:6px" hidden>Scan with this phone</button>
+      <ol class="walk-steps" id="walkSteps"></ol>
+      <div class="hint">Keep to your own land. Walk slowly and turn gradually: docs/video.md has more on filming.</div>
+    </section>
+        <section>
+          <h2>Grid and heights</h2>
+          <div class="datum" id="datum"></div>
+        </section>
+        <section class="foot" id="foot"></section>
+      </div>
+    </div>
+  </aside>
+
+  <footer class="sheet" aria-label="Drawing details">
+    <a id="allSites" class="cell back" href="../../" hidden>&larr; All sites</a>
+    <div class="cell title"><span class="k">Site</span><h1 id="siteTitle">Site</h1><span class="sub" id="siteSub"></span></div>
+    <div class="cell"><span class="k">Showing</span><span id="siteState">Existing site</span></div>
+    <div class="cell wide"><span class="k">Lot area</span><span><span id="lotArea"></span> m²</span></div>
+    <div class="cell north-cell"><svg class="north" viewBox="-20 -20 40 40" id="north" role="button" tabindex="0" aria-label="Turn the view to face north"><title>Face north</title><g id="northRot"><path d="M0,-17 L6,7 L0,3 L-6,7 Z" fill="currentColor"/><text x="0" y="18" text-anchor="middle" font-size="9" fill="currentColor">N</text></g></svg></div>
+    <div class="cell wide scale"><span class="k">Scale at the target</span><div class="scalerow"><div class="bar" id="scaleBar" style="width:80px"></div><span id="scaleText">10 m</span></div></div>
+    <div class="cell wide pointer"><span class="k">Pointer</span><div class="cursor" id="cursor" aria-hidden="true"></div></div>
+    <div class="cell wide grid-cell"><span class="k">Grid and heights</span><span id="datumShort"></span></div>
+  </footer>
+</div>
+
+<dialog id="help" aria-labelledby="helpTitle">
+  <div class="help-head"><h2 id="helpTitle">Moving around and keys</h2><button type="button" class="ib" id="helpClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <dl class="keys">
+        <dt>Drag</dt><dd>Rotate, or pan with the pan switch on</dd>
+        <dt>Right-drag, Shift-drag</dt><dd>Pan</dd>
+        <dt>Scroll, pinch</dt><dd>Zoom towards the pointer</dd>
+        <dt>Double-click</dt><dd>Centre the view on that point</dd>
+        <dt>Arrows</dt><dd>Turn the view where you stand: look left, right, up or down</dd>
+        <dt>Shift + arrows</dt><dd>Pan</dd>
+        <dt>Q E · R F</dt><dd>Rotate · look from higher or lower</dd>
+        <dt>+ −</dt><dd>Zoom</dd>
+        <dt>H</dt><dd>Overview</dd>
+        <dt>[ ]</dt><dd>The wall option before or after the one shown</dd>
+        <dt>S D P A V L</dt><dd>Select, Distance, Path, Area, Height, Profile</dd>
+        <dt>W G</dt><dd>Wall, Level area</dd>
+        <dt>?</dt><dd>This list</dd>
+        <dt>Enter · Backspace · Esc</dt><dd>Finish a path or area · drop its last point · cancel</dd>
+      </dl>
+</dialog>
+
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/three.module.js",
+  "three/addons/": "./vendor/three/addons/",
+  "three-mesh-bvh": "./vendor/three-mesh-bvh/index.module.js"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+import { Line2 } from "three/addons/lines/Line2.js";
+import { LineGeometry } from "three/addons/lines/LineGeometry.js";
+import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+import { computeBoundsTree, acceleratedRaycast } from "three-mesh-bvh";
+import { snapTargets, nearestSnap, referenceAngles, projectOnto, inferAngle, parseEntry, entryPoint, createHistory } from "./draw-core.js";
+
+// Bounding-volume trees make picking, the cursor readout and the profile's height sampling fast.
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
+
+const $ = (id) => document.getElementById(id);
+// Names and notes come from site files, public data and other people's sketches: text, never markup.
+const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESCAPES[c]);
+const status = (t) => { $("status").textContent = t; };
+
+let model;
+try {
+  const res = await fetch("data/model.json");
+  if (!res.ok) throw new Error(`model.json: HTTP ${res.status}`);
+  model = await res.json();
+} catch (err) {
+  status("The model data didn't load. Build it with: uv run python -m domus.build, then serve the viewer folder over http.");
+  throw err;
+}
+
+const [E0, N0, H0] = model.origin;
+const DATUMS = model.datums || [];
+const DRAPE0 = Object.keys(model.textures)[0];
+document.title = model.title;
+const css = getComputedStyle(document.documentElement);
+
+// Renderer, scene, camera
+const canvas = $("view");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+// The model and the measurements drawn on it; its y scale is the vertical exaggeration, so
+// everything measured is read back in its local (true) coordinates.
+const root = new THREE.Group();
+scene.add(root);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+const labelRenderer = new CSS2DRenderer({ element: $("labels") });
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.495;
+controls.zoomToCursor = true;
+
+function applySky() {
+  scene.background = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("--sky").trim());
+}
+applySky();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applySky);
+new MutationObserver(applySky).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+scene.add(new THREE.HemisphereLight(0xf2f6ff, 0x5b5040, 1.1));
+const sun = new THREE.DirectionalLight(0xfff4e0, 1.7);
+// Midday sun in New Zealand comes from the north (-z here), about 45 degrees up.
+sun.position.set(-18, 40, -38);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 140 });
+sun.shadow.bias = -0.0006;
+scene.add(sun);
+
+// Geometry helpers
+function meshFromLayer(layer, material) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(layer.positions, 3));
+  if (layer.uv) g.setAttribute("uv", new THREE.Float32BufferAttribute(layer.uv, 2));
+  g.setIndex(layer.indices);
+  g.computeVertexNormals();
+  g.computeBoundsTree();
+  return new THREE.Mesh(g, material);
+}
+// A drain as a pipe along its centre line ("pipes" layers): straight runs between the points.
+function pipeFromLayer(layer) {
+  const p = layer.path, path = new THREE.CurvePath();
+  for (let i = 3; i < p.length; i += 3) {
+    path.add(new THREE.LineCurve3(new THREE.Vector3(p[i - 3], p[i - 2], p[i - 1]), new THREE.Vector3(p[i], p[i + 1], p[i + 2])));
+  }
+  const g = new THREE.TubeGeometry(path, Math.max(8, 4 * path.curves.length), layer.radius, 10, false);
+  g.computeBoundsTree();
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: layer.colour, roughness: 0.55, metalness: 0 }));
+  m.castShadow = false;
+  return m;
+}
+function linesFromLayer(layer) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(layer.segments, 3));
+  return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: layer.colour }));
+}
+function label(text, at, cls = "") {
+  const el = document.createElement("div");
+  el.className = `lbl ${cls}`;
+  el.textContent = text;
+  const obj = new CSS2DObject(el);
+  obj.position.set(at[0], at[1], at[2]);
+  return obj;
+}
+
+// Ground drape textures
+const loader = new THREE.TextureLoader();
+const textures = {};
+for (const [key, t] of Object.entries(model.textures)) {
+  textures[key] = loader.load(`data/${t.file}`);
+  textures[key].colorSpace = THREE.SRGBColorSpace;
+  textures[key].anisotropy = renderer.capabilities.getMaxAnisotropy();
+}
+
+// Textures of other mesh layers (the house): `texture` names a file in data/, `repeat` tiles it.
+const layerTextures = {};
+function layerTexture(file, repeat) {
+  const key = `${file}|${repeat ? 1 : 0}`;
+  if (!layerTextures[key]) {
+    const t = loader.load(`data/${file}`);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    layerTextures[key] = t;
+  }
+  return layerTextures[key];
+}
+
+// Vegetation layers (domus.vegetation). Foliage is drawn as leaf cards: square quads showing
+// a sprite of the grey atlas, instanced per plant and sprite, tinted per card and alpha-tested,
+// lit with a normal stored per card that points out of the crown so a crown shades as one mass.
+// Trunks and limbs are tapered tubes, stumps are bark cylinders with their cut face on top, and
+// the lawn is a texture on the ground's own triangles, drawn in front of the ground.
+const vegBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+let vegFoliage = null;
+const vegSprites = {};
+function vegFoliageMaterial(file) {
+  if (vegFoliage) return vegFoliage;
+  // The atlas is grey shading for the card colours, so it is read as linear values.
+  const map = loader.load(`data/${file}`);
+  map.colorSpace = THREE.NoColorSpace;
+  map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  vegFoliage = new THREE.MeshStandardMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.8,
+    metalness: 0 });
+  vegFoliage.alphaToCoverage = true;
+  vegFoliage.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute vec3 cardNormal;")
+      .replace("#include <defaultnormal_vertex>", "#include <defaultnormal_vertex>\n" +
+        "transformedNormal = normalize(mix(transformedNormal, normalMatrix * cardNormal, 0.75));");
+    // Both faces of a card take the crown's normal (no flip for the back face), and leaves in
+    // shade keep some light: what they let through and the sky's fill.
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <normal_fragment_begin>",
+        THREE.ShaderChunk.normal_fragment_begin.replace("normal *= faceDirection;", ""))
+      .replace("#include <opaque_fragment>", "outgoingLight += diffuseColor.rgb * 0.4;\n#include <opaque_fragment>");
+  };
+  return vegFoliage;
+}
+function vegSpriteGeometry(sprite, [cols, rows], bottom) {
+  const key = `${sprite}|${bottom}`;
+  if (!vegSprites[key]) {
+    const g = new THREE.PlaneGeometry(1, 1);
+    if (bottom) g.translate(0, 0.5, 0);
+    const uv = g.attributes.uv, c = sprite % cols, r = Math.floor(sprite / cols);
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (c + uv.getX(i)) / cols, 1 - (r + 1 - uv.getY(i)) / rows);
+    vegSprites[key] = g;
+  }
+  return vegSprites[key].clone();
+}
+// The loop below tags every child with its layer for the point readout; plant meshes answer with
+// their own name and source instead, and only while their layer is shown.
+function vegPlant(obj, plant, group, picks) {
+  Object.defineProperty(obj.userData, "layer", { get: () => plant, set() {}, configurable: true });
+  const raycast = obj.raycast.bind(obj);
+  obj.raycast = (ray, hits) => { if (group.visible) raycast(ray, hits); };
+  group.add(obj);
+  picks.push(obj);
+}
+function vegMesh(P, N, U, C, I, mat) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(N, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(U, 2));
+  if (C) g.setAttribute("color", new THREE.Float32BufferAttribute(C, 3));
+  g.setIndex(I);
+  g.computeBoundsTree();
+  const m = new THREE.Mesh(g, mat);
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+function vegetationLayer(layer, picks) {
+  const group = new THREE.Group();
+  const col = new THREE.Color();
+  if (layer.cards) {
+    // Per card: int16 cm position; bytes size cm, yaw, pitch, roll, r, g, b, int8 normal x, y, z.
+    const pos = new Int16Array(vegBytes(layer.cards.positions).buffer);
+    const at = vegBytes(layer.cards.attributes), nrm = new Int8Array(at.buffer);
+    const mat = vegFoliageMaterial(layer.atlas);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, "YXZ");
+    const p = new THREE.Vector3(), s = new THREE.Vector3();
+    for (const [plant, sprite, bottom, start, count] of layer.cards.runs) {
+      const geo = vegSpriteGeometry(sprite, layer.atlas_grid, bottom);
+      const cn = new Float32Array(3 * count);
+      const mesh = new THREE.InstancedMesh(geo, mat, count);
+      for (let i = 0; i < count; i++) {
+        const k = start + i, a = 10 * k;
+        p.set(pos[3 * k] / 100, pos[3 * k + 1] / 100, pos[3 * k + 2] / 100);
+        q.setFromEuler(e.set(-at[a + 2] / 255 * Math.PI / 2, at[a + 1] / 128 * Math.PI, at[a + 3] / 128 * Math.PI));
+        mesh.setMatrixAt(i, m4.compose(p, q, s.setScalar(at[a] / 100)));
+        mesh.setColorAt(i, col.setRGB(at[a + 4] / 255, at[a + 5] / 255, at[a + 6] / 255, THREE.SRGBColorSpace));
+        cn[3 * i] = nrm[a + 7] / 127; cn[3 * i + 1] = nrm[a + 8] / 127; cn[3 * i + 2] = nrm[a + 9] / 127;
+      }
+      geo.setAttribute("cardNormal", new THREE.InstancedBufferAttribute(cn, 3));
+      mesh.castShadow = mesh.receiveShadow = true;
+      vegPlant(mesh, layer.plants[plant], group, picks);
+    }
+  }
+  if (layer.limbs) {
+    // [plant, x0, y0, z0, x1, y1, z1, r0, r1, r, g, b]: tapered tubes, one mesh per plant.
+    const mat = new THREE.MeshStandardMaterial({ map: layerTexture(layer.limbs.texture, true), vertexColors: true,
+      roughness: 0.95, metalness: 0 });
+    const byPlant = new Map();
+    for (const it of layer.limbs.items) (byPlant.get(it[0]) ?? byPlant.set(it[0], []).get(it[0])).push(it);
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), ax = new THREE.Vector3(), u = new THREE.Vector3(),
+      w = new THREE.Vector3(), d = new THREE.Vector3();
+    for (const [plant, items] of byPlant) {
+      const P = [], N = [], U = [], C = [], I = [];
+      for (const it of items) {
+        a.set(it[1], it[2], it[3]); b.set(it[4], it[5], it[6]);
+        col.setRGB(it[9] / 255, it[10] / 255, it[11] / 255, THREE.SRGBColorSpace);
+        const len = ax.subVectors(b, a).length();
+        ax.normalize();
+        u.set(0, 1, 0);
+        if (Math.abs(ax.y) > 0.9) u.set(1, 0, 0);
+        u.crossVectors(ax, u).normalize();
+        w.crossVectors(ax, u).normalize();
+        const base = P.length / 3, sides = 8, wraps = Math.max(1, Math.round((2 * Math.PI * it[7]) / 0.3));
+        for (let j = 0; j <= sides; j++) {
+          const t = (j / sides) * 2 * Math.PI;
+          d.copy(u).multiplyScalar(Math.cos(t)).addScaledVector(w, Math.sin(t));
+          for (const [o, r, v] of [[a, it[7], 0], [b, it[8], len]]) {
+            P.push(o.x + d.x * r, o.y + d.y * r, o.z + d.z * r);
+            N.push(d.x, d.y, d.z);
+            U.push((j / sides) * wraps, v);
+            C.push(col.r, col.g, col.b);
+          }
+        }
+        for (let j = 0; j < sides; j++) {
+          const i0 = base + 2 * j;
+          I.push(i0, i0 + 2, i0 + 1, i0 + 1, i0 + 2, i0 + 3);
+        }
+      }
+      vegPlant(vegMesh(P, N, U, C, I, mat), layer.plants[plant], group, picks);
+    }
+  }
+  if (layer.stumps) {
+    // A bark cylinder cut square at its face, `h` above its base point, leaning `lean` degrees
+    // towards `dir` (a horizontal unit vector) and reaching 0.1 m below the base; the face shows
+    // its cell of the stump texture. A root mound is a low dome showing its cell.
+    const st = layer.stumps, cells = st.cells, sides = 20;
+    const mat = new THREE.MeshStandardMaterial({ map: layerTexture(st.texture, false), roughness: 0.9, metalness: 0 });
+    for (const it of st.items) {
+      const [x, y, z] = it.at, P = [], N = [], U = [], I = [];
+      if (it.mound) {
+        const rings = 5;
+        for (let k = 0; k <= rings; k++) {
+          const f = k / rings;
+          for (let j = 0; j <= sides; j++) {
+            const t = (j / sides) * 2 * Math.PI, c = Math.cos(t), s = Math.sin(t);
+            P.push(x + it.r * f * c, y - 0.05 + (it.h + 0.05) * (1 - f * f), z + it.r * f * s);
+            const n = new THREE.Vector3(2 * it.h * f * c / it.r, 1, 2 * it.h * f * s / it.r).normalize();
+            N.push(n.x, n.y, n.z);
+            U.push((it.face + 0.5 + 0.47 * f * c) / cells, 0.5 - 0.47 * f * s);
+            if (k > 0 && j < sides) {
+              const a = (k - 1) * (sides + 1) + j, b = k * (sides + 1) + j;
+              I.push(a, b + 1, b, a, a + 1, b + 1);
+            }
+          }
+        }
+        vegPlant(vegMesh(P, N, U, null, I, mat), layer.plants[it.plant], group, picks);
+        continue;
+      }
+      const lean = (it.lean * Math.PI) / 180, [dx, dz] = it.dir;
+      const ax = new THREE.Vector3(Math.sin(lean) * dx, Math.cos(lean), Math.sin(lean) * dz);
+      const u = new THREE.Vector3(-dz, 0, dx), w = new THREE.Vector3().crossVectors(ax, u).normalize();
+      const face = new THREE.Vector3(x, y + it.h, z), len = (it.h + 0.1) / Math.cos(lean);
+      const foot = face.clone().addScaledVector(ax, -len), d = new THREE.Vector3();
+      for (let j = 0; j <= sides; j++) {
+        const t = (j / sides) * 2 * Math.PI;
+        d.copy(u).multiplyScalar(Math.cos(t)).addScaledVector(w, Math.sin(t));
+        for (const [o, v] of [[foot, 0], [face, 1]]) {
+          P.push(o.x + it.r * d.x, o.y + it.r * d.y, o.z + it.r * d.z);
+          N.push(d.x, d.y, d.z);
+          U.push(j / sides / cells, v);
+        }
+      }
+      for (let j = 0; j < sides; j++) I.push(2 * j, 2 * j + 2, 2 * j + 1, 2 * j + 1, 2 * j + 2, 2 * j + 3);
+      const c0 = P.length / 3;
+      P.push(face.x, face.y, face.z);
+      N.push(ax.x, ax.y, ax.z);
+      U.push((it.face + 0.5) / cells, 0.5);
+      for (let j = 0; j <= sides; j++) {
+        const t = (j / sides) * 2 * Math.PI, c = Math.cos(t), s = Math.sin(t);
+        d.copy(u).multiplyScalar(c).addScaledVector(w, s);
+        P.push(face.x + it.r * d.x, face.y + it.r * d.y, face.z + it.r * d.z);
+        N.push(ax.x, ax.y, ax.z);
+        U.push((it.face + 0.5 + 0.47 * c) / cells, 0.5 - 0.47 * s);
+        if (j < sides) I.push(c0, c0 + j + 1, c0 + j + 2);
+      }
+      vegPlant(vegMesh(P, N, U, null, I, mat), layer.plants[it.plant], group, picks);
+    }
+  }
+  if (layer.drape) {
+    // On the ground's own triangles, drawn in front of it. `detail`: a grey tile (`detail_m` across,
+    // laid in plan) multiplied in close up, fading out by 30 m away.
+    const d = layer.drape, g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(d.positions, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(d.uv, 2));
+    g.setIndex(d.indices);
+    g.computeVertexNormals();
+    g.computeBoundsTree();
+    const mat = new THREE.MeshStandardMaterial({ map: layerTexture(d.texture, !!d.repeat), roughness: 1,
+      metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
+    if (d.detail) {
+      const detail = loader.load(`data/${d.detail}`);
+      detail.wrapS = detail.wrapT = THREE.RepeatWrapping;
+      detail.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.detailMap = { value: detail };
+        shader.uniforms.detailScale = { value: 1 / d.detail_m };
+        shader.vertexShader = shader.vertexShader
+          .replace("#include <common>", "#include <common>\nvarying vec2 vPlan;")
+          .replace("#include <begin_vertex>", "#include <begin_vertex>\nvPlan = position.xz;");
+        shader.fragmentShader = shader.fragmentShader
+          .replace("#include <common>", "#include <common>\nuniform sampler2D detailMap;\nuniform float detailScale;\nvarying vec2 vPlan;")
+          .replace("#include <map_fragment>", "#include <map_fragment>\n" +
+            "float detailFade = clamp(1.0 - length(vViewPosition) / 30.0, 0.0, 1.0);\n" +
+            "diffuseColor.rgb *= mix(1.0, 2.0 * texture2D(detailMap, vPlan * detailScale).r, 0.55 * detailFade);");
+      };
+    }
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.receiveShadow = true;
+    groundSkins.push(mesh);
+    vegPlant(mesh, layer.plants[0], group, picks);
+    // The lawn and bed floors belong with the photo drapes: they step aside for the scanned plans
+    // and the plain relief.
+    $("drape").addEventListener("change", (e) => { mesh.visible = e.target.value.startsWith(DRAPE0); });
+  }
+  return group;
+}
+
+const objects = {};      // layer id -> Object3D
+const optionGrounds = {}; // wall option id -> its designed ground (a patch over the regrade area)
+const pickables = [];    // meshes that answer a click
+const groundSkins = [];  // the ground and the lawns and beds drawn on it: what the opacity slider fades
+let groundMesh;
+
+for (const layer of model.layers) {
+  let obj;
+  if (layer.type === "mesh") {
+    if (layer.id === "ground") {
+      obj = meshFromLayer(layer, new THREE.MeshStandardMaterial({ map: textures[DRAPE0], roughness: 1, metalness: 0 }));
+      obj.receiveShadow = true;
+      groundMesh = obj;
+      groundSkins.push(obj);
+    } else if (layer.role === "ground") {
+      obj = meshFromLayer(layer, new THREE.MeshStandardMaterial({ map: textures[DRAPE0], roughness: 1, metalness: 0 }));
+      obj.receiveShadow = true;
+      optionGrounds[layer.option] = obj;
+      groundSkins.push(obj);
+    } else if (layer.role === "skin") {
+      obj = meshFromLayer(layer, new THREE.MeshStandardMaterial({ color: layer.tint || "#ffffff",
+        map: layerTexture(layer.texture, true), roughness: 1, metalness: 0,
+        polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }));
+      obj.receiveShadow = true;
+      groundSkins.push(obj);
+    } else {
+      const map = layer.texture && layer.uv ? layerTexture(layer.texture, layer.repeat) : null;
+      const mat = new THREE.MeshStandardMaterial({
+        color: map ? "#ffffff" : layer.colour, map, roughness: 0.85, metalness: 0, side: THREE.DoubleSide,
+        flatShading: layer.id.startsWith("house-roof"),
+        transparent: layer.opacity != null, opacity: layer.opacity ?? 1,
+      });
+      obj = meshFromLayer(layer, mat);
+      obj.castShadow = layer.id !== "dsm";
+      obj.receiveShadow = true;
+    }
+    pickables.push(obj);
+  } else if (layer.type === "lines") {
+    obj = linesFromLayer(layer);
+    if (layer.labels) for (const l of layer.labels) obj.add(label(l.text, l.at, "contour"));
+  } else if (layer.type === "labels") {
+    obj = new THREE.Group();
+    for (const it of layer.items) obj.add(label(it.text, it.at, it.kind === "sewer" ? "sewer" : ""));
+  } else if (layer.type === "points") {
+    // JSON: positions as base64 little-endian int16 in `step` metres (viewer x, y, z), colours as base64 bytes.
+    obj = new THREE.Group();
+    const group = obj;
+    const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    fetch(`data/${layer.file}`).then((r) => r.json()).then((d) => {
+      const q = new Int16Array(bytes(d.positions).buffer);
+      const pos = new Float32Array(q.length);
+      for (let i = 0; i < q.length; i++) pos[i] = q[i] * d.step;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute("color", new THREE.Uint8BufferAttribute(bytes(d.colours), 3, true));
+      group.add(new THREE.Points(g, new THREE.PointsMaterial({ size: layer.size ?? 0.035, vertexColors: true })));
+    }).catch(() => status(`${layer.name} didn't load.`));
+  } else if (layer.type === "vegetation") {
+    const picks = [];
+    obj = vegetationLayer(layer, picks);
+    pickables.push(...picks);
+  } else if (layer.type === "pipes") {
+    obj = pipeFromLayer(layer);
+    pickables.push(obj);
+  }
+  if (!obj) continue;
+  obj.userData.layer = layer;
+  obj.traverse((o) => { o.userData.layer = layer; });
+  obj.visible = layer.visible !== false && layer.id !== "contours-minor";
+  objects[layer.id] = obj;
+  root.add(obj);
+}
+
+// Panel: drape selector
+const drapeBox = $("drape");
+Object.entries(model.textures).filter(([, t]) => !t.option).forEach(([key, t], i) => {
+  const id = `drape-${key}`;
+  drapeBox.insertAdjacentHTML("beforeend",
+    `<input type="radio" name="drape" id="${esc(id)}" value="${esc(key)}" ${i === 0 ? "checked" : ""}><label for="${esc(id)}">${esc(t.label)}</label>`);
+});
+drapeBox.addEventListener("change", (e) => {
+  groundMesh.material.map = textures[e.target.value];
+  groundMesh.material.needsUpdate = true;
+});
+
+// Panel: layers
+const groups = {};
+for (const layer of model.layers) {
+  if (!objects[layer.id] || layer.id === "ground") continue;
+  (groups[layer.group || "Other"] ||= []).push(layer);
+}
+const layersBox = $("layers");
+const layerSync = [];
+for (const [g, list] of Object.entries(groups)) {
+  const box = document.createElement("details");
+  box.className = "group";
+  box.innerHTML = `<summary><input type="checkbox" aria-label="Show all of ${esc(g)}"><span class="group-name">${esc(g)}</span><span class="group-count"></span></summary>`;
+  const all = box.querySelector("input");
+  const sync = () => {
+    const on = list.filter((l) => objects[l.id].visible).length;
+    all.checked = on === list.length;
+    all.indeterminate = on > 0 && on < list.length;
+    box.querySelector(".group-count").textContent = `${on} of ${list.length}`;
+  };
+  layerSync.push(sync);
+  all.addEventListener("click", (e) => e.stopPropagation());
+  // An option's layers come and go with the option, so the group's switch leaves them alone.
+  all.addEventListener("change", () => { const on = all.checked; for (const l of list) if (!l.option) setLayerVisible(l.id, on); sync(); });
+  for (const layer of list) {
+    const id = `layer-${layer.id}`;
+    const isLine = layer.type === "lines";
+    const colour = layer.colour || (layer.type === "trees" ? "#4f6e3b" : layer.type === "points" ? "#a39b8b" : "#888");
+    const row = document.createElement("label");
+    row.className = "layer";
+    row.htmlFor = id;
+    row.innerHTML = `<input type="checkbox" id="${esc(id)}" ${objects[layer.id].visible ? "checked" : ""}>` +
+      `<span class="swatch ${isLine ? "line" : ""}" style="${isLine ? `border-top-color:${esc(colour)}` : `background:${esc(colour)}`}"></span>` +
+      `<span class="layer-name">${esc(layer.name)}</span>`;
+    row.querySelector("input").addEventListener("change", (e) => { objects[layer.id].visible = e.target.checked; sync(); });
+    box.append(row);
+  }
+  sync();
+  layersBox.append(box);
+}
+
+// Panel: walls table
+const tbody = $("walls").querySelector("tbody");
+for (const w of model.summary.walls) {
+  const h = w.height_min_m === w.height_max_m ? `${w.height_max_m.toFixed(2)}` : `${w.height_min_m.toFixed(2)}–${w.height_max_m.toFixed(2)}`;
+  tbody.insertAdjacentHTML("beforeend",
+    `<tr><td><strong>${esc(w.id)}</strong> ${esc(w.name)}${w.confidence ? ` <span class="chip">${esc(w.confidence)}</span>` : ""}</td><td class="num">${w.length_m.toFixed(1)} m</td><td class="num">${h} m</td></tr>`);
+}
+
+// Panel: retaining wall options (options/*.toml). Picking one swaps the regrade area's ground for its
+// designed ground (the existing ground is hidden inside the option's mask, for drawing and for
+// picking), shows its walls, lawns, beds and contours, and hides the existing walls and the beds,
+// their plants and the stumps drawn on the old ground. A lawn that is there names the options that
+// draw it themselves, on their own ground (`redrawn_by`), and is hidden while one of them is shown.
+const OPTS = model.summary.options || [];
+const HIDE_WITH_OPTION = ["veg-beds", "veg-bed-floor", "stumps"];
+let activeOption = null, activeGround = null, optionMask = null;
+const maskTextures = {};
+const contourGeoms = {};
+const sum = (a, f) => a.reduce((t, x) => t + f(x), 0);
+function setLayerVisible(id, on) {
+  if (!objects[id]) return;
+  objects[id].visible = on;
+  const cb = $(`layer-${id}`);
+  if (cb) cb.checked = on;
+  for (const sync of layerSync) sync();
+}
+function maskRect(m) {
+  const [e0, n0, e1, n1] = model.extent;
+  const E = (u) => e0 + u * (e1 - e0) - E0, Z = (v) => -(n0 + v * (n1 - n0) - N0);
+  return [E(m[0]), Z(m[3]), E(m[2]), Z(m[1])];
+}
+function maskTexture(id, m) {
+  if (!maskTextures[id]) {
+    const c = document.createElement("canvas");
+    c.width = c.height = 1024;
+    const g = c.getContext("2d");
+    g.fillStyle = "#fff";
+    g.fillRect(0, 0, 1024, 1024);
+    g.fillStyle = "#000";
+    g.fillRect(m[0] * 1024, (1 - m[3]) * 1024, (m[2] - m[0]) * 1024, (m[3] - m[1]) * 1024);
+    maskTextures[id] = new THREE.CanvasTexture(c);
+  }
+  return maskTextures[id];
+}
+const inMask = (x, z) => optionMask && x > optionMask[0] && x < optionMask[2] && z > optionMask[1] && z < optionMask[3];
+// The existing ground answers no rays inside the mask while an option is shown.
+const groundRaycast = groundMesh.raycast.bind(groundMesh);
+groundMesh.raycast = (rc, hits) => {
+  const n = hits.length;
+  groundRaycast(rc, hits);
+  if (!optionMask) return;
+  for (let i = hits.length - 1; i >= n; i--) {
+    const p = root.worldToLocal(hits[i].point.clone());
+    if (inMask(p.x, p.z)) hits.splice(i, 1);
+  }
+};
+// The existing contours leave the mask to the option's own.
+function clipContours() {
+  for (const id of ["contours-major", "contours-minor"]) {
+    const o = objects[id];
+    if (!o) continue;
+    contourGeoms[id] ||= o.geometry;
+    if (!optionMask) {
+      o.geometry = contourGeoms[id];
+    } else {
+      const src = contourGeoms[id].attributes.position.array, keep = [];
+      for (let i = 0; i < src.length; i += 6) {
+        if (inMask(src[i], src[i + 2]) && inMask(src[i + 3], src[i + 5])) continue;
+        for (let k = 0; k < 6; k++) keep.push(src[i + k]);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(keep, 3));
+      o.geometry = g;
+    }
+    for (const ch of o.children) ch.visible = !inMask(ch.position.x, ch.position.z);
+  }
+}
+function applyDrape() {
+  const key = drapeBox.querySelector("input:checked")?.value || DRAPE0;
+  const cf = $("cutfillToggle").checked && activeOption;
+  groundMesh.material.map = textures[cf ? `cutfill-${activeOption.id}` : key];
+  groundMesh.material.needsUpdate = true;
+  for (const [id, g] of Object.entries(optionGrounds)) {
+    g.material.map = textures[cf ? `cutfill-${id}` : key];
+    g.material.needsUpdate = true;
+  }
+  $("cutfillLegend").hidden = !cf;
+  // The option's lawns and beds step aside for the cut and fill colours.
+  if (activeOption) {
+    for (const l of model.layers) if (l.option === activeOption.id && l.role === "skin") setLayerVisible(l.id, !cf);
+  }
+}
+drapeBox.addEventListener("change", applyDrape);
+$("cutfillToggle").addEventListener("change", applyDrape);
+function showOption(id) {
+  activeOption = OPTS.find((o) => o.id === id) || null;
+  for (const layer of model.layers) {
+    if (layer.option) setLayerVisible(layer.id, !!activeOption && layer.option === activeOption.id);
+  }
+  const keep = new Set(activeOption ? activeOption.keep_existing : []);
+  for (const w of model.summary.walls) setLayerVisible(`wall-${w.id}`, !activeOption || keep.has(w.id));
+  for (const id of HIDE_WITH_OPTION) setLayerVisible(id, !activeOption);
+  // Site features this option takes out.
+  for (const layer of model.layers) if (layer.hide_with) setLayerVisible(layer.id, !(activeOption && layer.hide_with.includes(activeOption.id)));
+  // A lawn the option draws itself, on its own ground.
+  for (const layer of model.layers) if (layer.redrawn_by) setLayerVisible(layer.id, !(activeOption && layer.redrawn_by.includes(activeOption.id)));
+  for (const layer of model.layers) if (layer.id.startsWith("fix-")) setLayerVisible(layer.id, !activeOption);
+  const gl = activeOption && model.layers.find((l) => l.id === `option-${activeOption.id}-ground`);
+  activeGround = activeOption ? optionGrounds[activeOption.id] : null;
+  optionMask = gl ? maskRect(gl.mask) : null;
+  groundMesh.material.alphaMap = gl ? maskTexture(activeOption.id, gl.mask) : null;
+  groundMesh.material.alphaTest = gl ? 0.5 : 0;
+  groundMesh.material.needsUpdate = true;
+  clipContours();
+  applyDrape();
+  $("siteState").textContent = activeOption ? activeOption.short : "Existing site";
+  renderOptionCard();
+  for (const c of $("optionsTable").querySelectorAll("[data-col]")) c.classList.toggle("on", c.dataset.col === (id || ""));
+  for (const b of $("optionBar").children) b.setAttribute("aria-checked", String(b.dataset.opt === (id || "")));
+  if (profile) openProfile(profile.rec);
+}
+function pickOption(id) {            // from the bar over the model, the table's headings or the keys
+  const radio = $(`opt-${id || "none"}`);
+  if (radio) radio.checked = true;
+  showOption(id);
+}
+function stepOption(by) {            // the option after or before the one shown, round through the site as it is
+  const ids = ["", ...OPTS.map((o) => o.id)];
+  pickOption(ids[(ids.indexOf(activeOption ? activeOption.id : "") + by + ids.length) % ids.length]);
+}
+function optionFlags(o) {
+  const out = [];
+  for (const w of o.walls) for (const f of w.flags) out.push(`${w.id}: ${f}`);
+  for (const s of o.stairs || []) for (const f of s.flags) out.push(`${s.id}: ${f}`);
+  for (const e of o.edge) out.push(`Ground: ${e.flag}`);
+  for (const d of o.drains) out.push(`Drains: ${d.flag}${d.wall ? "" : ` (${d.drain})`}`);
+  return out;
+}
+function renderOptionCard() {
+  const box = $("optionCard"), o = activeOption, site = model.summary.options_site;
+  const flat0 = OPTS.length ? OPTS[0].flat.before_m2 : 0;
+  if (!o) {
+    box.innerHTML = `<p class="opt-desc">The ground as it is: ${site.garden_m2.toFixed(0)} m², of which about ${flat0.toFixed(0)} m² is flatter than 1:${Math.round(1 / site.flat_slope)}. </p><p class="hint">Pick an option to see its walls, lawn and contours in the model.</p>`;
+    return;
+  }
+  const hi = Math.max(...o.walls.map((w) => w.height_max_m));
+  const walls = o.walls.map((w) => `<tr><td><strong>${esc(w.id)}</strong> ${esc(w.material)}</td><td class="num">${w.length_m.toFixed(1)} m</td><td class="num">${w.height_min_m.toFixed(2)}–${w.height_max_m.toFixed(2)} m</td><td class="num">${w.retained_max_m.toFixed(2)} m</td></tr>`).join("");
+  const flags = optionFlags(o);
+  const steps = (o.stairs || []).map((s) => `${s.risers} risers of ${s.riser_m.toFixed(2)} m, ${s.width_m.toFixed(1)} m wide` +
+    (s.foot_rise_m ? `, on a foot that rises ${s.foot_rise_m.toFixed(2)} m` : "")).join("; ");
+  box.innerHTML = `<p class="opt-desc">${esc(o.description)}</p>
+    <dl class="opt-nums">
+      <dt>Flat lawn</dt><dd>${o.flat.after_m2.toFixed(0)} m² (+${o.flat.gain_m2.toFixed(0)} m²); lawn ${(o.areas.lawn || 0).toFixed(0)} m², beds ${(o.areas.planting || 0).toFixed(0)} m²</dd>
+      <dt>Walls</dt><dd>${o.walls.length}, ${sum(o.walls, (w) => w.length_m).toFixed(1)} m long, ${sum(o.walls, (w) => w.face_area_m2).toFixed(1)} m² of face, up to ${hi.toFixed(2)} m</dd>
+      ${steps ? `<dt>Steps</dt><dd>${esc(steps)}</dd>` : ""}
+      <dt>Cut / fill</dt><dd>${o.volumes.cut_m3.toFixed(0)} / ${o.volumes.fill_m3.toFixed(0)} m³ (±${o.volumes.tolerance_m3.toFixed(0)}); deepest ${o.volumes.cut_max_m.toFixed(2)} / ${o.volumes.fill_max_m.toFixed(2)} m</dd>
+    </dl>
+    <div style="overflow-x:auto"><table><thead><tr><th>Wall</th><th>Length</th><th>Exposed</th><th>Retains</th></tr></thead><tbody>${walls}</tbody></table></div>
+    ${flags.length ? `<details open><summary>To check (${flags.length})</summary><ul class="flags">${flags.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></details>` : ""}
+    <div class="hint">From <code>${esc(o.file)}</code>.</div>`;
+}
+if (OPTS.length) {
+  $("optionsPanel").hidden = false;
+  const pick = $("optionPick");
+  for (const o of [{ id: "", short: "Existing" }, ...OPTS]) {
+    pick.insertAdjacentHTML("beforeend",
+      `<input type="radio" name="optionPick" id="opt-${esc(o.id || "none")}" value="${esc(o.id)}" ${o.id ? "" : "checked"}><label for="opt-${esc(o.id || "none")}">${esc(o.short)}</label>`);
+  }
+  pick.addEventListener("change", (e) => showOption(e.target.value));
+  const bar = $("optionBar");
+  bar.hidden = false;
+  for (const o of [{ id: "", short: "Existing", name: "The site as it is" }, ...OPTS]) {
+    bar.insertAdjacentHTML("beforeend",
+      `<button type="button" role="radio" data-opt="${esc(o.id)}" aria-checked="${o.id ? "false" : "true"}" title="${esc(o.name)}">${esc(o.short)}</button>`);
+  }
+  bar.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-opt]");
+    if (b) pickOption(b.dataset.opt);
+  });
+  const flat0 = OPTS[0].flat.before_m2;
+  const rows = [
+    ["Flat lawn, m²", (o) => (o ? o.flat.after_m2 : flat0).toFixed(0)],
+    ["Gained, m²", (o) => o ? `+${o.flat.gain_m2.toFixed(0)}` : "–"],
+    ["Walls, m", (o) => { const ws = o ? o.walls : model.summary.walls; return `${ws.length}: ${sum(ws, (w) => w.length_m).toFixed(0)}`; }],
+    ["Highest, m", (o) => { const w = o ? o.walls : model.summary.walls; return w.length ? Math.max(...w.map((x) => x.height_max_m)).toFixed(1) : "–"; }],
+    ["Cut/fill, m³", (o) => o ? `${o.volumes.cut_m3.toFixed(0)}/${o.volumes.fill_m3.toFixed(0)}` : "–"],
+    ["To check", (o) => o ? `${optionFlags(o).length}` : "–"],
+  ];
+  const cols = [null, ...OPTS];
+  const head = cols.map((o) => `<th data-col="${o ? esc(o.id) : ""}" data-opt="${o ? esc(o.id) : ""}">${o ? esc(o.short.split(".")[0]) : "Now"}</th>`).join("");
+  const body = rows.map(([label, f]) => `<tr><td>${label}</td>${cols.map((o) => `<td class="num" data-col="${o ? esc(o.id) : ""}">${esc(f(o))}</td>`).join("")}</tr>`).join("");
+  $("optionsTable").innerHTML = `<thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody>`;
+  $("optionsTable").addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-opt]");
+    if (!th) return;
+    pickOption(th.dataset.opt);
+  });
+  renderOptionCard();
+  for (const c of $("optionsTable").querySelectorAll('[data-col=""]')) c.classList.add("on");
+}
+
+$("lotArea").textContent = model.lot.area_m2.toFixed(0);
+$("allSites").hidden = !/\/s\/[a-z0-9-]+\/$/.test(location.pathname);     // one of many sites on a server
+$("siteTitle").textContent = model.heading;
+$("siteSub").textContent = model.subtitle || "";
+$("aboutModel").textContent = model.about;
+$("aboutModel").closest("section").hidden = !model.about;
+$("datum").innerHTML = `Grid ${esc(model.crs)}<br>Heights ${esc(model.vertical)}` +
+  DATUMS.map((d) => ` · ${esc(d.label)} = ${esc(model.vertical)} + ${d.offset_m.toFixed(2)} m`).join("");
+$("datumShort").textContent = `${model.crs}, ${model.vertical}`;
+$("foot").innerHTML = `Built ${esc(model.built.replace("T", " ").replace("+00:00", " UTC"))}${model.commit ? ` from ${esc(model.commit)}` : ""}.<br>${esc(model.attribution)}`;
+
+// Views. Their positions are at true scale; with the vertical scale raised, heights follow it.
+const SPAN = Math.max(model.extent[2] - model.extent[0], model.extent[3] - model.extent[1]);
+groundMesh.geometry.computeBoundingBox();
+const MIDY = (groundMesh.geometry.boundingBox.min.y + groundMesh.geometry.boundingBox.max.y) / 2;
+const VIEWS = {
+  "Overview": { pos: [0.37 * SPAN, MIDY + 0.42 * SPAN, -0.42 * SPAN], target: [0, MIDY, 0] },
+  "Plan": { pos: [0.5, MIDY + 1.35 * SPAN, 0.6], target: [0.5, MIDY, 0.5] },
+  ...model.views,
+};
+const viewsBox = $("views");
+for (const [name, v] of Object.entries(VIEWS)) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = name;
+  b.addEventListener("click", () => flyTo(v.pos, v.target));
+  viewsBox.append(b);
+}
+function setView(v) {
+  camera.position.set(...v.pos);
+  controls.target.set(...v.target);
+  camera.up.set(0, 1, 0);
+  controls.update();
+}
+setView(VIEWS["Overview"]);
+
+// Camera moves: a short eased flight, cut short by any drag; none when motion is reduced.
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let flight = null;
+function moveTo(pos, target, ms = 450) {
+  if (reduceMotion || ms <= 0) {
+    camera.position.copy(pos);
+    controls.target.copy(target);
+    controls.update();
+    return;
+  }
+  flight = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: target, start: performance.now(), ms };
+}
+function flyTo(pos, target) {
+  const k = root.scale.y;
+  moveTo(new THREE.Vector3(pos[0], pos[1] * k, pos[2]), new THREE.Vector3(target[0], target[1] * k, target[2]), 650);
+}
+function stepFlight(now) {
+  if (!flight) return;
+  const f = Math.min(1, (now - flight.start) / flight.ms);
+  const e = f < 0.5 ? 2 * f * f : 1 - (-2 * f + 2) ** 2 / 2;
+  camera.position.lerpVectors(flight.p0, flight.p1, e);
+  controls.target.lerpVectors(flight.t0, flight.t1, e);
+  if (f >= 1) flight = null;
+}
+controls.addEventListener("start", () => { flight = null; });
+controls.screenSpacePanning = false;    // panning slides along the ground
+
+// Navigation pad and keys
+const sph = new THREE.Spherical();
+const off = new THREE.Vector3();
+function orbitBy(dTheta, dPhi) {
+  flight = null;
+  off.subVectors(camera.position, controls.target);
+  sph.setFromVector3(off);
+  sph.theta += dTheta;
+  sph.phi = THREE.MathUtils.clamp(sph.phi + dPhi, 0.02, controls.maxPolarAngle);
+  off.setFromSpherical(sph);
+  camera.position.copy(controls.target).add(off);
+  controls.update();
+}
+function zoomBy(f) {
+  flight = null;
+  off.subVectors(camera.position, controls.target).multiplyScalar(f);
+  if (f < 1 && off.length() < 0.6) return;
+  camera.position.copy(controls.target).add(off);
+  controls.update();
+}
+function panBy(fx, fy) {
+  // fx, fy: fractions of the view's height, across and along the ground as the screen shows it
+  flight = null;
+  const d = camera.position.distanceTo(controls.target);
+  const h = 2 * d * Math.tan((camera.fov * Math.PI) / 360);
+  const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).setY(0).normalize();
+  const ahead = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).setY(0);
+  if (ahead.lengthSq() < 1e-8) ahead.crossVectors(new THREE.Vector3(0, 1, 0), right);
+  ahead.normalize();
+  const move = right.multiplyScalar(fx * h).addScaledVector(ahead, fy * h);
+  camera.position.add(move);
+  controls.target.add(move);
+  controls.update();
+}
+// Turn the view on the spot: the camera stays where it is and the point it turns about moves round it.
+// It can look straight down but not above the horizon, where the orbit's own limit would move the camera.
+function lookBy(dYaw, dPitch) {
+  flight = null;
+  off.subVectors(controls.target, camera.position);
+  sph.setFromVector3(off);
+  sph.theta += dYaw;
+  sph.phi = THREE.MathUtils.clamp(sph.phi + dPitch, Math.PI - controls.maxPolarAngle + 0.01, Math.PI - 0.02);
+  off.setFromSpherical(sph);
+  controls.target.copy(camera.position).add(off);
+  controls.update();
+  // Then turn about whatever is in the middle of the view, so a drag afterwards rotates about it.
+  camera.updateMatrixWorld();
+  const r = canvas.getBoundingClientRect();
+  const hit = pickAt(r.left + r.width / 2, r.top + r.height / 2, false);
+  if (hit) {
+    controls.target.copy(hit.hit.point);
+    controls.update();
+  }
+}
+function faceNorth() {
+  off.subVectors(camera.position, controls.target);
+  sph.setFromVector3(off);
+  sph.theta = 0;      // the camera south of the target, so north is up the screen
+  off.setFromSpherical(sph);
+  moveTo(controls.target.clone().add(off), controls.target.clone());
+}
+const NAV = {
+  in: () => zoomBy(0.8),
+  out: () => zoomBy(1.25),
+  left: () => orbitBy(-Math.PI / 18, 0),
+  right: () => orbitBy(Math.PI / 18, 0),
+  up: () => orbitBy(0, -Math.PI / 30),
+  down: () => orbitBy(0, Math.PI / 30),
+  home: () => flyTo(VIEWS.Overview.pos, VIEWS.Overview.target),
+  plan: () => {
+    const t = controls.target.clone();
+    const d = Math.max(20, camera.position.distanceTo(t));
+    moveTo(t.clone().add(new THREE.Vector3(0, d, 0.02 * d)), t);
+  },
+};
+const REPEATS = new Set(["in", "out", "left", "right", "up", "down"]);
+for (const b of document.querySelectorAll("[data-nav]")) {
+  const act = NAV[b.dataset.nav];
+  let timer = null;
+  const stop = () => { clearTimeout(timer); clearInterval(timer); timer = null; };
+  b.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    act();
+    if (REPEATS.has(b.dataset.nav)) timer = setTimeout(() => { timer = setInterval(act, 70); }, 350);
+  });
+  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, stop);
+  b.addEventListener("click", (e) => { if (e.detail === 0) act(); });     // Enter or Space on the button
+}
+function setPanDrag(on) {
+  $("panMode").setAttribute("aria-pressed", String(on));
+  controls.mouseButtons.LEFT = on ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+  controls.mouseButtons.RIGHT = on ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+  controls.touches.ONE = on ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE;
+}
+$("panMode").addEventListener("click", () => setPanDrag($("panMode").getAttribute("aria-pressed") !== "true"));
+$("north").addEventListener("click", faceNorth);
+$("north").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); faceNorth(); } });
+if (document.fullscreenEnabled) {
+  const fs = $("fullscreen");
+  fs.hidden = false;
+  fs.addEventListener("click", () => {
+    const p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    p.catch(() => { fs.hidden = true; });
+  });
+}
+
+// Saved views stay in this browser only; the page works the same without them.
+const SAVED_KEY = `domus-views-${model.title}`;
+function readSaved() {
+  try { return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]"); } catch { return []; }
+}
+function writeSaved(list) {
+  try { localStorage.setItem(SAVED_KEY, JSON.stringify(list)); return true; } catch { return false; }
+}
+function renderSaved() {
+  const box = $("saved");
+  box.replaceChildren();
+  readSaved().forEach((v, i) => {
+    const chip = document.createElement("span");
+    chip.className = "chipbtn";
+    const go = document.createElement("button");
+    go.type = "button";
+    go.textContent = v.name;
+    go.addEventListener("click", () => flyTo(v.pos, v.target));
+    const del = document.createElement("button");
+    del.type = "button";
+    del.textContent = "×";
+    del.title = `Forget the view “${v.name}”`;
+    del.setAttribute("aria-label", del.title);
+    del.addEventListener("click", () => {
+      const list = readSaved();
+      list.splice(i, 1);
+      writeSaved(list);
+      renderSaved();
+    });
+    chip.append(go, del);
+    box.append(chip);
+  });
+}
+$("saveForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const k = root.scale.y, list = readSaved();
+  const r2 = (v) => Math.round(v * 100) / 100;
+  list.push({
+    name: $("saveName").value.trim() || `View ${list.length + 1}`,
+    pos: [r2(camera.position.x), r2(camera.position.y / k), r2(camera.position.z)],
+    target: [r2(controls.target.x), r2(controls.target.y / k), r2(controls.target.z)],
+  });
+  if (writeSaved(list)) {
+    $("saveName").value = "";
+    renderSaved();
+  } else {
+    flash("This browser isn't keeping saved views for this page.");
+  }
+});
+renderSaved();
+
+// Messages over the model
+let flashTimer = null;
+function flash(text) {
+  status(text);
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => status(""), 3000);
+}
+
+// Picking: the nearest shown surface under a screen point, in the model's own (true-scale) coordinates.
+const ray = new THREE.Raycaster();
+ray.firstHitOnly = true;
+const ndc = new THREE.Vector2();
+const downRay = new THREE.Raycaster();
+downRay.firstHitOnly = true;
+const DOWN = new THREE.Vector3(0, -1, 0);
+const seeThrough = () => groundMesh.material.opacity < 0.5;
+function shown(o) {
+  for (let p = o; p && p !== root; p = p.parent) if (!p.visible) return false;
+  return true;
+}
+// leaves: whether the leaf cards of trees and shrubs answer (Select reads them; measuring goes through them).
+function pickAt(clientX, clientY, leaves = true) {
+  const rect = canvas.getBoundingClientRect();
+  ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const through = seeThrough();
+  const list = pickables.filter((o) => shown(o) && !(through && groundSkins.includes(o)) && !(!leaves && o.isInstancedMesh));
+  const hit = ray.intersectObjects(list, false)[0];
+  return hit ? { hit, local: root.worldToLocal(hit.point.clone()) } : null;
+}
+// Height of the first surface below (x, z) among `meshes`, in model coordinates, or null.
+function surfaceY(x, z, meshes) {
+  downRay.set(new THREE.Vector3(x, 1000, z), DOWN);
+  const hit = downRay.intersectObjects(meshes, false)[0];
+  return hit ? hit.point.y / root.scale.y : null;
+}
+const groundY = (x, z) => surfaceY(x, z, activeGround ? [activeGround, groundMesh] : [groundMesh]);
+
+// Go to a grid coordinate: centre the view on the ground there, keeping the camera's angle and distance.
+$("gotoForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const E = parseFloat($("gotoE").value), N = parseFloat($("gotoN").value);
+  if (!Number.isFinite(E) || !Number.isFinite(N)) {
+    flash(`Enter an easting and a northing in metres, for example ${Math.round(model.origin[0])} and ${Math.round(model.origin[1])}.`);
+    return;
+  }
+  const x = E - E0, z = -(N - N0), y = groundY(x, z);
+  if (y == null) {
+    flash(`E ${E.toFixed(2)}, N ${N.toFixed(2)} is outside the model.`);
+    return;
+  }
+  const t = new THREE.Vector3(x, y * root.scale.y, z);
+  moveTo(t.clone().add(off.subVectors(camera.position, controls.target)), t);
+  placeMarker(new THREE.Vector3(x, y, z));
+});
+
+// Drawing on the model: lines, points and labels in the measuring colour, over everything else.
+const overlay = new THREE.Group();
+root.add(overlay);
+const MEASURE = new THREE.Color(css.getPropertyValue("--measure").trim() || "#e0480c");
+const lineMat = new LineMaterial({ color: MEASURE, linewidth: 2.5, depthTest: false, transparent: true });
+const liveMat = new LineMaterial({ color: MEASURE, linewidth: 2, depthTest: false, transparent: true, dashed: true,
+  dashSize: 0.3, gapSize: 0.18 });
+const pointMat = new THREE.PointsMaterial({ color: MEASURE, size: 8, sizeAttenuation: false, depthTest: false,
+  transparent: true });
+const fillMat = new THREE.MeshBasicMaterial({ color: MEASURE, transparent: true, opacity: 0.16, depthTest: false,
+  depthWrite: false, side: THREE.DoubleSide });
+function polyline(points, mat, closed = false) {
+  const pts = closed ? [...points, points[0]] : points;
+  const g = new LineGeometry();
+  g.setPositions(pts.flatMap((p) => [p.x, p.y, p.z]));
+  const l = new Line2(g, mat);
+  l.computeLineDistances();
+  l.renderOrder = 20;
+  return l;
+}
+function dots(points) {
+  const d = new THREE.Points(new THREE.BufferGeometry().setFromPoints(points), pointMat);
+  d.renderOrder = 21;
+  return d;
+}
+function tag(text, at, live) {
+  return label(text, [at.x, at.y, at.z], live ? "measure live" : "measure");
+}
+function clearGroup(g) {
+  for (const c of [...g.children]) {
+    c.traverse((o) => {
+      o.geometry?.dispose();
+      if (o.isCSS2DObject) o.element.remove();
+    });
+    g.remove(c);
+  }
+}
+const marker = new THREE.Points(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3()]),
+  new THREE.PointsMaterial({ color: MEASURE, size: 11, sizeAttenuation: false, depthTest: false, transparent: true }));
+marker.renderOrder = 22;
+marker.visible = false;
+overlay.add(marker);
+function placeMarker(local) {
+  marker.position.copy(local);
+  marker.visible = true;
+}
+
+// Numbers as the readout writes them
+const fmt = (v, d = 2) => v.toLocaleString("en-NZ", { minimumFractionDigits: d, maximumFractionDigits: d });
+const f1 = (v) => fmt(v, 1), f2 = (v) => fmt(v, 2);
+const signed = (v) => `${v >= 0 ? "+" : "−"}${f2(Math.abs(v))}`;
+const pct = (v) => `${v < 0 ? "−" : ""}${fmt(Math.abs(v), 0)}%`;
+const site = (p) => [p.x + E0, -p.z + N0, p.y + H0];
+const siteText = (p) => { const [e, n, h] = site(p); return `E ${e.toFixed(2)}, N ${n.toFixed(2)}, ${h.toFixed(2)} m`; };
+const mid = (a, b) => a.clone().add(b).multiplyScalar(0.5);
+function grade(rise, run) {
+  if (run < 0.05) return "";
+  const g = rise / run;
+  if (Math.abs(g) < 0.0005) return " · level";
+  return ` · grade ${pct(100 * g)} (1 in ${f1(1 / Math.abs(g))})`;
+}
+
+// Point readout (the Select tool)
+function closeInspector() {
+  $("inspector").hidden = true;
+  marker.visible = false;
+}
+$("inspectorClose").addEventListener("click", closeInspector);
+function readPoint({ hit, local }) {
+  const [E, N, H] = site(local);
+  $("inspector").hidden = false;
+  updateHint();
+  $("readout").innerHTML = [["mE", fmt(E, 2)], ["mN", fmt(N, 2)], [model.vertical, `${fmt(H, 2)} m`],
+    ...DATUMS.map((d) => [d.label, fmt(H + d.offset_m, 2)])].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+  placeMarker(local);
+  const layer = hit.object.userData.layer;
+  // A line to paste into an artifact comment: comments pin to the page, not to a place in 3D.
+  $("copytext").value = `${layer?.name ? layer.name + " at " : ""}E ${E.toFixed(2)}, N ${N.toFixed(2)}, ${H.toFixed(2)} m NZVD2016`;
+  $("copyrow").hidden = false;
+  const info = layer?.info;
+  let html = `<strong>${esc(layer?.name)}</strong>`;
+  if (info) {
+    if (info.risers) html += `<br>${esc(info.material)}, ${info.risers} risers of ${fmt(info.riser_m, 2)} m on ${fmt(info.going_m, 2)} m goings, ${fmt(info.width_m, 1)} m wide`;
+    else if (info.material) html += `<br>${esc(info.material)}, about ${fmt(info.height_max_m, 2)} m exposed, ${fmt(info.length_m, 1)} m long`;
+    if (info.confidence) html += ` <span class="chip">${esc(info.confidence)}</span>`;
+    if (info.note) html += `<br><span class="hint">${esc(info.note)}</span>`;
+    if (info.source) html += `<br><span class="hint">Source: ${esc(info.source)}</span>`;
+  }
+  $("feature").innerHTML = html;
+}
+async function copyText(text) {
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch { ok = false; }
+  if (!ok) {
+    const t = $("copytext");
+    t.value = text;
+    $("inspector").hidden = false;
+    $("copyrow").hidden = false;
+    t.select();
+    try { ok = document.execCommand("copy"); } catch { ok = false; }
+  }
+  flash(ok ? "Copied." : "Selected in the point details: press Ctrl+C to copy.");
+}
+$("copybtn").addEventListener("click", () => copyText($("copytext").value));
+
+// Measuring tools
+const TOOLS = {
+  select: { name: "Select" },
+  distance: { name: "Distance", hint: "Click two points to measure between them.", n: 2 },
+  path: { name: "Path", hint: "Click points along the path. Double-click or press Enter to finish.", n: Infinity, min: 2 },
+  area: { name: "Area", hint: "Click the corners. Double-click, press Enter or click the first corner to close it.",
+    n: Infinity, min: 3 },
+  height: { name: "Height", hint: "Click two points to read the height between them.", n: 2 },
+  profile: { name: "Profile", hint: "Click the start and then the end of the section line.", n: 2 },
+  sketchwall: { name: "Wall", hint: "Click along the wall's face. Shift locks the direction, a typed number sets the length, Alt stops snapping. Enter to finish.", n: Infinity, min: 2,
+    sketch: "wall" },
+  sketcharea: { name: "Level area", hint: "Click the corners. Shift locks the direction, a typed number sets the length, Alt stops snapping. Enter or the first corner closes it.",
+    n: Infinity, min: 3, sketch: "area" },
+};
+let tool = "select";
+let active = null;      // the measurement being drawn: { type, pts, group }
+const done = [];        // finished: { id, type, pts, group, text, copy }
+let nextId = 1;
+let selId = null;       // the sketch item being shaped (see "Shaping a sketch")
+
+// Exact drawing: where a click really lands, once it has snapped to the site or lined up with it.
+const SNAP_TOOLS = new Set(["sketchwall", "sketcharea", "distance", "path", "area", "profile"]);
+const SNAP_PX = 12;
+const SITE_SNAP = snapTargets(model.snap?.lines, model.snap?.points);
+let drawn = null;       // the last hover, resolved: { local, label, line }
+let lockAngle = null;   // while Shift is held
+function metresPerPixel(local) {
+  const [ax, ay] = screenOf(local), [bx, by] = screenOf(new THREE.Vector3(local.x + 1, local.y, local.z));
+  return 1 / Math.max(Math.hypot(ax - bx, ay - by), 1e-3);
+}
+function drawTargets() {
+  const extra = sketch.map((it) => ({ label: it.name, pts: [...it.pts, ...(it.kind === "area" ? [it.pts[0]] : [])].map((p) => [p.x, p.z]) }));
+  const mine = active?.pts.length ? [{ label: "This line", pts: active.pts.map((p) => [p.x, p.z]) }] : [];
+  const t = snapTargets([...extra, ...mine], []);
+  return { corners: [...SITE_SNAP.corners, ...t.corners], mids: [...SITE_SNAP.mids, ...t.mids], edges: [...SITE_SNAP.edges, ...t.edges],
+    angles: [...referenceAngles(model.snap?.lines), ...referenceAngles([...extra, ...mine])] };
+}
+function resolveDraw(local, alt, from) {
+  const at = (q, label, line) => ({ local: new THREE.Vector3(q.x, existingY(q.x, q.z) ?? local.y, q.z), label, line });
+  if (alt) return { local: local.clone(), label: null, line: false };
+  const t = drawTargets(), tol = SNAP_PX * metresPerPixel(local);
+  const hit = nearestSnap(local, t, tol);
+  if (from && lockAngle !== null) return at(projectOnto(from, lockAngle, hit || local), hit ? `Locked, to ${hit.label}` : "Locked", true);
+  if (hit) return at(hit, hit.label, false);
+  const line = from && inferAngle(from, local, t.angles);
+  if (line) return at(projectOnto(from, line.angle, local), line.kind === "square" ? "Square to the site" : "In line with the site", true);
+  return { local: local.clone(), label: null, line: false };
+}
+function showSnap(d) {
+  const dot = $("snapDot");
+  dot.hidden = !d?.label;
+  if (dot.hidden) return;
+  const [x, y] = screenOf(d.local);
+  dot.style.left = `${x}px`;
+  dot.style.top = `${y}px`;
+  dot.classList.toggle("line", d.line);
+  dot.firstElementChild.textContent = d.label;
+}
+function hideSnap() { $("snapDot").hidden = true; }
+function lastPoint() { return active?.pts.length ? active.pts[active.pts.length - 1] : null; }
+function entryTarget() {
+  const from = lastPoint(), entry = parseEntry($("drawEntry").value);
+  if (!from || !entry) return null;
+  const toward = lockAngle !== null && drawn ? projectOnto(from, lockAngle, drawn.local) : drawn?.local;
+  const q = entryPoint(from, entry, toward);
+  return q ? new THREE.Vector3(q.x, existingY(q.x, q.z) ?? from.y, q.z) : null;
+}
+$("drawEntry").addEventListener("input", () => {
+  const q = entryTarget();
+  if (active) drawActive(q || drawn?.local || null);
+});
+$("drawEntry").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    $("drawEntry").value = "";
+    $("drawEntry").blur();
+  } else if (e.key === "Enter") {
+    const q = entryTarget();
+    if (!q) { $("hintText").textContent = "Type a length such as 3.2, or 3.2@45 for a bearing, and point the way you want it to go."; return; }
+    e.preventDefault();
+    $("drawEntry").value = "";
+    $("drawEntry").blur();
+    addPoint(q, [-1000, -1000]);
+  } else return;
+  e.stopPropagation();
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Shift" && lockAngle === null && drawn && lastPoint()) {
+    const from = lastPoint();
+    if (Math.hypot(drawn.local.x - from.x, drawn.local.z - from.z) > 0.1) lockAngle = Math.atan2(drawn.local.z - from.z, drawn.local.x - from.x);
+  }
+});
+window.addEventListener("keyup", (e) => { if (e.key === "Shift") lockAngle = null; });
+
+function setTool(t) {
+  if (active) cancelActive();
+  tool = t;
+  for (const b of document.querySelectorAll("[data-tool]")) b.setAttribute("aria-pressed", String(b.dataset.tool === t));
+  canvas.style.cursor = t === "select" ? "" : "crosshair";
+  if (t !== "select") closeInspector();
+  if (TOOLS[t].sketch) revealTab("design");
+  else if (t !== "select") revealTab("measure");
+  updateHint();
+}
+// A tool's button also puts it down again. On a phone the panel gets out of the way of the model to draw on.
+for (const b of document.querySelectorAll("[data-tool]")) {
+  b.addEventListener("click", () => {
+    setTool(tool === b.dataset.tool ? "select" : b.dataset.tool);
+    if (tool !== "select" && matchMedia("(max-width: 760px)").matches) closePanel();
+  });
+}
+$("toolDone").addEventListener("click", () => setTool("select"));
+function updateHint() {
+  const n = active ? active.pts.length : 0;
+  $("toolDone").hidden = tool === "select";
+  $("hintText").textContent = (tool !== "select" ? `${TOOLS[tool].name}: ` : "") + (tool === "select" && !n ? (selId != null ? SHAPE_HINT : "") : TOOLS[tool].hint) + (n ? ` (${n} point${n > 1 ? "s" : ""})` : "");
+  $("finishBtn").hidden = !(active && TOOLS[tool].min && n >= TOOLS[tool].min);
+  $("cancelBtn").hidden = !n;
+  $("drawEntryBox").hidden = !(n && SNAP_TOOLS.has(tool));
+  if ($("drawEntryBox").hidden) { $("drawEntry").value = ""; $("drawEntry").blur(); }
+  if (!active) hideSnap();
+}
+$("finishBtn").addEventListener("click", () => finishActive());
+$("cancelBtn").addEventListener("click", () => cancelActive());
+
+function screenOf(local) {
+  const p = root.localToWorld(local.clone()).project(camera);
+  const rect = canvas.getBoundingClientRect();
+  return [rect.left + ((p.x + 1) / 2) * rect.width, rect.top + ((1 - p.y) / 2) * rect.height];
+}
+function addPoint(local, [sx, sy]) {
+  if (!active) {
+    active = { type: tool, pts: [], group: new THREE.Group() };
+    overlay.add(active.group);
+  }
+  const pts = active.pts;
+  if ((tool === "area" || tool === "sketcharea") && pts.length >= 3) {
+    const [fx, fy] = screenOf(pts[0]);
+    if (Math.hypot(fx - sx, fy - sy) < 12) { finishActive(); return; }
+  }
+  if (pts.length) {                       // a double-click's second click lands on the last point
+    const [lx, ly] = screenOf(pts[pts.length - 1]);
+    if (Math.hypot(lx - sx, ly - sy) < 6) return;
+  }
+  pts.push(local.clone());
+  drawActive(null);
+  if (pts.length >= TOOLS[tool].n) finishActive();
+  updateHint();
+}
+function drawActive(hover) {
+  clearGroup(active.group);
+  const pts = hover ? [...active.pts, hover] : active.pts;
+  for (const o of describe(active.type, pts, true).objects) active.group.add(o);
+}
+function finishActive() {
+  if (!active) return;
+  const { type, pts, group } = active;
+  if (pts.length < (TOOLS[type].min ?? TOOLS[type].n)) { cancelActive(); return; }
+  clearGroup(group);
+  if (TOOLS[type].sketch) {
+    overlay.remove(group);
+    active = null;
+    addSketch(TOOLS[type].sketch, pts);
+    updateHint();
+    return;
+  }
+  const m = describe(type, pts, false);
+  for (const o of m.objects) group.add(o);
+  const rec = { id: nextId++, type, pts, group, text: m.text, copy: m.copy };
+  done.push(rec);
+  active = null;
+  renderMeasures();
+  updateHint();
+  if (type === "profile") openProfile(rec);
+}
+function cancelActive() {
+  if (!active) return;
+  clearGroup(active.group);
+  overlay.remove(active.group);
+  active = null;
+  updateHint();
+}
+function removeMeasure(rec) {
+  clearGroup(rec.group);
+  overlay.remove(rec.group);
+  done.splice(done.indexOf(rec), 1);
+  if (profile && profile.rec === rec) closeProfile();
+  renderMeasures();
+}
+$("clearAll").addEventListener("click", () => {
+  cancelActive();
+  for (const rec of [...done]) removeMeasure(rec);
+  marker.visible = false;
+});
+
+// What each tool draws and reads: the drawing, a short text for the list and a line to copy.
+function describe(type, pts, live) {
+  if (type === "sketchwall") type = "path";
+  if (type === "sketcharea") type = "area";
+  const mat = live ? liveMat : lineMat, objs = [];
+  let text = "", copy = "";
+  const n = pts.length;
+  if (n >= 2) {
+    const a = pts[0], b = pts[n - 1];
+    const run = Math.hypot(b.x - a.x, b.z - a.z), rise = b.y - a.y;
+    if (type === "distance" || type === "profile") {
+      const slope = Math.hypot(run, rise);
+      const bearing = ((Math.atan2(b.x - a.x, -(b.z - a.z)) * 180) / Math.PI + 360) % 360;
+      objs.push(polyline([a, b], mat));
+      objs.push(tag(type === "profile" ? `profile ${f2(run)} m` : `${f2(slope)} m`, mid(a, b), live));
+      text = `${f2(slope)} m · plan ${f2(run)} m · rise ${signed(rise)} m${grade(rise, run)} · bearing ${bearing.toFixed(0)}°`;
+      copy = `${TOOLS[type].name} ${text}, from ${siteText(a)} to ${siteText(b)}`;
+    } else if (type === "height") {
+      const lo = a.y <= b.y ? a : b, hi = lo === a ? b : a;
+      const corner = new THREE.Vector3(lo.x, hi.y, lo.z);
+      objs.push(polyline([lo, corner, hi], mat));
+      objs.push(tag(`Δh ${f2(hi.y - lo.y)} m`, mid(lo, corner), live));
+      text = `${f2(hi.y - lo.y)} m, from ${f2(lo.y + H0)} to ${f2(hi.y + H0)} m NZVD2016, ${f2(run)} m apart in plan`;
+      copy = `Height ${text}: ${siteText(lo)} and ${siteText(hi)}`;
+    } else if (type === "path") {
+      let len = 0, plan = 0;
+      for (let i = 1; i < n; i++) {
+        len += pts[i].distanceTo(pts[i - 1]);
+        plan += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
+      }
+      objs.push(polyline(pts, mat));
+      objs.push(tag(`${f2(len)} m`, b, live));
+      text = `${f2(len)} m (plan ${f2(plan)} m) over ${n} points, rise ${signed(rise)} m end to end`;
+      copy = `Path ${text}, from ${siteText(a)} to ${siteText(b)}`;
+    } else if (type === "area") {
+      if (n >= 3) {
+        let area = 0, perim = 0;
+        for (let i = 0; i < n; i++) {
+          const p = pts[i], q = pts[(i + 1) % n];
+          area += p.x * -q.z - q.x * -p.z;           // shoelace on (E, N)
+          perim += Math.hypot(q.x - p.x, q.z - p.z);
+        }
+        area = Math.abs(area) / 2;
+        objs.push(polyline(pts, mat, true));
+        const tris = THREE.ShapeUtils.triangulateShape(pts.map((p) => new THREE.Vector2(p.x, p.z)), []);
+        if (tris.length) {
+          const g = new THREE.BufferGeometry().setFromPoints(pts);
+          g.setIndex(tris.flat());
+          const fill = new THREE.Mesh(g, fillMat);
+          fill.renderOrder = 19;
+          objs.push(fill);
+        }
+        const c = pts.reduce((s, p) => s.add(p), new THREE.Vector3()).multiplyScalar(1 / n);
+        objs.push(tag(`${f1(area)} m²`, c, live));
+        text = `${f1(area)} m² in plan · perimeter ${f2(perim)} m · ${n} corners`;
+        copy = `Area ${text}: ${pts.map((p) => { const [e, nn] = site(p); return `(${e.toFixed(2)}, ${nn.toFixed(2)})`; }).join(", ")}`;
+      } else {
+        objs.push(polyline(pts, mat));
+      }
+    }
+  }
+  if (n) objs.push(dots(pts));
+  return { objects: objs, text, copy };
+}
+
+// The list of finished measurements in the panel
+const ICON_COPY = `<svg viewBox="0 0 24 24"><path d="M8 8h11v12H8z"/><path d="M5 16V4h11"/></svg>`;
+const ICON_DEL = `<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+function renderMeasures() {
+  const box = $("measures");
+  box.replaceChildren();
+  for (const rec of done) {
+    const row = document.createElement("div");
+    row.className = `mrow${rec.type === "profile" ? " open" : ""}`;
+    const what = document.createElement("div");
+    what.className = "what";
+    what.innerHTML = `<b>${TOOLS[rec.type].name}</b>`;
+    what.append(rec.text);
+    if (rec.type === "profile") {
+      what.title = "Show this profile";
+      what.addEventListener("click", () => openProfile(rec));
+    }
+    const cp = document.createElement("button");
+    cp.type = "button";
+    cp.className = "ib";
+    cp.innerHTML = ICON_COPY;
+    cp.title = "Copy this measurement";
+    cp.setAttribute("aria-label", cp.title);
+    cp.addEventListener("click", () => copyText(rec.copy));
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "ib";
+    del.innerHTML = ICON_DEL;
+    del.title = "Remove this measurement";
+    del.setAttribute("aria-label", del.title);
+    del.addEventListener("click", () => removeMeasure(rec));
+    row.append(what, cp, del);
+    box.append(row);
+  }
+  $("copyMeasures").hidden = done.length === 0;
+}
+$("copyMeasures").addEventListener("click", () => copyText(done.map((r) => r.copy).join("\n")));
+
+// Profile and section along a line
+let profile = null;
+const PROFILE_GROUPS = new Set(["Existing walls", "Site features"]);
+function structureMeshes() {
+  const out = [];
+  for (const layer of model.layers) {
+    const o = objects[layer.id];
+    if (!o || layer.type !== "mesh" || o === groundMesh || !shown(o)) continue;
+    if (PROFILE_GROUPS.has(layer.group) || (layer.group || "").startsWith("Option:")) out.push(o);
+  }
+  return out;
+}
+// Where the line a-b (plan) crosses each drain pipe: its distance along the line, centre height and size.
+function pipeCrossings(a, b, len) {
+  const out = [];
+  for (const layer of model.layers) {
+    if (layer.type !== "pipes") continue;
+    const p = layer.path;
+    for (let i = 3; i < p.length; i += 3) {
+      const cx = p[i - 3], cz = p[i - 1], dx = p[i] - cx, dz = p[i + 2] - cz;
+      const ex = b.x - a.x, ez = b.z - a.z, den = ex * dz - ez * dx;
+      if (Math.abs(den) < 1e-9) continue;
+      const t = ((cx - a.x) * dz - (cz - a.z) * dx) / den, u = ((cx - a.x) * ez - (cz - a.z) * ex) / den;
+      if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+      out.push({ s: t * len, y: p[i - 2] + u * (p[i + 1] - p[i - 2]), r: layer.radius, colour: layer.colour,
+        name: layer.name.replace(/, underground$/, "").replace(/ \(.*$/, ""), assumed: layer.info?.confidence === "depth assumed" });
+    }
+  }
+  return out;
+}
+function openProfile(rec) {
+  const [a, b] = rec.pts;
+  const len = Math.hypot(b.x - a.x, b.z - a.z);
+  const n = Math.min(800, Math.max(80, Math.ceil(len / 0.04)));
+  const structs = structureMeshes(), samples = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, x = a.x + t * (b.x - a.x), z = a.z + t * (b.z - a.z);
+    const g = groundY(x, z);
+    let top = null;
+    if (structs.length && g != null) {
+      const y = surfaceY(x, z, structs);
+      if (y != null && y > g + 0.02) top = y;
+    }
+    samples.push({ s: t * len, x, z, g, top });
+  }
+  profile = { rec, a, b, len, samples, crossings: pipeCrossings(a, b, len) };
+  for (const c of profile.crossings) {
+    const k = Math.round((c.s / len) * n);
+    c.depth = samples[k].g != null ? samples[k].g - (c.y - c.r) : null;
+  }
+  $("profile").hidden = false;
+  $("stage").classList.add("has-profile");
+  if (cutOn) { setCutPlane(); applyCut(); }
+  drawProfile();
+}
+function closeProfile() {
+  profile = null;
+  $("profile").hidden = true;
+  $("stage").classList.remove("has-profile");
+  cutOn = false;
+  $("cutToggle").checked = false;
+  $("cutFlip").disabled = true;
+  applyCut();
+  marker.visible = false;
+}
+$("profileClose").addEventListener("click", closeProfile);
+function niceStep(range, count) {
+  const raw = range / Math.max(1, count), mag = 10 ** Math.floor(Math.log10(raw));
+  return [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag;
+}
+const SVGNS = "http://www.w3.org/2000/svg";
+function svgEl(name, attrs, text) {
+  const el = document.createElementNS(SVGNS, name);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  if (text != null) el.textContent = text;
+  return el;
+}
+function drawProfile() {
+  if (!profile) return;
+  const svg = $("profileChart"), W = svg.clientWidth, H = svg.clientHeight;
+  svg.replaceChildren();
+  if (W < 80 || H < 60) return;
+  const { len, samples, crossings } = profile;
+  let lo = Infinity, hi = -Infinity;
+  for (const s of samples) {
+    if (s.g != null) { lo = Math.min(lo, s.g); hi = Math.max(hi, s.g); }
+    if (s.top != null) hi = Math.max(hi, s.top);
+  }
+  if (!Number.isFinite(lo)) {
+    $("profileStats").textContent = "No ground under this line.";
+    return;
+  }
+  for (const c of crossings) lo = Math.min(lo, c.y - c.r);
+  const pad = Math.max(0.15, (hi - lo) * 0.08);
+  lo -= pad;
+  hi += pad;
+  const m = { l: 50, r: 12, t: 8, b: 20 }, w = W - m.l - m.r, h = H - m.t - m.b;
+  const sx = (s) => m.l + (s / len) * w, sy = (y) => m.t + (1 - (y - lo) / (hi - lo)) * h;
+  profile.scale = { sx, sy, m, w };
+  // grid and axes: heights in NZVD2016, distance along the line from its start
+  const yStep = niceStep(hi - lo, h / 26), xStep = niceStep(len, w / 64);
+  for (let y = Math.ceil(lo / yStep) * yStep; y <= hi + 1e-9; y += yStep) {
+    svg.append(svgEl("line", { class: "grid", x1: m.l, x2: m.l + w, y1: sy(y), y2: sy(y) }));
+    svg.append(svgEl("text", { class: "axis", x: m.l - 6, y: sy(y) + 3.5, "text-anchor": "end" }, (y + H0).toFixed(yStep < 0.5 ? 2 : 1)));
+  }
+  for (let s = 0; s <= len + 1e-9; s += xStep) {
+    svg.append(svgEl("line", { class: "grid", x1: sx(s), x2: sx(s), y1: m.t, y2: m.t + h }));
+    if (sx(s) < m.l + w - 56) svg.append(svgEl("text", { class: "axis", x: sx(s), y: H - 5, "text-anchor": "middle" }, `${+s.toFixed(1)}`));
+  }
+  svg.append(svgEl("text", { class: "axis", x: m.l + w, y: H - 5, "text-anchor": "end" }, "m along"));
+  // ground: filled to the chart's foot, then its line
+  let d = "", fill = "";
+  let run = [];
+  const flush = () => {
+    if (run.length > 1) {
+      d += `M${run.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L")}`;
+      fill += `M${run[0][0].toFixed(1)},${(m.t + h).toFixed(1)}L${run.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L")}L${run[run.length - 1][0].toFixed(1)},${(m.t + h).toFixed(1)}Z`;
+    }
+    run = [];
+  };
+  for (const s of samples) {
+    if (s.g == null) flush();
+    else run.push([sx(s.s), sy(s.g)]);
+  }
+  flush();
+  svg.append(svgEl("path", { class: "gfill", d: fill }), svgEl("path", { class: "gline", d }));
+  // walls and site features standing on the ground: their tops
+  let top = "";
+  let open = false;
+  for (const s of samples) {
+    if (s.top == null || s.g == null) { open = false; continue; }
+    top += `${open ? "L" : "M"}${sx(s.s).toFixed(1)},${sy(s.top).toFixed(1)}`;
+    open = true;
+  }
+  if (top) svg.append(svgEl("path", { class: "sline", d: top }));
+  // drains crossed: the pipe at its depth
+  for (const c of crossings) {
+    const r = Math.max(3.5, (c.r / (hi - lo)) * h);
+    svg.append(svgEl("circle", { class: "pipe", cx: sx(c.s), cy: sy(c.y), r, fill: c.colour }));
+    const lbl = `${c.name}${c.depth != null ? `, invert ${f2(c.depth)} m deep` : ""}${c.assumed ? " (assumed)" : ""}`;
+    const right = sx(c.s) < m.l + w * 0.6;
+    svg.append(svgEl("text", { class: "pipe-lbl", x: sx(c.s) + (right ? r + 4 : -r - 4), y: sy(c.y) + 3.5,
+      "text-anchor": right ? "start" : "end" }, lbl));
+  }
+  // hover crosshair, filled in by the pointer
+  profile.cross = svgEl("line", { class: "cross", x1: 0, x2: 0, y1: m.t, y2: m.t + h, visibility: "hidden" });
+  profile.crossText = svgEl("text", { class: "cross-lbl", x: 0, y: m.t + 11, visibility: "hidden" });
+  svg.append(profile.cross, profile.crossText);
+  // the numbers
+  const first = samples.find((s) => s.g != null), last = [...samples].reverse().find((s) => s.g != null);
+  let steep = 0;
+  const win = Math.max(1, Math.round((0.5 / len) * (samples.length - 1)));
+  for (let i = win; i < samples.length; i += 1) {
+    const p = samples[i - win], q = samples[i];
+    if (p.g != null && q.g != null && q.s > p.s) steep = Math.max(steep, Math.abs(q.g - p.g) / (q.s - p.s));
+  }
+  const rise = last.g - first.g, span = last.s - first.s;
+  // the list in the panel reads the profile as the chart does: the ground at its ends
+  const rec = profile.rec;
+  rec.text = `${f2(len)} m · ground ${f2(first.g + H0)} to ${f2(last.g + H0)} m, rise ${signed(rise)} m${grade(rise, span)} · steepest ${pct(100 * steep)}`;
+  rec.copy = `Profile ${rec.text}${crossings.length ? `; crosses ${crossings.map((c) => `${c.name} at ${f2(c.s)} m (invert ${c.depth != null ? f2(c.depth) : "?"} m deep${c.assumed ? ", assumed" : ""})`).join(", ")}` : ""}, from ${siteText(profile.a)} to ${siteText(profile.b)}`;
+  renderMeasures();
+  const parts = [`<b>${f2(len)} m</b> long`, `ground <b>${f2(first.g + H0)} → ${f2(last.g + H0)} m</b>`,
+    `rise <b>${signed(rise)} m</b>${span > 0.05 ? `, mean <b>${pct((100 * rise) / span)}</b>` : ""}`,
+    `steepest over 0.5 m <b>${pct(100 * steep)}</b>`, `vertical ×${f1((h / (hi - lo)) / (w / len))} in the chart`];
+  $("profileStats").innerHTML = parts.join(" · ");
+}
+const chart = $("profileChart");
+chart.addEventListener("pointermove", (e) => {
+  if (!profile?.scale) return;
+  const { sx, sy, m, w } = profile.scale, rect = chart.getBoundingClientRect();
+  const f = THREE.MathUtils.clamp((e.clientX - rect.left - m.l) / w, 0, 1);
+  const s = profile.samples[Math.round(f * (profile.samples.length - 1))];
+  const x = sx(s.s);
+  profile.cross.setAttribute("x1", x);
+  profile.cross.setAttribute("x2", x);
+  profile.cross.setAttribute("visibility", "visible");
+  const txt = `${f2(s.s)} m · ground ${s.g != null ? f2(s.g + H0) : "–"}${s.top != null ? ` · top ${f2(s.top + H0)}` : ""}`;
+  profile.crossText.textContent = txt;
+  profile.crossText.setAttribute("x", x < m.l + w * 0.6 ? x + 6 : x - 6);
+  profile.crossText.setAttribute("text-anchor", x < m.l + w * 0.6 ? "start" : "end");
+  profile.crossText.setAttribute("visibility", "visible");
+  if (s.g != null) placeMarker(new THREE.Vector3(s.x, s.top ?? s.g, s.z));
+});
+chart.addEventListener("pointerleave", () => {
+  if (!profile?.cross) return;
+  profile.cross.setAttribute("visibility", "hidden");
+  profile.crossText.setAttribute("visibility", "hidden");
+  marker.visible = false;
+});
+
+// Section: cut the model along the profile line, keeping the half away from the camera
+const cutPlane = new THREE.Plane();
+let cutOn = false;
+function setCutPlane() {
+  const { a, b } = profile;
+  const dir = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
+  const nrm = new THREE.Vector3(-dir.z, 0, dir.x);
+  const cam = root.worldToLocal(camera.position.clone());
+  if (nrm.dot(cam.sub(a)) > 0) nrm.negate();
+  cutPlane.setFromNormalAndCoplanarPoint(nrm, new THREE.Vector3(a.x, 0, a.z));
+}
+function applyCut() {
+  const planes = cutOn && profile ? [cutPlane] : null;
+  renderer.localClippingEnabled = !!planes;
+  for (const o of Object.values(objects)) {
+    o.traverse((c) => {
+      for (const mat of c.material ? [c.material].flat() : []) {
+        if ((mat.clippingPlanes?.length ?? 0) === (planes?.length ?? 0)) continue;
+        mat.clippingPlanes = planes;
+        mat.clipShadows = true;
+        mat.needsUpdate = true;
+      }
+    });
+  }
+}
+$("cutToggle").addEventListener("change", (e) => {
+  cutOn = e.target.checked && !!profile;
+  $("cutFlip").disabled = !cutOn;
+  if (cutOn) setCutPlane();
+  applyCut();
+});
+$("cutFlip").addEventListener("click", () => cutPlane.negate());
+
+// Ground opacity and vertical scale
+function setGroundOpacity(v) {
+  for (const m of groundSkins) {
+    m.material.transparent = v < 1;
+    m.material.opacity = v;
+    m.material.depthWrite = v >= 1;
+    m.material.needsUpdate = true;
+  }
+  $("groundOpacityOut").textContent = `${Math.round(v * 100)}%`;
+}
+$("groundOpacity").addEventListener("input", (e) => setGroundOpacity(e.target.value / 100));
+const exagBox = $("exag");
+for (const k of [1, 1.5, 2, 3]) {
+  exagBox.insertAdjacentHTML("beforeend",
+    `<input type="radio" name="exag" id="exag-${k}" value="${k}" ${k === 1 ? "checked" : ""}><label for="exag-${k}">${k}×</label>`);
+}
+exagBox.addEventListener("change", (e) => {
+  const k = +e.target.value, r = k / root.scale.y;
+  flight = null;
+  root.scale.y = k;
+  root.updateMatrixWorld(true);
+  camera.position.y *= r;
+  controls.target.y *= r;
+  controls.update();
+});
+
+// Clicks on the model
+let down = null;
+canvas.addEventListener("pointerdown", (e) => { down = [e.clientX, e.clientY]; });
+canvas.addEventListener("pointerup", (e) => {
+  const moved = !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4;
+  down = null;
+  if (moved || e.button !== 0) return;
+  const p = pickAt(e.clientX, e.clientY, tool === "select");
+  if (!p && tool !== "select") return;
+  if (tool === "select") {
+    const id = sketchAt(e.clientX, e.clientY);
+    if (id != null && (!p || id !== selId)) { selectSketch(id); return; }
+    if (!p) return;
+    if (selId != null && id == null) selectSketch(null);
+    readPoint(p);
+  } else addPoint(SNAP_TOOLS.has(tool) ? resolveDraw(p.local, e.altKey, lastPoint()).local : p.local, [e.clientX, e.clientY]);
+});
+canvas.addEventListener("dblclick", (e) => {
+  if (TOOLS[tool].min) { finishActive(); return; }
+  if (tool !== "select") return;
+  const p = pickAt(e.clientX, e.clientY);
+  if (!p) return;
+  const t = p.hit.point.clone();
+  moveTo(t.clone().add(off.subVectors(camera.position, controls.target)), t);
+});
+// The pointer: a live reading of the point under it, and the measurement following it
+let hoverEv = null, hoverQueued = false;
+canvas.addEventListener("pointermove", (e) => {
+  hoverEv = e;
+  if (!hoverQueued) {
+    hoverQueued = true;
+    requestAnimationFrame(doHover);
+  }
+});
+canvas.addEventListener("pointerleave", () => {
+  hoverEv = null;
+  $("cursor").textContent = "";
+  hideSnap();
+  if (active) drawActive(null);
+});
+function doHover() {
+  hoverQueued = false;
+  if (!hoverEv || hoverEv.buttons) return;
+  const p = pickAt(hoverEv.clientX, hoverEv.clientY, false);
+  if (p) {
+    const [E, N, H] = site(p.local);
+    $("cursor").textContent = `E ${E.toFixed(2)}  N ${N.toFixed(2)}  ${H.toFixed(2)} m`;
+  } else {
+    $("cursor").textContent = "";
+  }
+  drawn = p && SNAP_TOOLS.has(tool) ? resolveDraw(p.local, hoverEv.altKey, lastPoint()) : null;
+  showSnap(drawn);
+  if (active && active.pts.length && !$("drawEntry").value) drawActive(drawn ? drawn.local : p ? p.local : null);
+}
+
+
+// Panel: what would improve this model, ticked off from the site's files or by hand, and the route to film.
+(function enrichPanel() {
+  const E = model.enrich;
+  if (!E) return;
+  $("enrich").hidden = false;
+  const KEY = `domus-enrich-${model.title}`;
+  let ticked = {};
+  try { ticked = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { /* no storage: start empty */ }
+  let store = null;
+  const count = () => {
+    const done = E.sources.filter((s) => s.found || ticked[s.id]).length;
+    $("enrichCount").textContent = `${done} of ${E.sources.length} sources added, most useful first. Each one makes the model closer to the real site.`;
+  };
+  const save = () => {
+    try { localStorage.setItem(KEY, JSON.stringify(ticked)); } catch { /* not kept */ }
+    store?.collection("enrich").doc("ticked").set({ ticked }).catch(() => {});
+  };
+  const render = () => {
+    const list = $("enrichList");
+    list.replaceChildren();
+    for (const s of E.sources) {
+      const row = document.createElement("div");
+      row.className = "enrich-item";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.id = `enrich-${s.id}`;
+      cb.checked = s.found || !!ticked[s.id];
+      cb.disabled = s.found;
+      cb.title = s.found ? "Found in this site's files" : "Tick when you have it";
+      cb.addEventListener("change", () => { ticked[s.id] = cb.checked; save(); count(); });
+      const d = document.createElement("details");
+      const sum = document.createElement("summary");
+      sum.textContent = s.title;
+      d.append(sum);
+      for (const [label, text] of [["Why", s.why], ["Where", s.where], ["Then", s.how]]) {
+        const p = document.createElement("p");
+        p.textContent = `${label}: ${text}`;
+        d.append(p);
+      }
+      row.append(cb, d);
+      list.append(row);
+    }
+    count();
+  };
+  render();
+  (async () => {
+    try { store = await window.claude?.use?.("db"); } catch { store = null; }
+    if (!store) { const h = await fetch("healthz").catch(() => null); if (h?.ok) store = {
+      collection: (c) => ({ doc: (id) => ({
+        get: async () => { const r = await fetch(`api/db/${c}/${id}`); return r.ok ? r.json() : null; },
+        set: async (data) => { await fetch(`api/db/${c}/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); },
+      }) }) }; }
+    const snap = await store?.collection("enrich").doc("ticked").get().catch(() => null);
+    const d = snap && (typeof snap.data === "function" ? snap.data() : snap.data);
+    if (d?.ticked) { ticked = { ...ticked, ...d.ticked }; render(); }
+  })();
+  fetch("healthz").then((h) => { if (h.ok) { $("walkScan").hidden = false; $("walkScan").onclick = () => { location.href = "scan"; }; } }).catch(() => {});
+  const R = E.route;
+  if (!R) return;
+  $("walkSummary").textContent = `About ${R.length_m} m, ${R.stops.length} stops. Show it on the model, then follow the numbers.`;
+  for (const s of R.stops) {
+    const li = document.createElement("li");
+    li.textContent = s.text;
+    $("walkSteps").append(li);
+  }
+  $("walkShow").addEventListener("click", () => {
+    const on = $("walkShow").getAttribute("aria-pressed") !== "true";
+    $("walkShow").setAttribute("aria-pressed", String(on));
+    $("walkShow").textContent = on ? "Hide the route" : "Show the route";
+    setLayerVisible("walk-route", on);
+    if (on) { const v = VIEWS.Plan; flyTo(v.pos, v.target); }
+  });
+})();
+
+// Sketching: walls and level areas drawn on the model, with heights set in the panel, kept in this
+// browser as a draft and saved to the app's store (collection "sketches"), or the artifact's database
+// when published as a claude.ai Artifact, to build into an option. Coordinates go out in grid metres and in the options' site frame (s, o).
+const SKETCH_KEY = `domus-sketch-${model.title}`;
+const sketchGroup = new THREE.Group();
+root.add(sketchGroup);
+const MATERIALS = ["timber", "block", "segmental", "gabion", "crib", "stone", "concrete"];
+const MAT_COLOUR = { timber: "#9a7650", block: "#b3aca1", segmental: "#a39e94", gabion: "#8c8a80", crib: "#9c8b6c",
+  stone: "#8f8577", concrete: "#a8a49c" };
+const AREA_KINDS = { lawn: "#6f9a48", bed: "#7a5c3e", path: "#b9b2a5" };
+const FALLS = { flat: 0, "1:100": 0.01, "1:50": 0.02, "1:40": 0.025, "1:25": 0.04 };
+const DIRS = { north: [0, -1], east: [1, 0], south: [0, 1], west: [-1, 0] };
+let sketch = [];
+let sketchId = 1;
+const frameSO = (() => {
+  const f = model.summary.options_site?.frame;
+  if (!f) return null;
+  const [oe, on] = f.origin, de = f.toward[0] - oe, dn = f.toward[1] - on, L = Math.hypot(de, dn);
+  const a = [de / L, dn / L], w = [-a[1], a[0]];   // in from the boundary (west)
+  return (E, N) => [(E - oe) * a[0] + (N - on) * a[1], -((E - oe) * w[0] + (N - on) * w[1])];
+})();
+const frameXY = (() => {
+  const f = model.summary.options_site?.frame;
+  if (!f) return null;
+  const [oe, on] = f.origin, de = f.toward[0] - oe, dn = f.toward[1] - on, L = Math.hypot(de, dn);
+  const a = [de / L, dn / L], w = [-a[1], a[0]];
+  return (s, o) => [oe + s * a[0] - o * w[0], on + s * a[1] - o * w[1]];
+})();
+const round2 = (v) => Math.round(v * 100) / 100;
+const existingY = (x, z) => surfaceY(x, z, activeGround ? [activeGround, groundMesh] : [groundMesh]);
+function loadSketch() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SKETCH_KEY) || "null");
+    if (d && Array.isArray(d.items)) {
+      sketch = d.items.map((it) => ({ ...it, pts: it.pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])) }));
+      sketchId = 1 + Math.max(0, ...sketch.map((it) => it.id));
+      $("sketchNote").value = d.note || "";
+    }
+  } catch { /* no storage: start empty */ }
+}
+const sketchState = () => JSON.stringify({ note: $("sketchNote").value, items: sketch.map((it) => ({ ...it, pts: it.pts.map((p) => [p.x, p.y, p.z]) })) });
+let history = null;
+function saveSketch() {
+  const state = sketchState();
+  history?.record(state);
+  try {
+    localStorage.setItem(SKETCH_KEY, state);
+  } catch { /* draft not kept */ }
+}
+function restoreSketch(state) {
+  if (!state) return;
+  const d = JSON.parse(state);
+  sketch = d.items.map((it) => ({ ...it, pts: it.pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])) }));
+  $("sketchNote").value = d.note;
+  if (!sketch.some((it) => it.id === selId)) selId = null;
+  selVertex = null;
+  renderSketch();
+  updateHint();
+}
+function groundRange(it) {
+  const ys = [];
+  const P = it.pts;
+  if (it.kind === "wall") {
+    for (let i = 1; i < P.length; i++) {
+      const n = Math.max(2, Math.ceil(Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z) / 0.25));
+      for (let k = 0; k <= n; k++) {
+        const t = k / n, y = existingY(P[i - 1].x + t * (P[i].x - P[i - 1].x), P[i - 1].z + t * (P[i].z - P[i - 1].z));
+        if (y != null) ys.push(y);
+      }
+    }
+  } else {
+    for (const p of P) { const y = existingY(p.x, p.z); if (y != null) ys.push(y); }
+  }
+  return ys.length ? [Math.min(...ys) + H0, Math.max(...ys) + H0] : [NaN, NaN];
+}
+// A wall's top at vertex i, in model metres, over ground g there: level mode keeps a top level per
+// vertex (tops, NZVD2016) once one has been pulled, else the one level for the whole wall.
+function wallTop(it, i, g) {
+  return it.mode === "level" ? (it.tops?.[i] ?? it.top) - H0 : g + it.height;
+}
+// The lowest and highest the wall's top stands above the existing ground along it.
+function wallExposure(it) {
+  const P = it.pts, gs = P.map((p) => existingY(p.x, p.z) ?? p.y);
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 1; i < P.length; i++) {
+    const n = Math.max(2, Math.ceil(Math.hypot(P[i].x - P[i - 1].x, P[i].z - P[i - 1].z) / 0.25));
+    const t0 = wallTop(it, i - 1, gs[i - 1]), t1 = wallTop(it, i, gs[i]);
+    for (let k = 0; k <= n; k++) {
+      const t = k / n, g = existingY(P[i - 1].x + t * (P[i].x - P[i - 1].x), P[i - 1].z + t * (P[i].z - P[i - 1].z));
+      if (g == null) continue;
+      const e = (it.mode === "level" ? t0 + t * (t1 - t0) : g + it.height) - g;
+      lo = Math.min(lo, e);
+      hi = Math.max(hi, e);
+    }
+  }
+  return lo <= hi ? [lo, hi] : [NaN, NaN];
+}
+function addSketch(kind, pts) {
+  const it = { id: sketchId++, kind, pts: pts.map((p) => p.clone()) };
+  const [lo, hi] = groundRange(it);
+  if (kind === "wall") {
+    Object.assign(it, { name: `Wall ${it.id}`, material: "timber", mode: "level", top: round2(Math.round((hi + 0.3) * 20) / 20),
+      height: 0.6 });
+  } else {
+    Object.assign(it, { name: `Area ${it.id}`, area: "lawn", level: round2(Math.round(((lo + hi) / 2) * 20) / 20),
+      fall: "1:50", dir: "north" });
+  }
+  sketch.push(it);
+  selId = it.id;
+  renderSketch();
+  if (tool !== "select") setTool("select");
+  else updateHint();
+}
+function areaZ(it) {
+  const g = FALLS[it.fall] || 0, [dx, dz] = DIRS[it.dir] || [0, -1];
+  const c = it.pts.reduce((s, p) => s.add(p), new THREE.Vector3()).multiplyScalar(1 / it.pts.length);
+  // level at the centre, falling towards `dir` (viewer x east, z south)
+  return (x, z) => it.level - H0 - g * ((x - c.x) * dx + (z - c.z) * dz);
+}
+function areaStats(it) {
+  const P = it.pts, zf = areaZ(it);
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const p of P) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
+  const inside = (x, z) => {
+    let c = false;
+    for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+      if ((P[i].z > z) !== (P[j].z > z) && x < ((P[j].x - P[i].x) * (z - P[i].z)) / (P[j].z - P[i].z) + P[i].x) c = !c;
+    }
+    return c;
+  };
+  const step = 0.3;
+  let area = 0, cut = 0, fill = 0, maxCut = 0, maxFill = 0;
+  for (let x = x0 + step / 2; x < x1; x += step) {
+    for (let z = z0 + step / 2; z < z1; z += step) {
+      if (!inside(x, z)) continue;
+      const g = existingY(x, z);
+      if (g == null) continue;
+      const d = zf(x, z) - g;
+      area += step * step;
+      if (d > 0) { fill += d * step * step; maxFill = Math.max(maxFill, d); } else { cut -= d * step * step; maxCut = Math.max(maxCut, -d); }
+    }
+  }
+  return { area, cut, fill, maxCut, maxFill };
+}
+function drawSketch() {
+  clearGroup(sketchGroup);
+  for (const it of sketch) {
+    const P = it.pts;
+    if (it.kind === "wall") {
+      const verts = [], idx = [];
+      for (let i = 0; i < P.length; i++) {
+        const g = existingY(P[i].x, P[i].z) ?? P[i].y;
+        const top = wallTop(it, i, g);
+        verts.push(P[i].x, g - 0.15, P[i].z, P[i].x, Math.max(top, g + 0.05), P[i].z);
+        if (i) { const b = 2 * i; idx.push(b - 2, b - 1, b, b - 1, b + 1, b); }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: MAT_COLOUR[it.material] || "#999",
+        side: THREE.DoubleSide, roughness: 0.9 }));
+      mesh.userData.sketchId = it.id;
+      sketchGroup.add(mesh);
+      sketchGroup.add(polyline(P.map((p, i) => new THREE.Vector3(p.x, verts[6 * i + 4], p.z)), lineMat));
+    } else {
+      const zf = areaZ(it);
+      const top = P.map((p) => new THREE.Vector3(p.x, zf(p.x, p.z), p.z));
+      const tris = THREE.ShapeUtils.triangulateShape(P.map((p) => new THREE.Vector2(p.x, p.z)), []);
+      const geo = new THREE.BufferGeometry().setFromPoints(top);
+      geo.setIndex(tris.flat());
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: AREA_KINDS[it.area], side: THREE.DoubleSide,
+        transparent: true, opacity: 0.8, roughness: 1 }));
+      mesh.userData.sketchId = it.id;
+      sketchGroup.add(mesh);
+      sketchGroup.add(polyline(top, lineMat, true));
+    }
+  }
+}
+function renderSketch() {
+  const box = $("sketchList");
+  box.textContent = "";
+  for (const it of sketch) {
+    const el = document.createElement("div");
+    el.className = "sk-item";
+    const [lo, hi] = groundRange(it);
+    if (it.kind === "wall") {
+      let len = 0;
+      for (let i = 1; i < it.pts.length; i++) len += Math.hypot(it.pts[i].x - it.pts[i - 1].x, it.pts[i].z - it.pts[i - 1].z);
+      const [elo, ehi] = wallExposure(it), tops = it.mode === "level" && it.tops ? it.tops : null;
+      const exposed = (tops ? `at ${tops.map(f2).join(" / ")} m, ` : "")
+        + (it.mode === "level" ? `${f2(Math.max(0, elo))}–${f2(Math.max(0, ehi))} m above the ground`
+          : `${f2(it.height)} m above the ground all along`);
+      el.innerHTML = `<div class="sk-head"><span class="sk-swatch" style="background:${MAT_COLOUR[it.material]}"></span><input data-k="name" aria-label="Name"><button type="button" data-shape aria-pressed="${it.id === selId}">${it.id === selId ? "Done" : "Shape"}</button><button type="button" data-del>Remove</button></div>
+        <div class="sk-row"><select data-k="material" aria-label="Material">${MATERIALS.map((m) => `<option>${m}</option>`).join("")}</select>
+          <select data-k="mode" aria-label="Top"><option value="level">top level at</option><option value="height">height above ground</option></select>
+          <input type="number" step="0.05" data-k="${it.mode === "level" ? "top" : "height"}" aria-label="Top level or height"> m</div>
+        <div class="sk-row">retains <select data-k="retains" aria-label="The side it retains, looking along it from its first corner"><option value="none">nothing yet</option><option value="left">the left side</option><option value="right">the right side</option></select>
+          ${it.retains === "left" || it.retains === "right" ? `, level for <input type="number" step="0.5" min="0.5" data-k="back" aria-label="Metres of level ground behind it"> m behind` : ""}</div>
+        <div class="sk-read" data-live="S${it.id}"></div>
+        <div class="sk-read">${f1(len)} m long · ground along it ${f2(lo)}–${f2(hi)} m · top ${exposed}</div>`;
+    } else {
+      const st = areaStats(it);
+      el.innerHTML = `<div class="sk-head"><span class="sk-swatch" style="background:${AREA_KINDS[it.area]}"></span><input data-k="name" aria-label="Name"><button type="button" data-shape aria-pressed="${it.id === selId}">${it.id === selId ? "Done" : "Shape"}</button><button type="button" data-del>Remove</button></div>
+        <div class="sk-row"><select data-k="area" aria-label="Kind"><option value="lawn">lawn</option><option value="bed">planting bed</option><option value="path">path or paving</option></select>
+          level <input type="number" step="0.05" data-k="level" aria-label="Level"> m, fall <select data-k="fall" aria-label="Fall">${Object.keys(FALLS).map((k) => `<option>${k}</option>`).join("")}</select>
+          to <select data-k="dir" aria-label="Falls towards">${Object.keys(DIRS).map((k) => `<option>${k}</option>`).join("")}</select></div>
+        <div class="sk-read">${f1(st.area)} m² · ground at its corners ${f2(lo)}–${f2(hi)} m · cut ${f1(st.cut)} m³ (up to ${f2(st.maxCut)} m), fill ${f1(st.fill)} m³ (up to ${f2(st.maxFill)} m)</div>`;
+    }
+    if (it.id === selId) el.classList.add("sel");
+    if (it.id === selId && selVertex != null && it.pts[selVertex]) {    // the corner last touched, by number
+      const p = it.pts[selVertex], [E, N] = site(p), so = frameSO ? frameSO(E, N) : null, [u, v] = so || [E, N];
+      const row = document.createElement("div");
+      row.className = "sk-row";
+      row.innerHTML = `Corner ${selVertex + 1}: ${so ? "along" : "E"} <input type="number" step="0.01" data-c="0" aria-label="${so ? "Metres along the boundary" : "Easting"}" value="${round2(u)}"> ${so ? "in" : "N"} <input type="number" step="0.01" data-c="1" aria-label="${so ? "Metres in from the boundary" : "Northing"}" value="${round2(v)}"> m`;
+      for (const inp of row.querySelectorAll("input")) {
+        inp.addEventListener("change", () => {
+          const a = parseFloat(row.querySelector('[data-c="0"]').value), b = parseFloat(row.querySelector('[data-c="1"]').value);
+          if (!Number.isFinite(a) || !Number.isFinite(b)) return;
+          const [e2, n2] = so ? frameXY(a, b) : [a, b];
+          p.x = e2 - E0;
+          p.z = -(n2 - N0);
+          p.y = existingY(p.x, p.z) ?? p.y;
+          renderSketch();
+        });
+      }
+      el.append(row);
+    }
+    for (const inp of el.querySelectorAll("[data-k]")) {
+      const k = inp.dataset.k;
+      inp.value = k === "top" && it.tops ? round2(Math.max(...it.tops)) : k === "retains" ? it.retains ?? "none" : k === "back" ? it.back ?? 3 : it[k];
+      inp.addEventListener("change", () => {
+        it[k] = inp.type === "number" ? parseFloat(inp.value) : inp.value;
+        if (k === "top") delete it.tops;      // typing a top level sets the whole wall to it
+        renderSketch();
+      });
+    }
+    el.querySelector("[data-shape]").addEventListener("click", () => selectSketch(it.id === selId ? null : it.id));
+    el.querySelector("[data-del]").addEventListener("click", () => {
+      sketch.splice(sketch.indexOf(it), 1);
+      if (it.id === selId) selectSketch(null);
+      else renderSketch();
+    });
+    box.append(el);
+  }
+  drawSketch();
+  buildHandles();
+  saveSketch();
+  queueDbSave();
+  queueLive();
+}
+// The sketch worked out as an option by the server, each time it settles: the ground it would make, and its cut and fill. Not in the artifact, which has no server.
+let liveTimer = null, liveTurn = 0, liveOK = null, lastLive = null;
+const liveGround = new THREE.Group();
+root.add(liveGround);
+function queueLive() {
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(runLive, 250);
+}
+async function runLive() {
+  if (liveOK === null) liveOK = await fetch("healthz").then((r) => r.ok).catch(() => false);
+  if (!liveOK) return;
+  if (drag) return;
+  const turn = ++liveTurn;
+  const items = sketchPayload().items.map((q, i) => ({ ...q, retains: sketch[i].retains, back: sketch[i].back }));
+  const ans = await fetch("api/sketch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }) })
+    .then((r) => r.json()).catch(() => ({ error: "The server didn't answer." }));
+  if (turn === liveTurn) showLive(ans);
+}
+function showLive(a) {
+  lastLive = a;
+  const box = $("sketchLive");
+  clearGroup(liveGround);
+  $("sketchOption").hidden = !!a.error || !!a.empty;
+  box.hidden = !!a.empty || !sketch.length;
+  if (box.hidden) return;
+  box.replaceChildren();
+  const line = (text, cls) => { const d = document.createElement("div"); d.textContent = text; if (cls) d.className = cls; box.append(d); };
+  if (a.error) { line(a.error, "flag"); return; }
+  for (const w of a.walls) {
+    const el = document.querySelector(`[data-live="${w.id}"]`);
+    if (el) el.textContent = `exposed ${f2(w.height_min_m)}–${f2(w.height_max_m)} m · retains up to ${f2(w.retained_max_m)} m`;
+    for (const f of w.flags) line(`${w.name}: ${f}`, "flag");
+  }
+  line(`Cut ${f1(Math.abs(a.volumes.cut_m3))} m³, fill ${f1(Math.abs(a.volumes.fill_m3))} m³ · flat lawn ${a.flat.gain_m2 >= 0 ? "+" : ""}${f1(a.flat.gain_m2)} m²`);
+  for (const f of a.flags) line(f, "flag");
+  if (a.grid) drawLiveGround(a.grid);
+}
+function drawLiveGround(g) {
+  const pos = [], col = [], idx = [], index = new Map();
+  const cut = new THREE.Color("#b3402a"), fill = new THREE.Color("#2a6fb3");
+  const vertex = (i, j) => {
+    const k = j * g.nx + i;
+    if (index.has(k)) return index.get(k);
+    if (g.z[k] == null) return -1;
+    pos.push(g.e0 + i * g.step - E0, g.z[k] - H0 + 0.03, -(g.n0 + j * g.step - N0));
+    const c = (g.dz[k] ?? 0) < 0 ? cut : fill;
+    col.push(c.r, c.g, c.b, Math.min(0.75, Math.abs(g.dz[k] ?? 0) * 1.5));
+    index.set(k, pos.length / 3 - 1);
+    return index.get(k);
+  };
+  for (let j = 0; j + 1 < g.ny; j++) {
+    for (let i = 0; i + 1 < g.nx; i++) {
+      const dzs = [g.dz[j * g.nx + i], g.dz[j * g.nx + i + 1], g.dz[(j + 1) * g.nx + i], g.dz[(j + 1) * g.nx + i + 1]];
+      if (dzs.every((d) => d == null || Math.abs(d) < 0.02)) continue;
+      const a = vertex(i, j), b = vertex(i + 1, j), c = vertex(i, j + 1), d = vertex(i + 1, j + 1);
+      if (a < 0 || b < 0 || c < 0 || d < 0) continue;
+      idx.push(a, c, b, b, c, d);
+    }
+  }
+  if (!idx.length) return;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 4));
+  geo.setIndex(idx);
+  liveGround.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, side: THREE.DoubleSide, depthWrite: false })));
+}
+function sketchPayload() {
+  return {
+    note: $("sketchNote").value.trim(),
+    shownOption: activeOption ? activeOption.id : "existing",
+    items: sketch.map((it) => {
+      const en = it.pts.map((p) => { const [e, n] = site(p); return [round2(e), round2(n)]; });
+      const out = { id: it.id, kind: it.kind, name: it.name, en, so: frameSO ? en.map(([e, n]) => frameSO(e, n).map(round2)) : null,
+        pts: it.pts.map((q) => [round2(q.x), round2(q.y), round2(q.z)]) };
+      if (it.kind === "wall") {
+        const tops = it.mode === "level" ? it.pts.map((_, i) => round2(it.tops?.[i] ?? it.top)) : null;
+        Object.assign(out, { material: it.material, mode: it.mode, top: tops ? Math.max(...tops) : null, tops,
+          height_above_ground: it.mode === "height" ? it.height : null, height: it.height });
+      }
+      else Object.assign(out, { area: it.area, level: it.level, fall: it.fall, fall_to: it.dir });
+      return out;
+    }),
+  };
+}
+function sketchText(p) {
+  const lines = [p.note ? `Notes: ${p.note}` : ""];
+  for (const it of p.items) {
+    const pts = (it.so || it.en).map(([a, b]) => `(${a}, ${b})`).join(" ");
+    lines.push(it.kind === "wall"
+      ? `Wall "${it.name}", ${it.material}, ${it.tops ? `tops ${it.tops.join("/")}` : `${it.height_above_ground} m above ground`}: ${it.so ? "s,o" : "E,N"} ${pts}`
+      : `Area "${it.name}", ${it.area}, level ${it.level}, fall ${it.fall} to ${it.fall_to}: ${it.so ? "s,o" : "E,N"} ${pts}`);
+  }
+  return lines.filter(Boolean).join("\n");
+}
+$("sketchNote").addEventListener("input", () => { saveSketch(); queueDbSave(); });
+$("sketchClear").addEventListener("click", () => {
+  if (sketch.length && !confirm("Clear the whole sketch?")) return;
+  sketch = [];
+  $("sketchNote").value = "";
+  renderSketch();
+});
+$("sketchCopy").addEventListener("click", async () => {
+  if (!sketch.length) { $("sketchStatus").textContent = "Draw something first."; return; }
+  const ok = await copyText(sketchText(sketchPayload()));
+  $("sketchStatus").textContent = ok === false ? "Couldn't copy here; try saving a copy." : "Copied.";
+});
+// The live sketch is the database document sketches/current: every change is written there (a
+// second after the last edit), and a page that opens with no local draft starts from it.
+let sketchDb = null, sketchUser = null, dbTimer = null, dbReady = false;
+function queueDbSave() {
+  if (!sketchDb || !dbReady) return;
+  clearTimeout(dbTimer);
+  dbTimer = setTimeout(async () => {
+    try {
+      const by = sketchUser ? await sketchUser.id().catch(() => null) : null;
+      await sketchDb.collection("sketches").doc("current").set({ ...sketchPayload(), saved: new Date().toISOString(), by });
+      $("sketchStatus").textContent = `Saved into the model at ${new Date().toLocaleTimeString()}.`;
+    } catch (err) {
+      $("sketchStatus").textContent = `Not saved into the model (${err?.code || err?.message || "error"}): it is kept in this browser; use Copy as text.`;
+    }
+  }, 1000);
+}
+function fromPayload(d) {
+  sketch = (d.items || []).filter((it) => Array.isArray(it.pts)).map((it) => {
+    const base = { id: it.id, kind: it.kind, name: it.name, pts: it.pts.map((q) => new THREE.Vector3(q[0], q[1], q[2])) };
+    return it.kind === "wall"
+      ? { ...base, material: it.material, mode: it.mode || (it.top != null ? "level" : "height"), top: it.top ?? 0,
+        height: it.height ?? it.height_above_ground ?? 0.6,
+        ...(Array.isArray(it.tops) && it.tops.length === it.pts.length && new Set(it.tops).size > 1 ? { tops: it.tops } : {}) }
+      : { ...base, area: it.area, level: it.level, fall: it.fall, dir: it.fall_to };
+  });
+  sketchId = 1 + Math.max(0, ...sketch.map((it) => it.id || 0));
+  $("sketchNote").value = d.note || "";
+}
+$("sketchSend").hidden = true;
+(async () => {
+  try {
+    sketchDb = await window.claude?.use?.("db");
+    sketchUser = await window.claude?.use?.("user");
+  } catch { sketchDb = null; }
+  if (!sketchDb) ({ db: sketchDb, user: sketchUser } = await serverStore());
+  if (!sketchDb) {
+    $("sketchStatus").textContent = "This copy of the viewer can't save to a server: the sketch stays in this browser; use Copy as text.";
+    return;
+  }
+  $("sketchSend").hidden = false;
+  try {
+    const snap = await sketchDb.collection("sketches").doc("current").get();
+    const d = snap && (typeof snap.data === "function" ? snap.data() : snap.data);
+    if (d && d.items && d.items.length && !sketch.length) {
+      fromPayload(d);
+      renderSketchNoSave();
+      $("sketchStatus").textContent = `Loaded the sketch saved ${d.saved ? new Date(d.saved).toLocaleString() : "earlier"}.`;
+    }
+  } catch { /* nothing saved yet */ }
+  dbReady = true;
+})();
+// The same calls as the artifact's database, on domus.serve's store.
+async function serverStore() {
+  const health = await fetch("healthz").catch(() => null);
+  if (!health?.ok) return {};
+  const doc = (coll, id) => ({
+    async get() {
+      const r = await fetch(`api/db/${coll}/${id}`);
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    },
+    async set(data) {
+      const r = await fetch(`api/db/${coll}/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    },
+  });
+  return { db: { collection: (coll) => ({ doc: (id) => doc(coll, id) }) },
+    user: { id: async () => (await (await fetch("api/user")).json()).id } };
+}
+function renderSketchNoSave() {
+  const was = dbReady;
+  dbReady = false;
+  renderSketch();
+  dbReady = was;
+}
+$("sketchSend").addEventListener("click", async () => {
+  if (!sketch.length) { $("sketchStatus").textContent = "Draw something first."; return; }
+  const btn = $("sketchSend");
+  btn.disabled = true;
+  try {
+    const id = `s${Date.now().toString(36)}`;
+    const by = sketchUser ? await sketchUser.id().catch(() => null) : null;
+    await sketchDb.collection("sketches").doc(id).set({ ...sketchPayload(), saved: new Date().toISOString(), by });
+    $("sketchStatus").textContent = `Copy kept as ${id}. The live sketch keeps saving too.`;
+  } catch (err) {
+    $("sketchStatus").textContent = `Not saved (${err?.code || err?.message || "error"}). Use Copy as text instead.`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+// Shaping a sketch: the selected wall or area carries handles to sculpt it with. White corners
+// move, a small dot on a side adds a corner there, the orange diamond pushes or pulls a wall's top
+// at that corner (Shift: the whole wall) or an area's level, and the blue square moves it all.
+// Double-click a corner, or press Delete after touching it, to remove it.
+const SHAPE_HINT = "Shaping: drag a white corner to move it (Alt stops snapping, or set it by number in the panel), a small dot to add a corner, an orange diamond up or down " +
+  "for height (Shift: whole wall), the blue square to move it all. Double-click a corner to remove it. Esc when done.";
+const handleGroup = new THREE.Group();
+scene.add(handleGroup);
+const H_GEO = { v: new THREE.SphereGeometry(1, 16, 12), m: new THREE.SphereGeometry(0.6, 12, 8),
+  lift: new THREE.OctahedronGeometry(1.1), move: new THREE.BoxGeometry(1.5, 1.5, 1.5) };
+const H_MAT = Object.fromEntries(Object.entries({ v: "#ffffff", m: "#ffffff", lift: MEASURE, move: "#2a7de1" })
+  .map(([k, c]) => [k, new THREE.MeshBasicMaterial({ color: c, depthTest: false, transparent: true, opacity: k === "m" ? 0.75 : 1 })]));
+const H_EDGE = new THREE.MeshBasicMaterial({ color: "#1c1c1c", depthTest: false, transparent: true, side: THREE.BackSide });
+let handles = [];        // { kind: v|m|lift|move, i, local (model metres), obj }
+let selVertex = null, drag = null;
+const selItem = () => sketch.find((it) => it.id === selId) || null;
+function selectSketch(id) {
+  if (id != null) revealTab("design");
+  selId = id;
+  selVertex = null;
+  renderSketch();
+  updateHint();
+}
+const centroid = (P) => P.reduce((s, p) => s.add(p), new THREE.Vector3()).multiplyScalar(1 / P.length);
+function buildHandles() {
+  handleGroup.clear();
+  handles = [];
+  const it = selItem();
+  if (!it) return;
+  const P = it.pts, closed = it.kind === "area", zf = closed ? areaZ(it) : null;
+  const on = (x, z) => (closed ? zf(x, z) : existingY(x, z) ?? 0);
+  const add = (kind, i, x, y, z) => {
+    const obj = new THREE.Group();
+    const m = new THREE.Mesh(H_GEO[kind], H_MAT[kind]);
+    const e = new THREE.Mesh(H_GEO[kind], H_EDGE);
+    e.scale.setScalar(1.3);
+    m.renderOrder = 31;
+    e.renderOrder = 30;
+    obj.add(e, m);
+    if (kind === "lift") obj.scale.y = 1.6;
+    handleGroup.add(obj);
+    handles.push({ kind, i, local: new THREE.Vector3(x, y, z), obj });
+  };
+  const n = P.length, segs = closed ? n : n - 1;
+  for (let i = 0; i < segs; i++) {
+    const a = P[i], b = P[(i + 1) % n], x = (a.x + b.x) / 2, z = (a.z + b.z) / 2;
+    add("m", i, x, on(x, z), z);
+  }
+  P.forEach((p, i) => add("v", i, p.x, on(p.x, p.z), p.z));
+  if (closed) {
+    const c = centroid(P);
+    add("move", -1, c.x, zf(c.x, c.z), c.z);
+    add("lift", -1, c.x, zf(c.x, c.z) + 0.45, c.z);
+  } else {
+    P.forEach((p, i) => add("lift", i, p.x, wallTop(it, i, existingY(p.x, p.z) ?? p.y) + 0.3, p.z));
+    const k = Math.floor((n - 1) / 2), a = P[k], b = P[k + 1], x = (a.x + b.x) / 2, z = (a.z + b.z) / 2;
+    const g = existingY(x, z) ?? a.y;
+    add("move", -1, x, (wallTop(it, k, g) + wallTop(it, k + 1, g)) / 2 + 0.3, z);
+  }
+}
+// Each frame: handles sit at their model points and keep the same size on screen; the height
+// handles stand a little up and to the right, so they stay clear of the corners seen from above.
+const hWorld = new THREE.Vector3(), camRight = new THREE.Vector3(), camUp = new THREE.Vector3();
+function updateHandles() {
+  if (!handles.length) return;
+  camRight.setFromMatrixColumn(camera.matrixWorld, 0);
+  camUp.setFromMatrixColumn(camera.matrixWorld, 1);
+  for (const h of handles) {
+    root.localToWorld(hWorld.copy(h.local));
+    const s = camera.position.distanceTo(hWorld) * 0.0075 * (h.kind === "v" && h.i === selVertex ? 1.35 : 1);
+    if (h.kind === "lift") hWorld.addScaledVector(camRight, 2.6 * s).addScaledVector(camUp, 2.6 * s);
+    h.obj.position.copy(hWorld);
+    h.obj.scale.set(s, h.kind === "lift" ? 1.6 * s : s, s);
+  }
+}
+// The handle under the pointer: the nearest on screen within reach, corners before side dots.
+function handleAt(cx, cy) {
+  let best = null, bd = 16;
+  updateHandles();
+  const rect = canvas.getBoundingClientRect();
+  for (const h of handles) {
+    const p = h.obj.position.clone().project(camera);
+    if (p.z > 1) continue;
+    const sx = rect.left + ((p.x + 1) / 2) * rect.width, sy = rect.top + ((1 - p.y) / 2) * rect.height;
+    const d = Math.hypot(sx - cx, sy - cy) + (h.kind === "m" ? 4 : 0);
+    if (d < bd) { bd = d; best = h; }
+  }
+  return best;
+}
+function rayAt(cx, cy) {
+  const rect = canvas.getBoundingClientRect();
+  ndc.set(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  return ray;
+}
+// Where the pointer meets the ground (model metres), else the level plane the drag started on.
+function planAt(cx, cy) {
+  const r = rayAt(cx, cy);
+  const hit = r.intersectObjects((activeGround ? [activeGround, groundMesh] : [groundMesh]).filter(shown), false)[0];
+  if (hit) return root.worldToLocal(hit.point.clone());
+  const v = r.ray.intersectPlane(drag.flat, new THREE.Vector3());
+  return v ? root.worldToLocal(v) : null;
+}
+// Height under the pointer on an upright plane through the handle, facing the camera (model metres).
+// Looking nearly straight down that plane is edge-on, so the pointer's travel up the screen
+// counts instead, at the handle's distance.
+function liftAt(cx, cy) {
+  if (drag.mpp) return -cy * drag.mpp;
+  const v = rayAt(cx, cy).ray.intersectPlane(drag.wall, new THREE.Vector3());
+  return v ? root.worldToLocal(v).y : null;
+}
+const snap05 = (v) => round2(Math.round(v * 20) / 20);
+function startDrag(h, e) {
+  const it = selItem();
+  if (h.kind === "m") {                       // a side dot becomes a new corner, dragged from here
+    const i = h.i + 1;
+    it.pts.splice(i, 0, new THREE.Vector3(h.local.x, existingY(h.local.x, h.local.z) ?? h.local.y, h.local.z));
+    if (it.tops) it.tops.splice(i, 0, snap05((it.tops[h.i] + it.tops[i % it.tops.length]) / 2));
+    buildHandles();
+    h = handles.find((q) => q.kind === "v" && q.i === i);
+  }
+  if (h.kind === "v") selVertex = h.i;
+  const w = h.kind === "lift" ? h.obj.position.clone() : root.localToWorld(h.local.clone());
+  const facing = new THREE.Vector3().subVectors(camera.position, w).setY(0);
+  if (facing.lengthSq() < 1e-6) facing.set(0, 0, 1);
+  drag = { h, it, id: e.pointerId, flat: new THREE.Plane(new THREE.Vector3(0, 1, 0), -w.y),
+    wall: new THREE.Plane().setFromNormalAndCoplanarPoint(facing.normalize(), w),
+    orig: it.pts.map((p) => p.clone()), level: it.level, mpp: 0 };
+  if (Math.abs(camera.getWorldDirection(new THREE.Vector3()).y) > 0.85) {
+    drag.mpp = (2 * camera.position.distanceTo(w) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
+      / canvas.getBoundingClientRect().height / root.scale.y;
+  }
+  if (h.kind === "lift" && it.kind === "wall") {
+    if (it.mode === "height") {               // pulling a top fixes the wall's levels from here on
+      it.tops = it.pts.map((p) => snap05((existingY(p.x, p.z) ?? p.y) + it.height + H0));
+      it.mode = "level";
+      it.top = Math.max(...it.tops);
+    }
+    drag.tops = it.pts.map((_, i) => it.tops?.[i] ?? it.top);
+  }
+  drag.y0 = h.kind === "lift" ? liftAt(e.clientX, e.clientY) : null;
+  const p0 = h.kind === "lift" ? null : planAt(e.clientX, e.clientY);
+  drag.p0 = p0;
+  drag.off = p0 ? new THREE.Vector3(h.local.x - p0.x, 0, h.local.z - p0.z) : null;
+  canvas.setPointerCapture(e.pointerId);
+  controls.enabled = false;
+  canvas.style.cursor = h.kind === "lift" ? "ns-resize" : "grabbing";
+}
+function dragTo(cx, cy, shift) {
+  const { h, it } = drag;
+  let say = "";
+  if (h.kind === "lift") {
+    const y = liftAt(cx, cy);
+    if (y == null || drag.y0 == null) return;
+    const dy = y - drag.y0;
+    if (it.kind === "area") {
+      it.level = snap05(drag.level + dy);
+      say = `Level ${f2(it.level)} m at its centre`;
+    } else {
+      it.tops = drag.tops.map((t, i) => (shift || i === h.i ? snap05(t + dy) : t));
+      it.top = Math.max(...it.tops);
+      const i = shift ? null : h.i, p = it.pts[h.i], g = existingY(p.x, p.z);
+      say = shift ? `Whole wall ${signed(snap05(dy))} m` : `Top ${f2(it.tops[i])} m here`
+        + (g != null ? `, ${f2(it.tops[h.i] - H0 - g)} m above the ground` : "");
+    }
+  } else {
+    const q = planAt(cx, cy);
+    if (!q) return;
+    if (h.kind === "v") {
+      const p = it.pts[h.i];
+      const raw = new THREE.Vector3(q.x + drag.off.x, q.y, q.z + drag.off.z);
+      const others = it.pts.filter((_, k) => k !== h.i);
+      const d = resolveCorner(raw, it, others);
+      p.set(d.local.x, 0, d.local.z);
+      p.y = existingY(p.x, p.z) ?? q.y;
+      showSnap(d);
+      const [E, N] = site(p);
+      const so = frameSO ? frameSO(E, N) : null;
+      say = so ? `Corner at s ${f2(so[0])}, o ${f2(so[1])} m (ground ${f2(p.y + H0)} m)` : siteText(p);
+    } else {
+      const dx = q.x - drag.p0.x, dz = q.z - drag.p0.z;
+      it.pts.forEach((p, i) => {
+        p.set(drag.orig[i].x + dx, 0, drag.orig[i].z + dz);
+        p.y = existingY(p.x, p.z) ?? drag.orig[i].y;
+      });
+      say = `Moved ${f2(Math.hypot(dx, dz))} m`;
+    }
+  }
+  drawSketch();
+  buildHandles();
+  $("hintText").textContent = say;
+}
+// A corner being dragged snaps like one being drawn, to everything but itself.
+function resolveCorner(raw, it, others) {
+  const saved = it.pts;
+  it.pts = others;
+  const d = resolveDraw(raw, altHeld, null);
+  it.pts = saved;
+  return d;
+}
+function endDrag() {
+  if (!drag) return;
+  hideSnap();
+  try { canvas.releasePointerCapture(drag.id); } catch { /* already released */ }
+  drag = null;
+  controls.enabled = true;
+  canvas.style.cursor = tool === "select" ? "" : "crosshair";
+  renderSketch();
+  updateHint();
+}
+// Handles answer before the camera controls do: listen on the window in the capture phase.
+window.addEventListener("pointerdown", (e) => {
+  if (e.target !== canvas || e.button !== 0 || active || drag || !handles.length) return;
+  const h = handleAt(e.clientX, e.clientY);
+  if (!h) return;
+  e.stopImmediatePropagation();
+  e.preventDefault();
+  startDrag(h, e);
+}, true);
+let dragEv = null, altHeld = false;
+canvas.addEventListener("pointermove", (e) => {
+  if (!drag || e.pointerId !== drag.id) {
+    if (!drag && !active && handles.length && !e.buttons) {
+      const h = handleAt(e.clientX, e.clientY);
+      canvas.style.cursor = h ? (h.kind === "lift" ? "ns-resize" : h.kind === "m" ? "copy" : "grab")
+        : tool === "select" ? "" : "crosshair";
+    }
+    return;
+  }
+  altHeld = e.altKey;
+  if (!dragEv) requestAnimationFrame(() => { if (drag && dragEv) dragTo(dragEv.clientX, dragEv.clientY, dragEv.shiftKey); dragEv = null; });
+  dragEv = e;
+});
+for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) {
+  canvas.addEventListener(ev, (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (dragEv) { dragTo(dragEv.clientX, dragEv.clientY, dragEv.shiftKey); dragEv = null; }
+    endDrag();
+  });
+}
+function deleteVertex(i) {
+  const it = selItem();
+  if (!it || i == null || it.pts.length <= (it.kind === "area" ? 3 : 2)) return false;
+  it.pts.splice(i, 1);
+  if (it.tops) it.tops.splice(i, 1);
+  selVertex = null;
+  renderSketch();
+  return true;
+}
+window.addEventListener("dblclick", (e) => {
+  if (e.target !== canvas || !handles.length) return;
+  const h = handleAt(e.clientX, e.clientY);
+  if (!h) return;
+  e.stopImmediatePropagation();
+  if (h.kind === "v") deleteVertex(h.i);
+}, true);
+// The sketch item under a click in Select, if any.
+window.__sketchHandles = () => handles.map((h) => {
+  const p = h.obj.position.clone().project(camera), rect = canvas.getBoundingClientRect();
+  return { kind: h.kind, i: h.i, x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height };
+});
+window.__sketch = () => sketchPayload();
+function sketchAt(cx, cy) {
+  const hit = rayAt(cx, cy).intersectObjects(sketchGroup.children.filter((o) => o.isMesh), false)[0];
+  return hit ? hit.object.userData.sketchId : null;
+}
+loadSketch();
+renderSketch();
+history = createHistory(sketchState());
+$("sketchOptionSave").addEventListener("click", async () => {
+  const name = $("sketchOptionName").value.trim();
+  if (!name) { $("sketchOptionName").focus(); return; }
+  const items = sketchPayload().items.map((q, i) => ({ ...q, retains: sketch[i].retains, back: sketch[i].back }));
+  const r = await fetch("api/sketch/option", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, items }) }).catch(() => null);
+  const j = r ? await r.json() : { error: "The server didn't answer." };
+  if (!r?.ok) { $("sketchStatus").textContent = j.error; return; }
+  $("sketchStatus").textContent = "Saved. Building it: this takes a minute or so, then the page reloads with your option.";
+  const wait = async () => {
+    const s = await (await fetch("api/sketch/option")).json();
+    if (s.state === "running") { setTimeout(wait, 3000); return; }
+    if (s.state === "done") location.reload();
+    else $("sketchStatus").textContent = "The build didn't finish. Its last lines: " + s.log;
+  };
+  wait();
+});
+$("sketchUndo").addEventListener("click", () => restoreSketch(history.undo()));
+$("sketchRedo").addEventListener("click", () => restoreSketch(history.redo()));
+
+// Keys (not while typing in a field)
+const TOOL_KEYS = { s: "select", d: "distance", p: "path", a: "area", v: "height", l: "profile", w: "sketchwall",
+  g: "sketcharea" };
+window.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || $("help").open) return;
+  if (e.key === "?" || (e.key === "/" && e.shiftKey)) { $("help").showModal(); return; }
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && ["z", "y"].includes(e.key.toLowerCase())) {
+    e.preventDefault();
+    const redo = e.key.toLowerCase() === "y" || e.shiftKey;
+    if (active && !redo) {
+      active.pts.pop();
+      if (active.pts.length) drawActive(null);
+      else cancelActive();
+      updateHint();
+    } else restoreSketch(redo ? history.redo() : history.undo());
+    return;
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (active?.pts.length && SNAP_TOOLS.has(tool) && /^[0-9.]$/.test(e.key)) {     // typing a number starts a length
+    e.preventDefault();
+    $("drawEntry").value = e.key;
+    $("drawEntry").focus();
+    $("drawEntry").dispatchEvent(new Event("input"));
+    return;
+  }
+  if (t.tagName === "BUTTON" && (e.key === "Enter" || e.key === " ")) return;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (TOOL_KEYS[key]) setTool(TOOL_KEYS[key]);
+  else if (key === "ArrowLeft") e.shiftKey ? panBy(-0.08, 0) : lookBy(Math.PI / 60, 0);
+  else if (key === "ArrowRight") e.shiftKey ? panBy(0.08, 0) : lookBy(-Math.PI / 60, 0);
+  else if (key === "ArrowUp") e.shiftKey ? panBy(0, 0.08) : lookBy(0, -Math.PI / 90);
+  else if (key === "ArrowDown") e.shiftKey ? panBy(0, -0.08) : lookBy(0, Math.PI / 90);
+  else if ((key === "[" || key === "]") && OPTS.length) stepOption(key === "]" ? 1 : -1);
+  else if (key === "q") NAV.left();
+  else if (key === "e") NAV.right();
+  else if (key === "r") NAV.up();
+  else if (key === "f") NAV.down();
+  else if (key === "+" || key === "=") NAV.in();
+  else if (key === "-" || key === "_") NAV.out();
+  else if (key === "h") NAV.home();
+  else if (key === "Escape") {
+    if (active) cancelActive();
+    else if (selId != null) selectSketch(null);
+    else if (profile) closeProfile();
+    else setTool("select");
+  } else if (key === "Enter") {
+    if (!active) return;
+    finishActive();
+  } else if (key === "Backspace" || key === "Delete") {
+    if (!active) { if (!deleteVertex(selVertex)) return; e.preventDefault(); return; }
+    active.pts.pop();
+    if (active.pts.length) drawActive(null);
+    else cancelActive();
+    updateHint();
+  } else return;
+  e.preventDefault();
+});
+
+// The rail: one panel open at a time, and the open one's button closes it. Phones start with it closed.
+function showTab(name) {
+  for (const p of document.querySelectorAll(".tabpanel")) p.hidden = p.id !== `tab-${name}`;
+  $("panel").classList.remove("collapsed");
+  markTabs();
+}
+function closePanel() {
+  $("panel").classList.add("collapsed");
+  markTabs();
+}
+function markTabs() {
+  const open = $("panel").classList.contains("collapsed") ? null : document.querySelector(".tabpanel:not([hidden])").id;
+  for (const b of document.querySelectorAll("[data-tab]")) b.setAttribute("aria-selected", String(open === `tab-${b.dataset.tab}`));
+}
+// A tool brings up its panel, but doesn't open a closed one over the model.
+function revealTab(name) { if (!$("panel").classList.contains("collapsed")) showTab(name); }
+for (const b of document.querySelectorAll("[data-tab]")) {
+  b.addEventListener("click", () => {
+    if (b.getAttribute("aria-selected") === "true") return closePanel();
+    // Going to a panel the tool in hand doesn't belong to puts it down.
+    const home = TOOLS[tool].sketch ? "design" : tool === "select" ? b.dataset.tab : "measure";
+    if (home !== b.dataset.tab) setTool("select");
+    showTab(b.dataset.tab);
+  });
+}
+$("panel").classList.toggle("collapsed", matchMedia("(max-width: 760px)").matches);
+markTabs();
+$("helpOpen").addEventListener("click", () => $("help").showModal());
+$("helpClose").addEventListener("click", () => $("help").close());
+
+// HUD: north arrow and scale bar
+const northRot = $("northRot");
+function updateHud() {
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  // North is -z. Angle of north on screen from the camera heading.
+  const heading = Math.atan2(dir.x, -dir.z);
+  const tilt = Math.abs(dir.y) > 0.999 ? Math.atan2(camera.up.x, -camera.up.z) : heading;
+  northRot.setAttribute("transform", `rotate(${(-tilt * 180) / Math.PI})`);
+  const dist = camera.position.distanceTo(controls.target);
+  const worldPerPx = (2 * dist * Math.tan((camera.fov * Math.PI) / 360)) / canvas.clientHeight;
+  const nice = [1, 2, 5, 10, 20, 50].find((m) => m / worldPerPx >= 60) ?? 50;
+  $("scaleBar").style.width = `${nice / worldPerPx}px`;
+  $("scaleText").textContent = `${nice} m`;
+}
+
+function resize() {
+  const stage = $("stage");
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  labelRenderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  lineMat.resolution.set(w, h);
+  liveMat.resolution.set(w, h);
+  if (profile) drawProfile();
+}
+new ResizeObserver(resize).observe($("stage"));
+resize();
+
+// Scriptable hook (used to line the model up with photos): positions are viewer coordinates
+// (x east, y up, z south of the origin); siteViewer.site(E, N, H) converts site coordinates.
+window.siteViewer = {
+  camera, controls, model, renderer, scene, root,
+  site: (E, N, H) => [E - E0, H - H0, -(N - N0)],
+  setCamera(pos, target, fov) {
+    flight = null;
+    camera.position.set(...pos);
+    controls.target.set(...target);
+    if (fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    controls.update();
+  },
+};
+
+status("");
+updateHint();
+renderer.setAnimationLoop((now) => {
+  stepFlight(now);
+  controls.update();
+  updateHandles();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+  updateHud();
+});
+</script>

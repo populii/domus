@@ -1,0 +1,18 @@
+# Site model settings. See docs/site-format.md for everything that can go here.
+
+[site]
+title = {{name}}
+heading = {{name}}
+about = {{about}}
+
+[crs]
+epsg = 2193
+label = "NZGD2000 / New Zealand Transverse Mercator (EPSG:2193)"
+vertical = "NZVD2016"
+
+[model]
+# Area modelled (E min, N min, E max, N max) and the viewer's origin (E, N). The viewer works in
+# metres east, up and south of the origin; its height comes from the ground unless you add one.
+extent = {{extent}}
+terrain_step_m = 0.5
+origin = {{origin}}

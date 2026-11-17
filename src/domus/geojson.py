@@ -1,0 +1,55 @@
+"""Small GeoJSON helpers. Site data is stored on the site's grid (crs.site_epsg()).
+
+GeoJSON (RFC 7946) assumes WGS84 lon/lat; these files carry the legacy `crs` member naming the
+site's grid instead, which GDAL/QGIS honour, so an engineer can drop them into GIS.
+Heights (third coordinate) are metres on the site's vertical datum unless a feature's properties
+say otherwise.
+"""
+
+import json
+from pathlib import Path
+
+
+def feature(geometry_type, coordinates, **properties):
+    return {
+        "type": "Feature",
+        "properties": properties,
+        "geometry": {"type": geometry_type, "coordinates": coordinates},
+    }
+
+
+def collection(features, name, description=""):
+    from . import crs
+
+    fc = {"type": "FeatureCollection", "name": name,
+          "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{crs.site_epsg()}"}}}
+    if description:
+        fc["description"] = description
+    fc["features"] = features
+    return fc
+
+
+def round_coords(obj, nd=3):
+    if isinstance(obj, float):
+        return round(obj, nd)
+    if isinstance(obj, (list, tuple)):
+        return [round_coords(v, nd) for v in obj]
+    return obj
+
+
+def write(path, fc):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    for f in fc["features"]:
+        f["geometry"]["coordinates"] = round_coords(f["geometry"]["coordinates"])
+    path.write_text(json.dumps(fc, indent=1) + "\n")
+
+
+def read(path):
+    return json.loads(Path(path).read_text())
+
+
+def read_optional(path):
+    """The features of a site layer, or none if the site does not have that layer."""
+    path = Path(path)
+    return read(path)["features"] if path.exists() else []
