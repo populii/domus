@@ -80,6 +80,14 @@ def test_the_checks_report_what_they_found(site):
     assert json.loads((site / ".domus" / "checks" / "check_model.json").read_text(encoding="utf-8")) == report
 
 
+def test_the_demos_roof_check_passes(site):
+    """The demo's surface model has the roof Domus draws for its house, so the roof check, as `domus prep check roof`
+    runs it, finds the house where it is."""
+    report = api.open_site().check(["roof"])
+    assert report["failures"] == {"roof": 0}
+    assert any("best plan shift of the house E +0.00 N +0.00 m" in f["detail"] for f in report["findings"])
+
+
 def test_a_folder_that_isnt_a_site_is_refused(site, tmp_path):
     with pytest.raises(DomusError, match="isn't a site project"):
         api.open_site(tmp_path)

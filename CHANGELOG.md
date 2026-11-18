@@ -10,6 +10,11 @@
   CI builds with the others.
 - The README drops its small 3D model, which GitHub's viewer drew as a little blue patch on a wire floor, and the
   README's and AGENTS.md's flowcharts of many steps read top to bottom, so GitHub doesn't shrink them.
+- `domus demo` writes a surface model (`data/lidar/dsm.tif`) with the roof Domus draws for the demo's house, its hip,
+  pitch, eaves and overhang, where it had the house as a flat block 5 m above the ground. So the demo passes its own
+  roof check, `domus prep check roof`, as the made-up sites in `tools/made_up_sites.py`, written from it, do too, and
+  the viewer's LiDAR surface layer shows the roof. AGENTS.md's worked example of a failing roof check says what the
+  pattern means instead of quoting the demo.
 
 ## 2026.11.43
 

@@ -869,17 +869,11 @@ check roof plumb` runs just those.
 
 A check the site has nothing for is skipped with a reason, such as `plumb skipped the site has no placed videos`.
 
-**A worked example.** On the made-up demo, `domus prep check` exits 1:
-
-```text
-roof    info      house    108 DSM cells inside the eaves: residual median +0.864 m, ...; best plan shift of the house E +0.05 N -0.80 m
-roof    fail      house    the LiDAR roof fits best with the house moved 0.80 m
-```
-
-Don't move the house. `check-roof-vs-dsm.jpg` shows a big blue middle and a red rim: the demo's made-up surface model
-draws the house as a flat block 5 m above sloping ground, not a hip roof, so the search is reacting to the shape. That's
-the pattern [7.5](#75-fit-the-model-to-the-evidence) describes. Report it as a known difference between the roof and
-the surface, with the picture as evidence.
+**When the roof check wants the house moved.** Look at `check-roof-vs-dsm.jpg` before moving anything. A big blue
+middle and a red rim mean the roof is the wrong shape, such as a hip roof where the surface model sees a flat top, not
+that the house is out of place: the search for a better shift is reacting to the shape. That's the pattern
+[7.5](#75-fit-the-model-to-the-evidence) describes. Don't move the house. Set the roof's shape if you know it, or report
+it as a known difference between the roof and the surface, with the picture as evidence.
 
 Fix what's wrong, or explain it in your report. Don't loosen a tolerance to pass.
 

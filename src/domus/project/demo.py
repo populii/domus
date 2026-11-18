@@ -14,6 +14,7 @@ import numpy as np
 import rasterio
 from rasterio.transform import from_origin
 
+from ..model import house
 from . import newsite
 
 # In the Tasman Sea, far off the coast: no one can mistake this for a real section.
@@ -42,7 +43,9 @@ def write_tif(path, array, x0, y1, res, nodata=None):
         dst.write(array)
 
 
-def write_rasters(root, ext):
+def write_rasters(root, ext, roof):
+    """The ground model, the surface model and the aerial photo. The surface model has the trees, and the house's roof
+    as Domus draws it from `roof`, the demo's [house]: its form, pitch, height at the wall and eaves."""
     x0, y0, x1, y1 = ext[0] - 12, ext[1] - 12, ext[2] + 12, ext[3] + 12
     xs = np.arange(x0, x1, 1.0) + 0.5
     ys = y1 - np.arange(0, y1 - y0, 1.0) - 0.5
@@ -52,8 +55,10 @@ def write_rasters(root, ext):
     for tx, ty, r, h in TREES:
         d = np.hypot(X - tx, Y - ty)
         dsm = np.where(d < r, np.maximum(dsm, dem + h * np.sqrt(np.clip(1 - (d / r) ** 2, 0, 1))), dsm)
-    inside = (X > HOUSE[0][0]) & (X < HOUSE[1][0]) & (Y < HOUSE[0][1]) & (Y > HOUSE[2][1])
-    dsm = np.where(inside, dem + 5.0, dsm).astype("float32")
+    fr = house.HouseFrame(np.array(HOUSE, float))
+    top = house.roof_surface(fr, fr.local(np.array(HOUSE, float)), roof)
+    at = fr.local(np.column_stack([X.ravel(), Y.ravel()]))
+    dsm = np.maximum(dsm, top(at[:, 0], at[:, 1]).reshape(X.shape)).astype("float32")
     write_tif(root / "data" / "lidar" / "dem.tif", dem[None], x0, y1, 1.0, -9999.0)
     write_tif(root / "data" / "lidar" / "dsm.tif", dsm[None], x0, y1, 1.0, -9999.0)
     # The aerial: painted grass, the house's roof, the trees' crowns, the drive.
@@ -195,12 +200,14 @@ def main(argv=None):
     args = ap.parse_args(argv)
     root = newsite.write_project(args.path, "Demo site (made up)", LOT, "made up", ABOUT)
     ext = newsite.extent_of(LOT)
-    write_rasters(root, ext)
+    fl = round(float(ground(X0 + 11, Y0 + 10)) + 0.4, 2)
+    roof = {"roof_pitch_deg": 25.0, "roof_plane_at_wall": round(fl + 2.8, 2), "eaves_overhang_m": 0.4}
+    write_rasters(root, ext, roof)
     write_layers(root)
     write_options(root)
-    fl = round(float(ground(X0 + 11, Y0 + 10)) + 0.4, 2)
     with open(root / "data" / "site.toml", "a", encoding="utf-8", newline="\n") as fh:
-        fh.write(f"\n[house]\nfl_upper = {fl}\nroof_pitch_deg = 25.0\nroof_plane_at_wall = {fl + 2.8:.2f}\neaves_overhang_m = 0.4\n")
+        fh.write(f"\n[house]\nfl_upper = {fl}\nroof_pitch_deg = {roof['roof_pitch_deg']}\n"
+                 f"roof_plane_at_wall = {roof['roof_plane_at_wall']:.2f}\neaves_overhang_m = {roof['eaves_overhang_m']}\n")
     print(f"Wrote the demo site to {root}. Next:\n  domus --site {root} build\n  domus --site {root} serve")
 
 
