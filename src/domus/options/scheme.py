@@ -35,7 +35,7 @@ import numpy as np
 import shapely
 from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
 from shapely.geometry import LineString, Polygon
-from shapely.ops import unary_union
+from shapely.ops import polygonize, unary_union
 
 from ..errors import DomusError
 from ..geo.mesh import Mesh, offset_behind, prism, resample_line
@@ -80,6 +80,24 @@ def _points(cfg, key_en, key_so, frame):
     return np.asarray(cfg[key_en], float)
 
 
+def crossing(corners):
+    """Whether an outline (its corners in turn, on the site's grid) crosses or touches itself, or doubles back along
+    itself, and what Terrace makes of one that does: None for an outline that doesn't, else (the area it closes round,
+    each part of it once, and the area of what shapely's buffer(0) keeps of it), in square metres. A corner given
+    twice in a row is no crossing."""
+    ring = np.asarray(corners, float)[:, :2]
+    ring = ring[np.r_[True, np.any(np.diff(ring, axis=0) != 0, axis=1)]]
+    if len(ring) > 1 and np.all(ring[0] == ring[-1]):
+        ring = ring[:-1]
+    if len(ring) >= 3 and shapely.LinearRing(ring).is_simple:
+        return None
+    if len(ring) < 3:
+        return 0.0, 0.0
+    lines = unary_union(LineString(np.vstack([ring, ring[:1]])))           # the outline, cut where it crosses
+    closed = unary_union(list(polygonize(lines)))
+    return float(closed.area), float(Polygon(ring).buffer(0).area)
+
+
 def _fall(cfg):
     """Fall as a gradient (rise over run) from "1:50", 0.02 or "2%"."""
     f = cfg.get("fall", 0)
@@ -116,6 +134,7 @@ class Terrace:
         self.paving = float(cfg.get("paving_m", defaults.get("paving_m", PAVING_M))) if self.kind == "paving" else 0.0
         pts = _points(cfg, "polygon", "polygon_so", frame)
         self.poly = Polygon(pts[:, :2]).buffer(0)
+        self.crossing = crossing(pts)       # an outline that crosses itself is reshaped by buffer(0): the build says so
         if pts.shape[1] == 3:
             # its own level at each corner, linear between them on its corners' Delaunay triangles, worked out about
             # its first corner: Qhull finds them from each corner's squared distance from the origin, which on the

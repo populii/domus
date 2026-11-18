@@ -870,6 +870,15 @@ def add_walls(b):
     summary["walls"] = wall_info
 
 
+def crossing_warnings(found):
+    """A warning for each terrace of the options (`found`, each with what it comes to) whose outline crosses itself
+    (scheme.crossing), naming it and saying what the build makes of it."""
+    return [f"Warning: {opt['path']}: terrace {t.id} ({t.name}): its outline crosses itself, so the build takes it as "
+            f"shapely's buffer(0) reshapes it, {t.crossing[1]:.1f} m2 of the {t.crossing[0]:.1f} m2 it closes round. Move "
+            "its corners so that no side crosses another."
+            for opt, res in found for t in res["design"].terraces if t.crossing]
+
+
 def add_options(b):
     """Wall options (options/*.toml, domus.design): each one's designed ground over the regrade area, its walls, lawns and beds, contours and a cut-and-fill drape, hidden until picked in the viewer's options panel."""
     cfg, extent, frame, layers, summary, textures, wall_defs = b.cfg, b.extent, b.frame, b.layers, b.summary, b.textures, b.wall_defs
@@ -878,6 +887,8 @@ def add_options(b):
     b.lawns_redrawn = {}        # lawn id -> the options that draw it themselves, on their own ground
     lawns = vegetation.lawns(canopy.read(b.site))
     found = [(opt, design.evaluate(b.site, opt)) for opt in options.load_all(b.site)]
+    for line in crossing_warnings(found):
+        b.say(line)
     # Each lawn that is there has a plain picture, its grass without its bare patches: the options draw the lawn
     # with it where they keep it, and the new lawns beside it, which it reaches.
     for lawn in lawns if found else ():

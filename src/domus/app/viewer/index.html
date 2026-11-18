@@ -584,6 +584,7 @@ import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { computeBoundsTree, acceleratedRaycast } from "three-mesh-bvh";
 import { snapTargets, nearestSnap, referenceAngles, projectOnto, inferAngle, parseEntry, entryPoint, createHistory, optionsFrame } from "./draw-core.js";
+import { crossings } from "./sketch-core.js";
 
 // Bounding-volume trees make picking, the cursor readout and the profile's height sampling fast.
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -1877,6 +1878,12 @@ function finishActive() {
   if (pts.length < (TOOLS[type].min ?? TOOLS[type].n)) { cancelActive(); return; }
   clearGroup(group);
   if (TOOLS[type].sketch) {
+    const why = TOOLS[type].sketch === "area" ? crossingOf({ id: sketchId, kind: "area", name: `Area ${sketchId}` }, pts) : null;
+    if (why) {                    // an outline that crosses itself stays open: move or drop a corner, and close it again
+      drawActive(null);
+      flash(why);
+      return;
+    }
     overlay.remove(group);
     active = null;
     addSketch(TOOLS[type].sketch, pts);
@@ -2559,6 +2566,15 @@ function wallExposure(it) {
   }
   return lo <= hi ? [lo, hi] : [NaN, NaN];
 }
+// What's wrong with a sketch item's outline as it stands, or would with corners `pts`: an area's outline, or the
+// ground a wall holds, crossing itself (sketch-core.js's crossings, which the server says word for word); else null.
+// Its corners go as they're saved, to the centimetre.
+function crossingOf(it, pts = it.pts) {
+  const en = pts.map((p) => { const [e, n] = site(p); return [round2(e), round2(n)]; });
+  const tops = it.kind === "wall" && it.mode === "level" ? pts.map((_, i) => it.tops?.[i] ?? it.top) : null;
+  return crossings([{ id: it.id, kind: it.kind, name: it.name, en, mode: it.mode, tops, retains: it.retains, back: it.back }],
+    model.regrade?.rules?.sketch_back_m ?? 3)[0] ?? null;
+}
 function addSketch(kind, pts) {
   const it = { id: sketchId++, kind, pts: pts.map((p) => p.clone()) };
   const [lo, hi] = groundRange(it);
@@ -2741,9 +2757,15 @@ function renderSketch() {
           const a = parseFloat(row.querySelector('[data-c="0"]').value), b = parseFloat(row.querySelector('[data-c="1"]').value);
           if (!Number.isFinite(a) || !Number.isFinite(b)) return;
           const [e2, n2] = so ? frameXY(a, b) : [a, b];
+          const was = p.clone();
           p.x = e2 - E0;
           p.z = -(n2 - N0);
           p.y = existingY(p.x, p.z) ?? p.y;
+          const why = crossingOf(it);
+          if (why) {                  // a corner typed where the outline would cross itself stays where it was
+            p.copy(was);
+            flash(why);
+          }
           renderSketch();
         });
       }
@@ -2753,8 +2775,15 @@ function renderSketch() {
       const k = inp.dataset.k;
       inp.value = k === "top" && it.tops ? round2(Math.max(...it.tops)) : k === "retains" ? it.retains ?? "none" : k === "back" ? it.back ?? 3 : it[k];
       inp.addEventListener("change", () => {
+        const was = { value: it[k], tops: it.tops };
         it[k] = inp.type === "number" ? parseFloat(inp.value) : inp.value;
         if (k === "top") delete it.tops;      // typing a top level sets the whole wall to it
+        const why = crossingOf(it);           // the ground a wall holds, which this can change, mustn't cross itself
+        if (why) {
+          it[k] = was.value;
+          if (was.tops) it.tops = was.tops;
+          flash(why);
+        }
         renderSketch();
       });
     }
@@ -3104,9 +3133,18 @@ function startDrag(h, e) {
   }
   if (h.kind === "lift" && it.kind === "wall") {
     if (it.mode === "height") {               // pulling a top fixes the wall's levels from here on
+      const was = { top: it.top };
       it.tops = it.pts.map((p) => snap05((existingY(p.x, p.z) ?? p.y) + it.height + H0));
       it.mode = "level";
       it.top = Math.max(...it.tops);
+      const why = crossingOf(it);             // with its levels fixed it holds its ground: not if that crosses itself
+      if (why) {
+        Object.assign(it, { mode: "height", top: was.top });
+        delete it.tops;
+        drag = null;
+        flash(why);
+        return;
+      }
     }
     drag.tops = it.pts.map((_, i) => it.tops?.[i] ?? it.top);
   }
@@ -3139,16 +3177,23 @@ function dragTo(cx, cy, shift) {
     const q = planAt(cx, cy);
     if (!q) return;
     if (h.kind === "v") {
-      const p = it.pts[h.i];
+      const p = it.pts[h.i], was = p.clone();
       const raw = new THREE.Vector3(q.x + drag.off.x, q.y, q.z + drag.off.z);
       const others = it.pts.filter((_, k) => k !== h.i);
       const d = resolveCorner(raw, it, others);
       p.set(d.local.x, 0, d.local.z);
       p.y = existingY(p.x, p.z) ?? q.y;
-      showSnap(d);
-      const [E, N] = site(p);
-      const so = frameSO ? frameSO(E, N) : null;
-      say = so ? `Corner at s ${f2(so[0])}, o ${f2(so[1])} m (ground ${f2(p.y + H0)} m)` : siteText(p);
+      const why = crossingOf(it);
+      if (why) {                  // the corner stays where the outline last didn't cross itself
+        p.copy(was);
+        hideSnap();
+        say = why;
+      } else {
+        showSnap(d);
+        const [E, N] = site(p);
+        const so = frameSO ? frameSO(E, N) : null;
+        say = so ? `Corner at s ${f2(so[0])}, o ${f2(so[1])} m (ground ${f2(p.y + H0)} m)` : siteText(p);
+      }
     } else {
       const dx = q.x - drag.p0.x, dz = q.z - drag.p0.z;
       it.pts.forEach((p, i) => {
@@ -3266,6 +3311,11 @@ for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) {
 function deleteVertex(i) {
   const it = selItem();
   if (!it || i == null || it.pts.length <= (it.kind === "area" ? 3 : 2)) return false;
+  const why = crossingOf(it, it.pts.filter((_, k) => k !== i));
+  if (why) {                    // dropping it would have the outline cross itself
+    flash(why);
+    return false;
+  }
   it.pts.splice(i, 1);
   if (it.tops) it.tops.splice(i, 1);
   selVertex = null;

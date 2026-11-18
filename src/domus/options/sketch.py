@@ -10,7 +10,7 @@ import json
 
 import numpy as np
 
-from . import design
+from . import design, scheme
 
 DEFAULT_BACK_M = 3.0
 GRID_STEP_M = 0.5
@@ -64,6 +64,26 @@ def area_terrace(it):
     z = float(it["level"]) - grad * ((en - en.mean(axis=0)) @ d)
     return {"id": f"S{it['id']}", "name": it.get("name") or f"Area {it['id']}", "kind": KINDS.get(it.get("area"), "lawn"),
             "polygon": [[float(a), float(b), float(c)] for (a, b), c in zip(en, z)]}
+
+
+def crossings(items):
+    """What's wrong with a sketch whose outlines cross themselves (scheme.crossing), one message for each item: an
+    area's outline, or the ground a wall holds (its line, and the line `back` behind it). The build would take such an
+    outline as shapely's buffer(0) reshapes it, so the viewer doesn't let one be drawn (app/viewer/sketch-core.js's
+    crossings, word for word) and a sketch with one isn't saved as an option."""
+    out = []
+    for it in items:
+        en = it.get("en") or []
+        if it.get("kind") == "area" and len(en) >= 3:
+            if scheme.crossing(en):
+                name = it.get("name") or f"Area {it['id']}"
+                out.append(f"The outline of {name} crosses itself: move its corners so that no side crosses another.")
+        elif it.get("kind") == "wall" and len(en) >= 2:
+            wall, held = wall_option(it, 0.0)
+            if held and scheme.crossing(held["polygon"]):
+                out.append(f"The ground behind {wall['name']} crosses itself: move the wall's corners, or hold less "
+                           "ground behind it.")
+    return out
 
 
 def to_option(site, items, name="Sketch"):

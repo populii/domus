@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** a terrace in an option written by hand whose outline crosses or touches itself still builds,
+  now with a warning that names the option and the terrace and says what the build makes of it: shapely's `buffer(0)`
+  reshapes it, and can keep only part of what it closes round ([docs/options.md](docs/options.md)). In the viewer a
+  sketched area's outline, and the ground a sketched wall holds, can't cross themselves: an outline that would isn't
+  closed, a corner dragged or typed where it would stays where it was, and a change to a wall's side or depth that
+  would is undone, each saying why. The server won't save such a sketch as an option, with the same message.
+
 ## 2026.11.54
 
 - **For site projects:** a terrace that gives its own level at each corner is cut into its corners' Delaunay

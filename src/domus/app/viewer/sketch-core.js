@@ -203,6 +203,58 @@ function behind(line, side, depth) {
   return out;
 }
 
+// scheme.crossing's test, as shapely's LinearRing.is_simple has it: whether an outline (its corners in turn, [x, y],
+// closed back to the first) crosses or touches itself, or doubles back along itself. A corner given twice in a row is
+// no crossing; an outline of fewer than three corners doubles back.
+export function crossesItself(corners) {
+  const P = [];
+  for (const [x, y] of corners) {
+    const q = P[P.length - 1];
+    if (!q || q[0] !== Number(x) || q[1] !== Number(y)) P.push([Number(x), Number(y)]);
+  }
+  if (P.length > 1 && P[0][0] === P[P.length - 1][0] && P[0][1] === P[P.length - 1][1]) P.pop();
+  const n = P.length;
+  if (n < 3) return true;
+  const Q = P.map(([x, y]) => [x - P[0][0], y - P[0][1]]);
+  const turn = (a, b, c) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+  const within = (a, b, p) => Math.min(a[0], b[0]) <= p[0] && p[0] <= Math.max(a[0], b[0])
+    && Math.min(a[1], b[1]) <= p[1] && p[1] <= Math.max(a[1], b[1]);
+  const meet = (a, b, c, d) => {                  // whether the sides a-b and c-d have a point in common
+    const d1 = turn(c, d, a), d2 = turn(c, d, b), d3 = turn(a, b, c), d4 = turn(a, b, d);
+    if (d1 * d2 < 0 && d3 * d4 < 0) return true;
+    return (d1 === 0 && within(c, d, a)) || (d2 === 0 && within(c, d, b)) || (d3 === 0 && within(a, b, c)) || (d4 === 0 && within(a, b, d));
+  };
+  const back = (a, v, b) => turn(a, v, b) === 0 && (a[0] - v[0]) * (b[0] - v[0]) + (a[1] - v[1]) * (b[1] - v[1]) > 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const [a, b] = [Q[i], Q[(i + 1) % n]], [c, d] = [Q[j], Q[(j + 1) % n]];
+      if (j === i + 1) { if (back(a, b, d)) return true; }          // neighbours: only by doubling back
+      else if (i === 0 && j === n - 1) { if (back(b, a, c)) return true; }
+      else if (meet(a, b, c, d)) return true;
+    }
+  }
+  return false;
+}
+
+// sketch.crossings, word for word: a message for each item of a sketch whose outline crosses itself, an area's or the
+// ground a wall holds (its line, and the line `back` behind it). The viewer doesn't let one be drawn, and the server
+// doesn't save one as an option: shapely's buffer(0) would reshape it in the build.
+export function crossings(items, backDefault = 3.0) {
+  const out = [];
+  for (const it of items) {
+    const en = (it.en || []).map((p) => [Number(p[0]), Number(p[1])]);
+    if (it.kind === "area" && en.length >= 3) {
+      if (crossesItself(en)) out.push(`The outline of ${it.name || `Area ${it.id}`} crosses itself: move its corners so that no side crosses another.`);
+    } else if (it.kind === "wall" && en.length >= 2) {
+      const held = (it.retains === "left" || it.retains === "right") && it.mode === "level" && it.tops && it.tops.length;
+      if (held && crossesItself([...en, ...behind(en, it.retains, Number(it.back || backDefault)).reverse()])) {
+        out.push(`The ground behind ${it.name || `Wall ${it.id}`} crosses itself: move the wall's corners, or hold less ground behind it.`);
+      }
+    }
+  }
+  return out;
+}
+
 // sketch.sketched: the option a sketch makes, keeping every existing wall.
 function sketched(items, upstand, backDefault) {
   const walls = [], terraces = [];

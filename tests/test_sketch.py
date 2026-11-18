@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 import tomllib
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -185,3 +186,96 @@ def test_the_server_works_a_sketch_out_and_saves_it_as_an_option(site, monkeypat
         for f in (site / "options").glob("sketch-*.toml"):
             f.unlink()
     time.sleep(0)
+
+
+AT = np.array([1500000.0, 5500000.0])       # on a grid as large as New Zealand's
+SHAPES = {"a square": [[0, 0], [4, 0], [4, 4], [0, 4]],
+          "a square with a corner twice": [[0, 0], [4, 0], [4, 0], [4, 4], [0, 4]],
+          "a square closed": [[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]],
+          "a square with a corner on a straight side": [[0, 0], [2, 0], [4, 0], [4, 4], [0, 4]],
+          "a bow-tie": [[0, 0], [4, 4], [4, 0], [0, 4]],
+          "one touching itself at a corner": [[0, 0], [4, 0], [2, 2], [4, 4], [0, 4], [2, 2]],
+          "one with a corner on another side": [[0, 0], [4, 0], [4, 4], [2, 0], [0, 4]],
+          "one doubling back along a side": [[0, 0], [4, 0], [2, 0], [2, 3], [0, 3]],
+          "three corners in a line": [[0, 0], [2, 0], [4, 0]]}
+
+
+def held(en, **kw):
+    return {"id": 2, "kind": "wall", "name": "Wall 2", "en": (AT + np.array(en, float)).tolist(), "mode": "level",
+            "tops": [42.0] * len(en), "retains": "left", **kw}
+
+
+def test_the_viewer_and_the_server_say_the_same_of_outlines_that_cross_themselves(tmp_path):
+    """The viewer's check (sketch-core.js's crossesItself and crossings) and the server's (scheme.crossing and
+    sketch.crossings) agree, word for word, on outlines that cross, touch or double back on themselves and on ones
+    that don't, and on the ground a wall holds: its line and the line behind it."""
+    from domus.options import scheme, sketch
+
+    rings = [(AT + np.array(v, float)).tolist() for v in SHAPES.values()]
+    rng = np.random.default_rng(3)
+    rings += [(AT + rng.uniform(0.0, 12.0, (k, 2))).tolist() for k in (4, 5, 6, 8) for _ in range(25)]
+    bow = rings[list(SHAPES).index("a bow-tie")]
+    sketches = [[{"id": 1, "kind": "area", "name": "Lawn", "en": bow}],
+                [{"id": 7, "kind": "area", "en": bow}],
+                [{"id": 1, "kind": "area", "name": "Lawn", "en": rings[0]}],
+                [held([[0, 0], [10, 0]])],
+                [held([[0, 0], [2, 6], [4, 0]], retains="right", back=5.0)],      # a narrow V, the ground inside it
+                [held([[0, 0], [2, 6], [4, 0]], back=5.0)],                       # and outside it
+                [held([[0, 0], [5, 1], [10, 0]], retains="right")],
+                [held([[0, 0], [6, 0], [6, 3], [3, -2]], back=1.0)],              # a line that crosses itself
+                [held([[0, 0], [2, 6], [4, 0]], retains="right", back=5.0, mode="height", tops=None)],
+                [held([[0, 0], [2, 6], [4, 0]], retains="none", back=5.0)]]
+    (tmp_path / "cases.json").write_text(json.dumps({"rings": rings, "sketches": sketches}), encoding="utf-8")
+    here = Path(__file__).parent
+    out = subprocess.run(["node", str(here / "sketch_crossing_check.mjs"), str(here.parent / "src" / "domus" / "app" / "viewer" / "sketch-core.js"),
+                          str(tmp_path / "cases.json")], capture_output=True, text=True, encoding="utf-8", check=False, timeout=120)
+    assert out.returncode == 0, out.stderr
+    js = json.loads(out.stdout)
+    assert js["rings"] == [scheme.crossing(r) is not None for r in rings]
+    assert js["rings"][:len(SHAPES)] == [False, False, False, False, True, True, True, True, True]
+    assert 0 < sum(js["rings"][len(SHAPES):]) < len(rings) - len(SHAPES)
+    assert js["sketches"] == [sketch.crossings(s) for s in sketches]
+    area = "The outline of {} crosses itself: move its corners so that no side crosses another."
+    wall = "The ground behind Wall 2 crosses itself: move the wall's corners, or hold less ground behind it."
+    assert js["sketches"] == [[area.format("Lawn")], [area.format("Area 7")], [], [], [wall], [], [], [wall], [], []]
+
+
+def test_the_server_wont_save_a_sketch_whose_outline_crosses_itself(site, monkeypatch):
+    """A sketch whose outline crosses itself isn't saved as an option, with the message the viewer gives: the build
+    would take the outline as shapely's buffer(0) reshapes it. Nothing is written and nothing built."""
+    monkeypatch.delenv("DOMUS_OUTPUT", raising=False)
+    built = []
+    monkeypatch.setattr(serve.BuildJob, "start", lambda self: built.append(self.root))
+    httpd = serve.make_server("127.0.0.1", 0, [site / "viewer" / "data"], site / ".domus" / "viewer.db", root=site)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    port = httpd.server_address[1]
+    try:
+        boundary = json.loads((site / "data" / "site" / "boundary.geojson").read_text(encoding="utf-8"))["features"][0]["geometry"]["coordinates"][0]
+        cx, cy = np.mean(boundary, axis=0)[:2]
+        bow = [[cx - 2, cy - 2], [cx + 2, cy + 2], [cx + 2, cy - 2], [cx - 2, cy + 2]]
+        items = [{"id": 3, "kind": "area", "name": "Lawn", "en": bow, "area": "lawn", "level": 42.0, "fall": "flat", "fall_to": "north"}]
+        status, ans = call(port, "POST", "/api/sketch/option", json.dumps({"name": "Crossed", "items": items}))
+        assert status == 400
+        assert ans["error"] == "The outline of Lawn crosses itself: move its corners so that no side crosses another."
+        assert not list((site / "options").glob("sketch-*.toml")) and built == []
+    finally:
+        httpd.handler_class_worker().stop()
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_the_build_warns_of_a_terrace_whose_outline_crosses_itself():
+    """A terrace written by hand whose outline crosses itself is taken as shapely's buffer(0) reshapes it: the build
+    says so, naming the option and the terrace, and how much of what it closes round is kept."""
+    from types import SimpleNamespace
+
+    from domus import build
+    from domus.options import scheme
+
+    bow = scheme.Terrace({"id": "T1", "name": "Lawn", "polygon": [[0, 0], [4, 4], [4, 0], [0, 4]], "level": 42.0}, {"batter": 1.0}, None)
+    fine = scheme.Terrace({"id": "T2", "name": "Bed", "polygon": [[0, 0], [4, 0], [4, 4], [0, 4]], "level": 42.0}, {"batter": 1.0}, None)
+    assert bow.crossing == (8.0, 4.0) and fine.crossing is None
+    found = [({"path": "options/a.toml"}, {"design": SimpleNamespace(terraces=[bow, fine])})]
+    assert build.crossing_warnings(found) == [
+        ("Warning: options/a.toml: terrace T1 (Lawn): its outline crosses itself, so the build takes it as shapely's "
+         "buffer(0) reshapes it, 4.0 m2 of the 8.0 m2 it closes round. Move its corners so that no side crosses another.")]

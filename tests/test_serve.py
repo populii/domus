@@ -352,3 +352,39 @@ def test_each_site_of_many_has_its_own_changes(tmp_path):
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_the_viewer_keeps_the_ground_a_wall_holds_from_crossing_itself(demo_server):
+    """The ground a sketched wall holds, its line and the line behind it, can't cross itself: holding it deeper behind
+    a narrow V, where it would, is undone, with the message the server gives (sketch.crossings)."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    port, model = demo_server
+    e0, n0 = model["origin"][:2]
+    en = [[1500004.0, 5500020.0], [1500006.0, 5500026.0], [1500008.0, 5500020.0]]
+    wall = {"id": 1, "kind": "wall", "name": "Wall 1", "material": "timber", "mode": "level", "top": 43.0, "tops": [43.0] * 3,
+            "height": 0.6, "retains": "right", "back": 2.0, "pts": [[e - e0, 0.0, -(n - n0)] for e, n in en]}
+    state = json.dumps({"note": "", "items": [wall]})
+    with sync_api.sync_playwright() as p:
+        if not os.path.exists(p.chromium.executable_path):
+            pytest.skip("Playwright's Chromium isn't installed: uv run playwright install chromium")
+        browser = p.chromium.launch()
+        try:
+            page = browser.new_page()
+            errors = []
+            page.on("console", lambda m: errors.append(m.text)
+                    if m.type == "error" and not m.text.startswith("Failed to load resource") else None)
+            page.on("pageerror", lambda err: errors.append(str(err)))
+            page.add_init_script(f"localStorage.setItem({json.dumps('domus-sketch-' + model['title'])}, {json.dumps(state)});")
+            page.goto(f"http://127.0.0.1:{port}/demo")
+            back = page.locator('[data-k="back"]')
+            back.wait_for(state="attached", timeout=60000)
+            back.evaluate("(el) => { el.value = '3'; el.dispatchEvent(new Event('change')); }")
+            said = page.locator("#status").text_content()
+            kept = page.locator('[data-k="back"]').input_value()
+            back = page.locator('[data-k="back"]')
+            back.evaluate("(el) => { el.value = '1.5'; el.dispatchEvent(new Event('change')); }")
+            shallower = page.locator('[data-k="back"]').input_value()
+        finally:
+            browser.close()
+    assert said == "The ground behind Wall 1 crosses itself: move the wall's corners, or hold less ground behind it."
+    assert kept == "2" and shallower == "1.5" and not errors

@@ -8,6 +8,8 @@ with levels, lawns, beds and paving, and a row in the viewer's options table (`s
 
 The quickest way to make one is to sketch it in the viewer: draw the wall, set which side it retains, and press **Make it an option**. That writes `options/sketch-<name>.toml`, which you can then edit. Or copy a file, rename it, change a few numbers, rebuild, and pick it in the viewer.
 
+A sketched area's outline, and the ground a sketched wall holds (its line and the line behind it), can't cross themselves. The viewer won't close an outline that would, keeps a dragged or typed corner where the outline last didn't, and undoes a change to a wall's side or depth that would, each time saying why; the server won't save such a sketch as an option, with the same message.
+
 ## The site frame
 
 Options are drawn in metres along and in from one boundary of the lot, named in `[frame]` in
@@ -84,7 +86,9 @@ width_m = 1.0
 
 A terrace polygon with three numbers per corner (`[s, o, level]`) takes its own level at each
 corner, linear between them: a planting strip that rises beside a sloping drive is drawn this way.
-Draw a terrace's edge on the wall's face line where a wall holds it.
+Draw a terrace's edge on the wall's face line where a wall holds it. A terrace's outline mustn't cross or touch
+itself: the build takes such an outline as shapely's `buffer(0)` reshapes it, which can keep only part of what it
+closes round, and says so in a warning that names the option and the terrace.
 
 A flight of steps is straight, and joins the ground at its two ends: move a lawn's level and its steps
 follow. The ground under it is a ramp between them. Leave a gap in a wall where steps pass through it, and

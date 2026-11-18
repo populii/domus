@@ -450,9 +450,13 @@ class Site:
         return sketch.evaluate(self._project, items)
 
     def _sketch_option(self, items, name):
-        """For the server: a sketch from the viewer as a wall option's file, its TOML. Not in the promise."""
+        """For the server: a sketch from the viewer as a wall option's file, its TOML; not one with an outline that
+        crosses itself (sketch.crossings), which the build would reshape. Not in the promise."""
         from .options import sketch
 
+        crossed = sketch.crossings(items)
+        if crossed:
+            raise DomusError(" ".join(crossed))
         return sketch.to_toml(sketch.to_option(self._project, items, name))
 
     def _writing(self):
