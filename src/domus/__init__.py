@@ -6,4 +6,4 @@ walls, features, plants, drains), options/ (the wall options), build/, checks/, 
 edits), the public API (api, testing), and on top of them all app/ (the command line, the server and the viewer).
 """
 
-__version__ = "2026.11.62"
+__version__ = "2026.11.63"

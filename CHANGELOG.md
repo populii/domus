@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.63
 
 - **For site projects:** a wall round a sharp corner, a turn of more than 120 degrees, keeps its thickness round it.
   Held on the inside of the turn, its back, and its capping course's, stopped at twice its depth from the face,
