@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from domus import vegetation
+from domus.model import vegetation
 
 
 def test_ndvi_tells_a_green_roof_from_a_tree():

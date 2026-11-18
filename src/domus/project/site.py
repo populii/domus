@@ -7,10 +7,10 @@ is read as itself. Whatever a part keeps of what it read (the settings, the rast
 (`cached`), never in a module's own globals.
 
 Site code written before Domus handed its parts their site calls a few of them without one, such as design.frame()
-and terrain.ground(). They then read the current site, deprecated: the one the process was started for (DOMUS_SITE,
-else the current folder, with its model built into DOMUS_OUTPUT if that's set), found the first time something asks
-for it, or one site code makes current for a while with use(). In Domus's tests (DOMUS_STRICT_SITE=1) a part called
-without its site is an error, so Domus can't lean on the current site unseen.
+and terrain.ground(). They then read the current site, deprecated, and say so: the one the process was started for
+(DOMUS_SITE, else the current folder, with its model built into DOMUS_OUTPUT if that's set), found the first time
+something asks for it, or one site code makes current for a while with use(). In Domus's tests (DOMUS_STRICT_SITE=1)
+a part called without its site is an error, so Domus can't lean on the current site unseen.
 """
 
 import contextvars
@@ -21,7 +21,7 @@ import tomllib
 from contextlib import contextmanager
 from pathlib import Path
 
-from ..errors import DomusError
+from ..errors import DomusError, deprecated
 from . import formats, schema
 
 
@@ -126,13 +126,19 @@ def use(site):
         _current.reset(token)
 
 
-def given(site):
+def given(site, what=None):
     """`site`, the site a part was handed; for a call without one, from site code written before, the current site
-    (deprecated). In strict mode (DOMUS_STRICT_SITE=1, as in the tests) a call without a site is an error."""
+    (deprecated, and it says so, naming the part: `what`, else the function that asked). In strict mode
+    (DOMUS_STRICT_SITE=1, as in the tests) a call without a site is an error."""
     if site is not None:
         return site
     if STRICT:
         raise SiteNotHanded("A part of Domus was called without its site: hand it the Site (domus.project.site)")
+    if what is None:
+        caller = sys._getframe(1)
+        what = f"{caller.f_globals.get('__name__', '?')}.{caller.f_code.co_qualname.removesuffix('.__init__')}"
+    deprecated(f"{what}() was called without its site, which is deprecated: hand it the Site it works on "
+               "(domus.project.site.Site), first or as site=")
     return current()
 
 
@@ -143,14 +149,14 @@ def cached(fn):
 
     @functools.wraps(fn)
     def wrapper(site=None):
-        site = given(site)
+        site = given(site, name)
         key = (name, (), ())
         if key not in site.cache:
             site.cache[key] = fn(site)
         return site.cache[key]
 
     def cache_clear(site=None):
-        site = given(site)
+        site = given(site, f"{name}.cache_clear")
         for key in [k for k in site.cache if k[0] == name]:
             del site.cache[key]
 

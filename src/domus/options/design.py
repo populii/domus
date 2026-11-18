@@ -2,7 +2,7 @@
 settings schema, and what they're worked out on, read from the site each is handed: the ground, the house, the
 existing walls, the services and the easements (context()). domus.scheme works them out and reads no site; its names
 are kept here, on a site's frame and ground, for the site tools and tests that use them. Those call settings(),
-frame(), Terrace and Design without a site (deprecated), and then read the current one.
+frame(), Terrace and Design without a site (deprecated, and they say so), and then read the current one.
 
 Options are drawn in the site frame of options/_site.toml: s along a reference boundary from its first corner, o in
 from it, into the lot.

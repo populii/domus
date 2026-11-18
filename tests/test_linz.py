@@ -3,7 +3,7 @@
 import pytest
 from pyproj import Transformer
 
-from domus import linz
+from domus.importers.nz import linz
 
 TO_NZTM = Transformer.from_crs(4326, 2193, always_xy=True)
 
@@ -59,9 +59,9 @@ def test_fetch_skips_a_survey_with_no_data_here(site, monkeypatch, tmp_path, at_
 
 
 def test_fetch_says_linz_covers_new_zealand_only(site, monkeypatch, project):
-    from domus import linz
     from domus.errors import DomusError
     from domus.geo.crs import Grid
+    from domus.importers.nz import linz
 
     monkeypatch.setattr(Grid, "to_lonlat", lambda self, e, n: (-5.5, 50.1))       # a site in Cornwall
     monkeypatch.setattr(linz, "find_surveys", lambda *a: pytest.fail("asked LINZ"))

@@ -127,7 +127,7 @@ BENDS = [(2, 22), (8, 22), (9, 21.2), (9.6, 21.7), (10.1, 22.6), (11, 22.2), (13
 def leaning(tmp_path_factory):
     """The demo with its old wall bent through tight corners and leaning back a metre (batter_m 1.0), so the outline of
     its foot, half the lean in front of its line, folds back on itself at the corners."""
-    from domus import demo
+    from domus.project import demo
     from domus.project import demo as made_up
     from domus.project.site import Site
 

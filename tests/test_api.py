@@ -63,7 +63,9 @@ def test_the_ground_comes_back_the_shape_it_was_asked(site):
 def test_the_ground_is_the_ground_the_build_draws(site, project):
     """site.ground() is the ground as the build draws it, the existing walls' faces and tops in it: just behind the
     demo's old wall, the wall's top, which stands above the LiDAR there."""
-    from domus import design, mesh, terrain, walls
+    from domus.geo import mesh
+    from domus.model import terrain, walls
+    from domus.options import design
 
     ground = api.open_site().ground()
     old = design.existing_walls(project)[0]
@@ -224,7 +226,7 @@ def test_the_helpers(monkeypatch):
     assert len(pts) == 5 and along[-1] == pytest.approx(10) and pts[:, 2][-1] == pytest.approx(6)
     a, resid = api.fit_affine([[0, 0], [10, 0], [0, 10]], [[100, 200], [110, 200], [100, 190]])
     assert np.allclose(a, [[1, 0, 100], [0, -1, 200]]) and np.allclose(resid, 0)
-    from domus import publicdata
+    from domus.importers.nz import publicdata
 
     asked = []
     monkeypatch.setattr(publicdata, "_wfs", lambda key, layer, cql, count=20: asked.append((key, layer, cql, count)) or [])

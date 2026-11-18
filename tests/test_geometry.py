@@ -7,7 +7,7 @@ from domus.errors import DomusError
 
 
 def test_frame_round_trip(site):
-    from domus import design
+    from domus.options import design
 
     fr = design.SiteFrame([100.0, 200.0], [100.0, 180.0])
     so = np.array([[3.0, 2.0], [-1.5, 7.0]])
@@ -17,8 +17,9 @@ def test_frame_round_trip(site):
     assert np.allclose(design.SiteFrame([100.0, 200.0], [100.0, 180.0], "left").en(np.array([0.0, 1.0])), [101.0, 200.0])
 
 
+@pytest.mark.filterwarnings("ignore::domus.errors.DomusDeprecationWarning")      # crs's names from before
 def test_crs_defaults_to_nztm(site):
-    from domus import crs
+    from domus.geo import crs
 
     assert crs.site_epsg() == 2193
     assert crs.site_to_nztm(1500000.0, 5500000.0) == pytest.approx((1500000.0, 5500000.0))
@@ -26,7 +27,8 @@ def test_crs_defaults_to_nztm(site):
 
 
 def test_designed_ground_holds_its_level(site, project):
-    from domus import design, options
+    from domus import options
+    from domus.options import design
 
     opt = next(o for o in options.load_all(project) if o["id"] == "a-one-wall")
     d = design.Design(opt, site=project)
@@ -36,7 +38,7 @@ def test_designed_ground_holds_its_level(site, project):
 
 
 def test_new_site_reference_edge_keeps_the_lot_on_the_right():
-    from domus import newsite
+    from domus.project import newsite
 
     cw = [[0, 10], [20, 10], [20, 0], [1, 0], [0, 10]]
     a, b = newsite.longest_edge(cw)
@@ -48,7 +50,7 @@ def test_new_site_reference_edge_keeps_the_lot_on_the_right():
 def test_new_project_is_buildable_config(tmp_path):
     import tomllib
 
-    from domus import newsite
+    from domus.project import newsite
 
     ring, epsg = newsite.square_boundary(-43.53, 172.63, 20)
     root = newsite.write_project(tmp_path / "p", 'A "quoted" name', ring, epsg=epsg)
@@ -104,7 +106,7 @@ def test_a_new_site_can_be_a_git_repository_of_its_own(tmp_path, domus):
 def test_a_folder_keeps_its_own_gitignore(tmp_path):
     """site/ in a copy of Domus has a .gitignore that keeps everything added to it out of the repo: a site started there
     leaves it as it is."""
-    from domus import newsite
+    from domus.project import newsite
 
     ring, epsg = newsite.square_boundary(-43.53, 172.63, 20)
     (tmp_path / "site").mkdir()
@@ -116,7 +118,7 @@ def test_a_folder_keeps_its_own_gitignore(tmp_path):
 def test_read_boundary_takes_lon_lat(tmp_path):
     import json
 
-    from domus import newsite
+    from domus.project import newsite
 
     f = tmp_path / "lot.geojson"
     f.write_text(json.dumps({"type": "Polygon", "coordinates": [[[172.63, -43.53], [172.6302, -43.53], [172.6302, -43.5302], [172.63, -43.53]]]}), encoding="utf-8")
@@ -139,7 +141,7 @@ def boundary(path, ring, epsg=None):
 def test_a_site_abroad_goes_on_a_grid_in_metres(tmp_path, domus):
     import tomllib
 
-    from domus import newsite
+    from domus.project import newsite
 
     # Longitude and latitude in Cornwall: its UTM zone. A grid in metres: kept. A grid in feet: the UTM zone.
     lonlat = [[-5.5, 50.1], [-5.4998, 50.1], [-5.4998, 50.1002], [-5.5, 50.1]]
@@ -176,7 +178,7 @@ def test_a_grid_cell_is_cut_along_its_corners_closer_in_height():
 
 
 def test_the_ground_is_triangulated_from_what_it_is_given():
-    from domus import tin
+    from domus.model import tin
 
     # tin reads no site: the ground model (a plane rising 1 in 10 to the north), a wall across it and the model's
     # origin come from the caller, and the same ground far along a grid, about an origin moved with it, gives the

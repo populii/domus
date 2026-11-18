@@ -923,8 +923,10 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md) f
   `DOMUS_SITE` once and hand the site down; a job in a process of its own gets the site's folder. The pure layers
   (`geo`, the model's pure parts and `scheme`) read no site at all. Nothing reads the current site: the older names
   that do (`crs.ROOT`, `crs.settings()`, `raster.dem()` and the rest, and calls such as `design.frame()` without a
-  site) are kept for site code and deprecated. The tests run in strict mode, where a part called without its site is
-  an error, and `tests/test_handed.py` looks for code that reads the old way.
+  site) are kept for site code, deprecated, and each says so where it's used. The tests run in strict mode, where a
+  part called without its site is an error, and so is a `DomusDeprecationWarning`, from those names or a module's old
+  name (`domus.MOVED`): Domus's code and tests import each module by its name now, and a test of an old name catches
+  its warning. `tests/test_handed.py` looks for code that reads the old way.
 - **Text files are UTF-8**, named on every read and write; a test checks.
 - **The app** (`domus/app/`: the command line, the server and the viewer) sits on top, and nothing else in Domus
   imports it. **The viewer** loads nothing from other hosts (new libraries go in its `vendor` folder), and its page is

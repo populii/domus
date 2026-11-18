@@ -18,7 +18,8 @@ def demo():
 
 
 def ground_at(s, o):
-    from domus import design, terrain
+    from domus.model import terrain
+    from domus.options import design
 
     en = design.frame(demo()).en(np.array([[s, o]]))
     return float(terrain.ground(demo()).sample(en[:, 0], en[:, 1])[0])
@@ -38,7 +39,7 @@ def two_lawns(site):
 
 
 def test_steps_take_their_levels_from_the_lawns_they_join(two_lawns, project):
-    from domus import design
+    from domus.options import design
 
     low, opt = two_lawns
     d = design.Design(opt, site=project)
@@ -55,7 +56,7 @@ def test_steps_take_their_levels_from_the_lawns_they_join(two_lawns, project):
 
 
 def test_steps_drawn_from_the_top_come_out_the_same(two_lawns, project):
-    from domus import design
+    from domus.options import design
 
     low, opt = two_lawns
     opt["stairs"][0]["line_so"] = opt["stairs"][0]["line_so"][::-1]
@@ -65,7 +66,7 @@ def test_steps_drawn_from_the_top_come_out_the_same(two_lawns, project):
 
 
 def test_a_short_flight_is_flagged_as_steep(two_lawns, project):
-    from domus import design
+    from domus.options import design
 
     _, opt = two_lawns
     opt["stairs"][0]["line_so"] = [[9.4, 5.0], [10.0, 5.0]]
@@ -75,7 +76,7 @@ def test_a_short_flight_is_flagged_as_steep(two_lawns, project):
 
 def test_a_lawn_edge_under_the_steps_gets_no_batter(two_lawns, project):
     """The upper lawn's edge is free where the wall stops short of it; the flight there holds it instead."""
-    from domus import design
+    from domus.options import design
 
     _, opt = two_lawns
     d = design.Design(opt, site=project)
@@ -117,7 +118,7 @@ polygon_so = [[0, 0], [1, 0], [1, 1]]
 def test_every_wall_material_has_a_painted_picture(site, tmp_path):
     from PIL import Image
 
-    from domus import wall_looks, walls
+    from domus.model import wall_looks, walls
 
     for material, (image, size_m, _) in walls.MATERIAL_TEXTURES.items():
         path = wall_looks.paint(material, tmp_path / image, size_m)
@@ -136,7 +137,7 @@ def test_a_wall_with_no_photo_is_drawn_with_its_painted_picture(built):
 
 def test_fill_against_the_house_is_reported_as_that(site, project):
     """A bed raised against the house's north wall: the house holds it, so it's the cladding to mind, not a wall to add."""
-    from domus import design
+    from domus.options import design
 
     level = round(ground_at(13.5, 11.0) + 0.4, 2)
     opt = {"terraces": [{"id": "bed", "kind": "planting", "level": level, "at_so": [13.5, 11.0],
@@ -172,7 +173,7 @@ def stepped_wall(low):
 
 
 def test_a_wall_can_step_in_level_bays(site, project):
-    from domus import design
+    from domus.options import design
 
     low = round(ground_at(8.0, 10.0), 2)
     w = design.evaluate(project, stepped_wall(low))["walls"][0]
@@ -188,7 +189,8 @@ def test_a_wall_can_step_in_level_bays(site, project):
 
 
 def test_a_timber_wall_has_its_posts_and_a_block_wall_none(site, project):
-    from domus import design, walls
+    from domus.model import walls
+    from domus.options import design
 
     low = round(ground_at(8.0, 10.0), 2)
     w = design.Design(stepped_wall(low), site=project).wall_levels()[0]
@@ -207,7 +209,8 @@ def test_the_ground_behind_a_wall_is_the_ground_it_holds(site, project):
     ground where it is."""
     from scipy.interpolate import LinearNDInterpolator
 
-    from domus import design, terrain
+    from domus.model import terrain
+    from domus.options import design
 
     low = round(ground_at(8.0, 10.0), 2)
     opt = {"walls": [{"id": "W", "material": "block", "line_so": [[10.0, 6.0], [10.0, 12.0]], "retained_side": "left",
@@ -227,7 +230,8 @@ def test_a_wall_can_name_its_block(site, tmp_path, project):
     courses under it and the cap's top, as long as four blocks, in the block's own colour."""
     from PIL import Image
 
-    from domus import design, wall_looks, walls
+    from domus.model import wall_looks, walls
+    from domus.options import design
 
     low = round(ground_at(8.0, 10.0), 2)
     cfg = {"id": "W", "material": "segmental", "unit_m": [0.457, 0.2], "cap_m": 0.1, "colour": "#7f868b",
@@ -289,7 +293,7 @@ line_so = [[0, 2], [1, 2]]
 
 def test_steps_can_be_railway_sleepers(two_lawns, project):
     """A flight of sleepers is two sleepers to a tread, each with faces of its own, and carries the picture's uv."""
-    from domus import design
+    from domus.options import design
 
     low, opt = two_lawns
     s = design.evaluate(project, {**opt, "stairs": [{**opt["stairs"][0], "material": "sleepers"}]})["stairs"][0]
@@ -319,7 +323,8 @@ def test_the_ground_has_a_clean_edge_at_steps_and_at_a_building(site, project):
     from scipy.interpolate import LinearNDInterpolator
     from shapely.geometry import box
 
-    from domus import design, terrain
+    from domus.model import terrain
+    from domus.options import design
 
     e, n = design.frame(project).en(np.array([[8.0, 10.0]]))[0]
     pit = box(e - 1, n - 1, e + 1, n + 1)
@@ -344,7 +349,7 @@ def test_the_ground_runs_on_under_a_bay_window(monkeypatch, project):
     """A bay window hangs from the wall, so it takes no ground: an option regrades under it."""
     from shapely.geometry import box
 
-    from domus import design
+    from domus.options import design
 
     def ring(*bounds):
         return [list(box(*bounds).exterior.coords)]
@@ -363,7 +368,7 @@ def test_the_ground_runs_on_under_a_bay_window(monkeypatch, project):
 def sloping_foot(two_lawns):
     """The two lawns' flight, 1.4 m wide, on ground that rises 0.28 m across its foot, left to right or right to
     left: (the lower lawn's level, the option, the flight's `foot`, and whether the frame's `o` is to the left)."""
-    from domus import design
+    from domus.options import design
 
     low, opt = two_lawns
     en = design.frame(demo()).en(np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]))
@@ -377,7 +382,7 @@ def test_a_flight_can_stand_on_ground_that_slopes_across_its_foot(two_lawns, pro
     """`foot` with two levels, the ground at the left and right ends of the foot line: the treads stay level, the
     foot line straight and every tread runs the full width. The lowest tread is level with the ground at the high
     end, and the risers above it are equal."""
-    from domus import design
+    from domus.options import design
 
     low, opt, stair, _ = sloping_foot(two_lawns)
     d = design.Design({**opt, "stairs": [stair]}, site=project)
@@ -419,7 +424,7 @@ def test_a_flight_can_stand_on_ground_that_slopes_across_its_foot(two_lawns, pro
 def test_a_wall_beside_steps_on_a_sloping_foot_is_measured_at_its_own_face(two_lawns, project):
     """A wall up the high side of such a flight stands on the ground under the flight at the wall, not on the
     lower ground 0.35 m out across the flight, where a wall's foot is otherwise read."""
-    from domus import design
+    from domus.options import design
 
     low, opt, stair, o_is_left = sloping_foot(two_lawns)
     high_side = 5.7 if o_is_left else 4.3           # the flight's centre line is o = 5.0, and its left is the high end
@@ -439,7 +444,9 @@ def test_an_option_keeps_the_lawns_it_leaves_alone(built, project):
     from shapely.geometry import Polygon
     from shapely.ops import unary_union
 
-    from domus import canopy, design, options, vegetation
+    from domus import options
+    from domus.model import canopy, vegetation
+    from domus.options import design
 
     model = json.loads((built / "model.json").read_text(encoding="utf-8"))
     by_id = {x["id"]: x for x in model["layers"]}
@@ -475,7 +482,8 @@ BLOCK = {"material": "segmental", "unit_m": [0.457, 0.2], "cap_m": 0.1, "thickne
 def cornered(first, second, last=1.0):
     """A wall of named blocks that runs `first` metres, turns a corner, runs `second` metres, turns the same way
     again and runs `last` metres more, with the side given that makes both of them outside corners."""
-    from domus import design, walls
+    from domus.model import walls
+    from domus.options import design
 
     line = [[10.0, 6.0], [10.0, 6.0 + first], [10.0 + second, 6.0 + first], [10.0 + second, 6.0 + first - last]]
     for side in ("left", "right"):
@@ -489,7 +497,7 @@ def cornered(first, second, last=1.0):
 def test_a_block_wall_has_a_corner_block_at_each_outside_corner(site):
     """The bond of a wall of named blocks starts at its corners: a joint at the first outside corner, the next
     face half a block on from it, and whole blocks from one corner to the next where they fit."""
-    from domus import walls
+    from domus.model import walls
 
     block = 0.457
     w = cornered(3 * block, 4.5 * block)
@@ -521,7 +529,8 @@ def test_a_block_walls_blocks_butt_turn_about_in_an_inside_corner(site, project)
     """Between an outside corner and an inside one the bond runs on half a block round each: whole blocks reach
     both where the stretches are whole numbers of half blocks. Where one is not, the outside corner keeps its
     joint, the cut block stands in the inside corner, and the wall says so."""
-    from domus import design, walls
+    from domus.model import walls
+    from domus.options import design
 
     block = 0.457
 
@@ -551,7 +560,8 @@ def test_capping_units_are_whole_from_each_corner_step_and_end(site, project):
     top, the one cut to fit in the middle, and none of them a sliver. At an outside corner the unit of one face
     runs through to the corner and the next face's butts against it, its depth round the corner. The capping
     course and the top are drawn with those joints."""
-    from domus import design, walls
+    from domus.model import walls
+    from domus.options import design
 
     block = 0.457
     joints, count = walls._lay(1.0, 1.0 + 4 * block, block)
@@ -602,7 +612,7 @@ def test_block_walls_that_meet_share_their_courses_and_their_bond(site, project)
     """Two walls of the same block that stand against each other are set out as one: the same courses, the bond
     carried on from the one into the other, and the face they share drawn once. A top that is not a whole number
     of courses from the other's is reported."""
-    from domus import design
+    from domus.options import design
 
     low = round(ground_at(8.0, 10.0), 2)
     side = "left" if cornered(1.0, 1.0)["side"] == 1 else "right"     # the side that makes A's corner an outside one
@@ -636,7 +646,8 @@ def test_block_walls_that_meet_share_their_courses_and_their_bond(site, project)
 def test_a_block_walls_courses_stay_level_where_its_top_steps(site, project):
     """Under a top that steps the courses run through, each bay has its own capping course, and the end of the
     higher bay shows across the wall. A step that is not a whole number of courses is reported."""
-    from domus import design, walls
+    from domus.model import walls
+    from domus.options import design
 
     low = round(ground_at(8.0, 10.0), 2)
     cfg = {**BLOCK, "id": "W", "line_so": [[10.0, 6.0], [10.0, 9.0], [10.0, 12.6]], "retained_side": "left",
@@ -668,7 +679,8 @@ def test_the_ground_keeps_its_level_up_to_a_walls_face_and_back(site, project):
     its foot, and just behind its back the ground it holds."""
     from scipy.interpolate import LinearNDInterpolator
 
-    from domus import design, terrain
+    from domus.model import terrain
+    from domus.options import design
 
     low = round(ground_at(8.0, 10.0), 2)
     opt = {"walls": [{"id": "W", "material": "block", "line_so": [[10.0, 6.0], [10.0, 12.0]], "retained_side": "left",
@@ -691,7 +703,7 @@ def test_the_ground_keeps_its_level_up_to_a_walls_face_and_back(site, project):
 def test_capping_units_end_at_a_corner_where_the_top_changes_level():
     """A corner with the top at two levels is the end of the higher wall and the start of the lower one: the
     capping units of each end there, and none runs round it."""
-    from domus import walls
+    from domus.model import walls
 
     block = 0.457
     chain = np.array([0.0, 3 * block, 3 * block, 5 * block])
@@ -704,7 +716,7 @@ def test_capping_units_end_at_a_corner_where_the_top_changes_level():
 def test_a_step_of_one_course_is_capped_as_a_stair():
     """Two capping units make a course: at a step of one course the higher capping course runs half a unit on
     past the step, over two capping units stacked beside the end of the higher course."""
-    from domus import walls
+    from domus.model import walls
 
     block = 0.457
     chain = np.array([0.0, 2.5 * block, 2.5 * block, 5 * block])
@@ -719,7 +731,9 @@ def test_options_are_worked_out_on_the_ground_the_build_draws(built, project):
     """The wall options are designed on and measured from the ground as the build draws it, with the ground fixes and
     the existing walls' faces and tops in it: just behind the demo's old wall, the wall's top, a third of a metre
     above the LiDAR there."""
-    from domus import design, mesh, terrain, walls
+    from domus.geo import mesh
+    from domus.model import terrain, walls
+    from domus.options import design
 
     ground = design.context(project).ground
     assert ground is terrain.existing(project) and ground.surface is terrain.drawn(project)
@@ -740,7 +754,8 @@ def test_a_block_wall_is_drawn_as_deep_as_its_units_with_its_foot_in_the_ground(
     its toe: it's drawn that deep, its capping course standing out that far, and its foot on the course at or below
     that depth, so it steps down with the ground a course at a time. thickness_m still sets it out, so its blocks and
     capping units are laid as they were."""
-    from domus import design, walls
+    from domus.model import walls
+    from domus.options import design
 
     low = round(ground_at(8.0, 10.0), 2)
     plain = {**BLOCK, "id": "W", "line_so": [[10.0, 6.0], [10.0, 12.0]], "retained_side": "left", "top": low + 1.0}

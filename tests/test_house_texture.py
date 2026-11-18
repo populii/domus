@@ -2,7 +2,10 @@
 face's photo when the site asks."""
 
 import numpy as np
+import pytest
 from PIL import Image
+
+from domus.errors import DomusDeprecationWarning
 
 
 def spec(**extra):
@@ -16,19 +19,21 @@ def lap_rows(shade):
 
 
 def test_boards_default_to_150_mm_and_are_not_drawn_on_photos(site):
-    from domus import crs, house_texture
+    from domus.geo import crs
+    from domus.model import house_texture
 
-    assert house_texture.Looks(crs.settings().get("house", {})).boards() == (0.15, False)
+    with pytest.warns(DomusDeprecationWarning):                     # crs.settings(), by its name from before
+        assert house_texture.Looks(crs.settings().get("house", {})).boards() == (0.15, False)
 
 
 def test_boards_take_their_size_from_the_site(site):
-    from domus import house_texture
+    from domus.model import house_texture
 
     assert house_texture.Looks({"board_m": 0.117, "boards_on_photos": True}).boards() == (0.117, True)
 
 
 def test_laps_are_a_board_apart_counted_up_from_the_datum(site):
-    from domus import house_texture
+    from domus.model import house_texture
 
     ppm, z1 = 200, 3.0
     zc = z1 - (np.arange(600) + 0.5) / ppm
@@ -44,7 +49,7 @@ def test_laps_are_a_board_apart_counted_up_from_the_datum(site):
 
 
 def test_a_face_counts_its_boards_from_the_plinth_and_says_where_they_show(site):
-    from domus import house_texture
+    from domus.model import house_texture
 
     opening = {"kind": "window", "u0": 1.0, "u1": 2.0, "sill": 1.6, "head": 2.4}
     img, clad = house_texture.draw_face(4.0, 0.0, 3.0, spec(openings=[opening]), "north", house_texture.Looks({"board_m": 0.2}),
@@ -61,7 +66,7 @@ def test_a_face_counts_its_boards_from_the_plinth_and_says_where_they_show(site)
 
 
 def test_boards_are_drawn_over_a_photo_only_where_the_boards_show(site):
-    from domus import house_texture
+    from domus.model import house_texture
 
     photo = np.full((300, 400, 3), 180, np.uint8)
     photo[::7] = 120                                      # the photo's own lines, at a spacing that is not the boards'
@@ -80,8 +85,8 @@ def test_boards_are_drawn_over_a_photo_only_where_the_boards_show(site):
 def test_a_site_names_its_own_colours_and_claddings(site):
     import pytest
 
-    from domus import house_texture as ht
     from domus.errors import DomusError
+    from domus.model import house_texture as ht
 
     house = {"palette": {"heritage-red": "#8a2b22"},
              "cladding": {"default": ["brick:heritage-red", "plaster:#d8d2c4"], "front": ["boards-grey", "panel:#5b6670"]}}
@@ -106,8 +111,8 @@ def test_a_site_names_its_own_colours_and_claddings(site):
 def test_the_roof_is_drawn_as_the_site_names_it(site, tmp_path):
     import pytest
 
-    from domus import house_texture as ht
     from domus.errors import DomusError
+    from domus.model import house_texture as ht
 
     pictures = {}
     for kind in ht.ROOFS:

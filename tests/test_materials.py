@@ -4,7 +4,7 @@ from its set-out (walls.unit_count), what its trench takes, and the rest, net an
 import numpy as np
 import pytest
 
-from domus import walls
+from domus.model import walls
 from domus.options import materials
 
 UNIT = {"unit_m": [0.457, 0.2], "cap_m": 0.1}

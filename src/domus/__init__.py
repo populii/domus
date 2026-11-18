@@ -7,16 +7,16 @@ edits), the public API (api, testing), and on top of them all app/ (the command 
 
 Modules that moved into those parts can still be imported by their old names (domus.terrain,
 domus.video.georef_sfm, domus.cli, ...): each old name is the module itself, so site tools written before keep
-working. The app's old names, domus.cli and domus.serve, say they're deprecated (a DeprecationWarning), and
-`python -m domus.cli` still runs the command line.
+working. Each is deprecated, and says so where it's imported (a DeprecationWarning naming the module's name now), and
+`python -m domus.cli` still runs the command line. The old names go in a later release.
 """
 
 import importlib
 import importlib.abc
 import importlib.util
-import os
 import sys
-import warnings
+
+from .errors import deprecated
 
 __version__ = "2026.11.48"
 
@@ -56,8 +56,6 @@ MOVED = {
     "wall_looks": "model.wall_looks",
     "walls": "model.walls",
 }
-# The old names that say they're deprecated when used. The others will, from a later release.
-WARNS = {"cli", "serve"}
 
 
 class _OldNames(importlib.abc.MetaPathFinder, importlib.abc.Loader):
@@ -77,10 +75,7 @@ class _OldNames(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         return None
 
     def create_module(self, spec):
-        rest = spec.name[len("domus."):]
-        if rest in WARNS:
-            warnings.warn(f"{spec.name} is {self._new(spec.name)} now: import it by that name", DeprecationWarning,
-                          skip_file_prefixes=(os.path.dirname(__file__), "<frozen importlib"))
+        deprecated(f"{spec.name} is {self._new(spec.name)} now: import it by that name")
         module = importlib.import_module(self._new(spec.name))
         self._real = getattr(self, "_real", {})
         self._real[spec.name] = module.__spec__         # the import system sets the alias's spec on it: put it back
@@ -94,11 +89,10 @@ class _OldNames(importlib.abc.MetaPathFinder, importlib.abc.Loader):
     def get_code(self, name):
         """`python -m domus.<old name>`: the module at its new name, run as __main__."""
         new = self._new(name)
-        lines = ["import runpy"]
-        if name[len("domus."):] in WARNS:
-            said = f"python -m {name} is python -m {new} now"
-            lines += ["import warnings", f"warnings.warn({said!r}, DeprecationWarning)"]
-        lines.append(f"runpy.run_module({new!r}, run_name='__main__', alter_sys=True)")
+        said = f"python -m {name} is python -m {new} now"
+        lines = ["import runpy", "import warnings", "from domus.errors import DomusDeprecationWarning",
+                 f"warnings.warn({said!r}, DomusDeprecationWarning)",
+                 f"runpy.run_module({new!r}, run_name='__main__', alter_sys=True)"]
         return compile("\n".join(lines) + "\n", name, "exec")
 
 

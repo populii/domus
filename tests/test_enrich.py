@@ -20,7 +20,7 @@ def test_the_model_carries_a_checklist_in_order_with_what_the_site_has(built):
 
 
 def test_a_document_in_sources_counts_as_found(built, site, monkeypatch, project):
-    from domus import enrich
+    from domus.checks import enrich
 
     raw = site / "sources" / "raw"
     raw.mkdir(parents=True, exist_ok=True)
@@ -32,7 +32,7 @@ def test_a_document_in_sources_counts_as_found(built, site, monkeypatch, project
 
 
 def test_the_route_stays_on_the_lot_and_goes_round_the_house(site):
-    from domus import enrich
+    from domus.checks import enrich
 
     ground = lambda e, n: np.zeros(np.shape(e))
     r = enrich.walk_route(LOT, HOUSE, ground)
@@ -43,7 +43,7 @@ def test_the_route_stays_on_the_lot_and_goes_round_the_house(site):
 
 
 def test_a_steep_spot_gets_its_own_stop(site):
-    from domus import enrich
+    from domus.checks import enrich
 
     steep = lambda e, n: np.where(np.asarray(n) < 10, np.asarray(n) * 1.5, 15.0)
     r = enrich.walk_route(LOT, None, steep)
@@ -52,7 +52,7 @@ def test_a_steep_spot_gets_its_own_stop(site):
 
 
 def test_no_stop_is_on_the_house(site, built):
-    from domus import enrich
+    from domus.checks import enrich
 
     steep = lambda e, n: np.asarray(n) * 1.5
     r = enrich.walk_route(LOT, HOUSE, steep)
@@ -62,17 +62,17 @@ def test_no_stop_is_on_the_house(site, built):
 
 
 def test_it_can_be_left_out(built, site, project):
-    from domus import build, crs
+    from domus import build
 
     toml = site / "data" / "site.toml"
     was = toml.read_text(encoding="utf-8")
     toml.write_text(was + "\n[enrich]\nenabled = false\n", encoding="utf-8")
-    crs.settings.cache_clear()
+    project.forget_settings()
     try:
         build.main(project)
         m = json.loads((built / "model.json").read_text(encoding="utf-8"))
         assert "enrich" not in m and not [x for x in m["layers"] if x.get("id") == "walk-route"]
     finally:
         toml.write_text(was, encoding="utf-8")
-        crs.settings.cache_clear()
+        project.forget_settings()
         build.main(project)

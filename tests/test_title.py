@@ -5,7 +5,8 @@ import json
 import pytest
 from shapely.geometry import Polygon
 
-from domus import design, publicdata, title
+from domus.importers.nz import publicdata, title
+from domus.options import design
 
 LOT = [[1000.0, 2000.0], [1020.0, 2000.0], [1020.0, 2020.0], [1000.0, 2020.0], [1000.0, 2000.0]]
 STRIP = [[1016.0, 2000.0], [1020.0, 2000.0], [1020.0, 2020.0], [1016.0, 2020.0], [1016.0, 2000.0]]

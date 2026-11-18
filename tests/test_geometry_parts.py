@@ -7,9 +7,9 @@ import math
 import numpy as np
 from shapely.geometry import Polygon
 
-from domus import house, terrain, vegetation
 from domus.geo.georef import fit_affine, fit_rigid
 from domus.geo.mesh import wall_strip
+from domus.model import house, terrain, vegetation
 
 
 def bumps(*specs, shape=(80, 120)):

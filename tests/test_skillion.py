@@ -5,8 +5,9 @@ import math
 import numpy as np
 import pytest
 
-from domus import create, house
-from domus.prep import check
+from domus import create
+from domus.checks import model as check
+from domus.model import house
 
 RING = [[1005.0, 2015.0], [1017.0, 2015.0], [1017.0, 2006.0], [1005.0, 2006.0], [1005.0, 2015.0]]
 ground = lambda e, n: np.full(np.shape(e), 40.0)

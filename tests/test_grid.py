@@ -89,6 +89,7 @@ def test_it_reads_its_settings_once_until_it_forgets_them(tmp_path):
     assert site.settings()["crs"]["epsg"] == 2193 and site.grid.epsg == 2193
 
 
+@pytest.mark.filterwarnings("ignore::domus.errors.DomusDeprecationWarning")      # crs's names from before
 def test_crs_names_from_before_give_the_current_sites(tmp_path, at_site):
     from domus import crs  # by its old name, as site code imports it
 

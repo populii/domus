@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 from shapely.geometry import Polygon
 
-from domus import scheme
 from domus.model import tin, walls
+from domus.options import scheme
 
 
 class Slope:

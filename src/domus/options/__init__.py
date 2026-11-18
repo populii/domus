@@ -72,8 +72,8 @@ def current(site, cfg):
 
 
 def load(path, site=None):
-    """The option in the file at `path`, one of the site's. Site code calls it without a site (deprecated), and then it
-    reads the current one."""
+    """The option in the file at `path`, one of the site's. Site code calls it without a site (deprecated, and it says
+    so), and then it reads the current one."""
     site = given(site)
     cfg = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     if "based_on" in cfg:

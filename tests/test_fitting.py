@@ -28,7 +28,7 @@ def test_a_face_is_fitted_through_its_points_and_against_the_model():
 
 
 def test_a_frames_pixels_meet_a_plane(site, project):
-    from domus import design
+    from domus.options import design
     from domus.prep import fitting
 
     # One frame, its camera 40 m up at s 5, o 5, looking along the grid's north: a pixel half the focal length below

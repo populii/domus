@@ -17,7 +17,7 @@ os.environ["DOMUS_STRICT_SITE"] = "1"       # a part of Domus is handed its site
 
 @pytest.fixture(scope="session")
 def site():
-    from domus import demo
+    from domus.project import demo
 
     demo.write(os.environ["DOMUS_SITE"])
     return Path(os.environ["DOMUS_SITE"])

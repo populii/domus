@@ -43,7 +43,8 @@ def test_the_richer_site_paints_in_the_drive_under_its_trees(sites, at_site):
     import numpy as np
     from shapely.geometry import shape
 
-    from domus import build, demo
+    from domus import build
+    from domus.project import demo
 
     root = sites / "richer"
     richer = at_site(root)

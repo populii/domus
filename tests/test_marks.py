@@ -7,9 +7,9 @@ import sys
 
 import pytest
 
-from domus import marks, publicdata
 from domus.errors import DomusError
 from domus.geo.crs import Grid
+from domus.importers.nz import marks, publicdata
 
 LOT = [[1000.0, 2000.0], [1020.0, 2000.0], [1020.0, 2020.0], [1000.0, 2020.0], [1000.0, 2000.0]]
 NZTM = Grid(2193)       # the sites here are on NZTM, so LINZ's coordinates are their own

@@ -63,8 +63,8 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 | top level | The public API (`api`, `testing`), `create`, `shots` and the templates |
 
 The modules that moved there can still be imported by their old names (`domus.terrain`, `domus.video`, `domus.cli`,
-...), which are the same modules, so a site's tools written before keep working. The app's, `domus.cli` and
-`domus.serve`, say they're deprecated.
+...), which are the same modules, so a site's tools written before keep working. Each is deprecated, and says so where
+it's imported: a `DomusDeprecationWarning` that names the module's name now.
 
 ## Settings and imports
 
@@ -108,17 +108,17 @@ each part of Domus is handed the site it works on (`domus.project.site`), and ea
 The layout above came in seven phases, 0 to 6, each proved by identical builds of made-up and real sites before the
 next began: this layout and its made-up sites in CI, the public API, the settings schema and site formats, sites
 anywhere, the model as pure functions with builds that redo only what changed and trusted site extensions, the general
-tools that grew in real sites, and the package in folders. Then came four slices, proved the same way: a site's grid as
+tools that grew in real sites, and the package in folders. Then came five slices, proved the same way: a site's grid as
 a value of its own, with `domus.geo.crs` left as the grid maths; each part handed the site it works on; the app in
-`domus/app/`; and one route into Domus, every command a call into `domus.api` with its arguments read in one tree and
-its usage printed by `--help`. Beside them came a newer three.js in the viewer, `domus export` to glTF and IFC, and
-`domus shots`.
+`domus/app/`; one route into Domus, every command a call into `domus.api` with its arguments read in one tree and its
+usage printed by `--help`; and a warning wherever site code uses a name that's going, or calls a part without its
+site. Beside them came a newer three.js in the viewer, `domus export` to glTF and IFC, and `domus shots`.
 
 What's next, each step proved the same way:
 
 | Work | What it brings |
 |---|---|
-| The old module names | They warn, then go before the repository is public |
+| The old names | The modules' old names, crs's and raster's names from before and the calls without a site go, once the site code that uses them has moved to the new ones |
 | One route for every change | A change to a site's data, from the viewer, an agent, a site tool or a check, goes one way: recorded with who, when and why, and undoable. A check's findings come as proposals a person accepts |
 | Observations | Readings from videos kept as data apart from the model, each set at every build against the element it checks by its id; accepting one changes the model through that route |
 | A house kept as an IFC file | `[house] source = "ifc"`: the house drawn from its IFC and written only by IfcOpenShell |

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** the names Domus is replacing say so where a site's code uses them: a
+  `DomusDeprecationWarning` (a `DeprecationWarning`, from `domus.errors`) that names what replaces each, put at the
+  line that used it. They're the modules' old names (`domus.terrain`, `domus.crs`, `domus.video.georef_sfm` and the
+  rest, and `python -m domus.cli`); `domus.geo.crs`'s names from before a site had its own grid (`crs.ROOT`,
+  `crs.settings()`, `crs.site_epsg()` and the rest), for which a Site's `path`, `output`, `settings()`, `format()` and
+  `grid` give the same; `domus.geo.raster`'s (`raster.DEM`, `raster.dem()` and the rest), for which
+  `domus.project.rasters` does, handed the site; and a part called without its site (`design.frame()`,
+  `terrain.ground()` and the like), which is to be handed it. They all work as they did, until a later release removes
+  them and says so here. Python shows these warnings in a site's tests (pytest lists them), and in a script it runs
+  where the script uses one itself; `PYTHONWARNINGS=default::DeprecationWarning` shows them everywhere, the `domus`
+  commands included. Nothing in `domus.api` or `domus.testing` is deprecated.
+
 ## 2026.11.48
 
 - **For site projects:** a terrace that gives its own level at each corner now has that level along its edges too,

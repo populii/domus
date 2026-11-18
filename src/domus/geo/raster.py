@@ -5,8 +5,8 @@ that names none is taken to be on the site's, whose EPSG code it's given. A heig
 is read in metres. This module reads no site: domus.project.rasters finds a site's rasters and reads each once.
 
 The names it had when it read the current site as well (DEM, DSM, AERIAL, NIR, shift(), dem(), dsm(), aerial() and
-nir()) still give the current site's, for site code written before. They're deprecated: domus.project.rasters gives
-the same for the site it's handed.
+nir()) still give the current site's, for site code written before. They're deprecated, and say so where they're
+used: domus.project.rasters gives the same for the site it's handed, and domus.api's Site.ground() the ground.
 """
 
 from functools import lru_cache
@@ -83,47 +83,50 @@ class Raster:
 OLD_PATHS = {"DEM": "dem", "DSM": "dsm", "AERIAL": "aerial", "NIR": "nir"}
 
 
-def _old():
+def _old(old, new):
     # The one way from here to a site, for these names alone (see pyproject.toml's import rules).
+    from ..errors import deprecated
     from ..project import rasters
     from ..project.site import current
 
+    deprecated(f"domus.geo.raster.{old} is deprecated: use domus.project.rasters.{new}, handing it the site "
+               "(domus.project.site.Site)")
     return rasters, current()
 
 
 def __getattr__(name):
     """DEM, DSM, AERIAL and NIR, deprecated: domus.project.rasters.path(site, "dem") and so on, on the current site."""
     if name in OLD_PATHS:
-        rasters, site = _old()
+        rasters, site = _old(name, f'path(site, "{OLD_PATHS[name]}")')
         return rasters.path(site, OLD_PATHS[name])
     raise AttributeError(name)
 
 
 def shift(key):
     """Deprecated, domus.project.rasters.shift(site, key), on the current site."""
-    rasters, site = _old()
+    rasters, site = _old("shift()", "shift(site, key)")
     return rasters.shift(site, key)
 
 
 def dem():
     """Deprecated, domus.project.rasters.dem(site), on the current site."""
-    rasters, site = _old()
+    rasters, site = _old("dem()", "dem(site)")
     return rasters.dem(site)
 
 
 def dsm():
     """Deprecated, domus.project.rasters.dsm(site), on the current site."""
-    rasters, site = _old()
+    rasters, site = _old("dsm()", "dsm(site)")
     return rasters.dsm(site)
 
 
 def aerial():
     """Deprecated, domus.project.rasters.aerial(site), on the current site."""
-    rasters, site = _old()
+    rasters, site = _old("aerial()", "aerial(site)")
     return rasters.aerial(site)
 
 
 def nir():
     """Deprecated, domus.project.rasters.nir(site), on the current site."""
-    rasters, site = _old()
+    rasters, site = _old("nir()", "nir(site)")
     return rasters.nir(site)

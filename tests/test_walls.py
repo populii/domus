@@ -5,8 +5,8 @@ import json
 import numpy as np
 import pytest
 
-from domus import walls
 from domus.errors import DomusError
+from domus.model import walls
 
 
 def timber(line, **props):
@@ -47,7 +47,7 @@ def test_the_face_at_an_open_end_shows_board_ends_not_a_post(site, project):
     feature = fc["features"][0]
     feature["properties"] = {**feature["properties"], "material": "timber", "open_ends": ["end"]}
     w = walls.from_feature(feature)
-    from domus import terrain
+    from domus.model import terrain
 
     m, _ = walls.mesh(w, terrain.ground(project))                                      # its toe is read off the site's ground
     start, end = np.asarray(w["line"])[0], np.asarray(w["line"])[-1]
@@ -59,7 +59,7 @@ def test_the_face_at_an_open_end_shows_board_ends_not_a_post(site, project):
 
 
 def test_a_wall_reads_no_ground_but_the_one_it_is_given(site):
-    from domus import terrain
+    from domus.model import terrain
 
     w = {"id": "W", "line": [[0.0, 0.0], [4.0, 0.0]], "side": 1, "thickness": 0.2, "height": 1.0}
     with pytest.raises(DomusError, match="none was given"):

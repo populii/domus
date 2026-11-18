@@ -72,7 +72,7 @@ def test_upload_size_is_capped(app):
 
 
 def test_a_scan_counts_on_the_checklist(built, site, project):
-    from domus import enrich
+    from domus.checks import enrich
 
     raw = site / "sources" / "raw"
     raw.mkdir(parents=True, exist_ok=True)

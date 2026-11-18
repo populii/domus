@@ -49,7 +49,7 @@ def las(path, fmt=2):
     ("e.las", lambda p: las(p, 7)),
 ])
 def test_binary_formats(site, tmp_path, name, writer):
-    from domus import scan
+    from domus.capture import scan
 
     writer(tmp_path / name)
     xyz, rgb = scan.read_cloud(tmp_path / name)
@@ -65,7 +65,7 @@ def test_binary_formats(site, tmp_path, name, writer):
     ("c.csv", "x,y,z,r,g,b\n{commas}\n"),
 ])
 def test_text_formats(site, tmp_path, name, text):
-    from domus import scan
+    from domus.capture import scan
 
     rows = [f"{a} {b} {c} {r} {g} {bl}" for (a, b, c), (r, g, bl) in zip(PTS, RGB)]
     f = tmp_path / name
@@ -76,7 +76,7 @@ def test_text_formats(site, tmp_path, name, text):
 
 
 def test_obj_vertices(site, tmp_path):
-    from domus import scan
+    from domus.capture import scan
 
     f = tmp_path / "m.obj"
     f.write_text("# mesh\nv 0 0 0\nv 1 2 3\nvn 0 0 1\nf 1 2 2\n", encoding="utf-8")
@@ -87,7 +87,7 @@ def test_obj_vertices(site, tmp_path):
 
 @pytest.mark.parametrize("name", ["scan.laz", "scan.usdz", "scan.e57"])
 def test_formats_it_cannot_read_say_what_to_do(site, tmp_path, name):
-    from domus import scan
+    from domus.capture import scan
 
     (tmp_path / name).write_bytes(b"x")
     with pytest.raises(DomusError, match="PLY"):
@@ -95,7 +95,7 @@ def test_formats_it_cannot_read_say_what_to_do(site, tmp_path, name):
 
 
 def test_compressed_las_is_refused(site, tmp_path):
-    from domus import scan
+    from domus.capture import scan
 
     las(tmp_path / "x.las")
     raw = bytearray((tmp_path / "x.las").read_bytes())
@@ -111,7 +111,7 @@ def turned(th, t, src):
 
 
 def test_place_about_vertical_from_a_y_up_scan(site):
-    from domus import scan
+    from domus.capture import scan
 
     z_up = np.array([[0.0, 0, 0], [3, 0, 0.5], [3, 4, 1], [0, 4, -1], [1, 1, 2]])
     y_up = np.column_stack([z_up[:, 0], z_up[:, 2], -z_up[:, 1]])    # ARKit: y up, z towards the viewer
@@ -123,7 +123,7 @@ def test_place_about_vertical_from_a_y_up_scan(site):
 
 
 def test_place_in_3d_needs_points_off_a_line(site):
-    from domus import scan
+    from domus.capture import scan
 
     src = np.array([[0.0, 0, 0], [3, 0, 0], [3, 4, 0], [0, 4, 1]])
     dst = turned(-1.1, np.array([10.0, 20, 30]), src)

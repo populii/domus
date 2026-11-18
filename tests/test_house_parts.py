@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from domus import house
 from domus.errors import DomusError
+from domus.model import house
 
 # A 12 x 9 m house with its walls on the grid's axes, on flat ground at 40.
 RING = [[1005.0, 2015.0], [1017.0, 2015.0], [1017.0, 2006.0], [1005.0, 2006.0], [1005.0, 2015.0]]

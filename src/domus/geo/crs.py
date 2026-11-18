@@ -9,7 +9,7 @@ Rasters are read on their own grids (domus.geo.raster).
 The names this module had when it read the current site as well (ROOT, OUTPUT, settings(), site_format(),
 site_epsg(), label(), site_to_nztm(), nztm_to_site(), site_to_lonlat(), datums(), to_model_height() and
 from_model_height()) still give the current site's (domus.project.site.current()), for site code written before.
-They're deprecated: a Site's path, output, settings(), format() and grid give the same.
+They're deprecated, and say so where they're used: a Site's path, output, settings(), format() and grid give the same.
 """
 
 from dataclasses import dataclass
@@ -17,7 +17,7 @@ from functools import lru_cache
 
 from pyproj import CRS, Transformer
 
-from ..errors import DomusError
+from ..errors import DomusError, deprecated
 
 NZTM_EPSG = 2193
 LONLAT_EPSG = 4326
@@ -108,6 +108,12 @@ def _transformer(source, target):
 # The names from before the grid was split from the site, deprecated: each gives the current site's, as it did. A
 # Site (domus.project.site) has them all: its path, output, settings(), format() and grid.
 
+def _old(name, new):
+    """Says that crs.`name` is deprecated, naming what's `new`."""
+    deprecated(f"domus.geo.crs.{name} is deprecated: use the site's {new} (domus.project.site.Site; a site that "
+               "domus.api.open_site() opens has its path, output, settings() and grid too)")
+
+
 def _site():
     # The one way from here to a site, for these names alone (see pyproject.toml's import rules).
     from ..project.site import current
@@ -119,66 +125,79 @@ def __getattr__(name):
     """ROOT and OUTPUT, deprecated: the current site's folder (Site.path), and the folder its model is built into
     (Site.output)."""
     if name == "ROOT":
+        _old("ROOT", "path")
         return _site().path
     if name == "OUTPUT":
+        _old("OUTPUT", "output")
         return _site().output
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def settings():
     """Deprecated, Site.settings(): the current site's settings. settings.cache_clear() has them read again."""
+    _old("settings()", "settings()")
     return _site().settings()
 
 
-settings.cache_clear = lambda: _site().forget_settings()
+def _forget():
+    _old("settings.cache_clear()", "forget_settings()")
+    _site().forget_settings()
+
+
+settings.cache_clear = _forget
 
 
 def site_format():
     """Deprecated, Site.format(): the format the current site's own files are in."""
+    _old("site_format()", "format()")
     return _site().format()
 
 
-def _grid():
-    # Made from crs.settings at each call, as these read it before, so code that replaces crs.settings (tests do)
-    # still has them read its own.
-    return Grid.from_settings(settings())
+_settings = settings
+
+
+def _grid(name, new):
+    # Made from crs.settings at each call, as these read it before, so code that replaces crs.settings (tests did)
+    # still has them read its own. It's `name` that's said to be deprecated, not settings() as well.
+    _old(name, new)
+    return Grid.from_settings(_site().settings() if settings is _settings else settings())
 
 
 def site_epsg():
     """Deprecated, Site.grid.epsg: the current site's grid, [crs] epsg."""
-    return _grid().epsg
+    return _grid("site_epsg()", "grid.epsg").epsg
 
 
 def label():
     """Deprecated, Site.grid.label: the current site's grid's name for people."""
-    return _grid().label
+    return _grid("label()", "grid.label").label
 
 
 def site_to_nztm(e, n):
     """Deprecated, Site.grid.to_nztm(e, n), on the current site."""
-    return _grid().to_nztm(e, n)
+    return _grid("site_to_nztm()", "grid.to_nztm()").to_nztm(e, n)
 
 
 def nztm_to_site(x, y):
     """Deprecated, Site.grid.from_nztm(x, y), on the current site."""
-    return _grid().from_nztm(x, y)
+    return _grid("nztm_to_site()", "grid.from_nztm()").from_nztm(x, y)
 
 
 def site_to_lonlat(e, n):
     """Deprecated, Site.grid.to_lonlat(e, n), on the current site."""
-    return _grid().to_lonlat(e, n)
+    return _grid("site_to_lonlat()", "grid.to_lonlat()").to_lonlat(e, n)
 
 
 def datums():
     """Deprecated, Site.grid.datums: the current site's other height datums, as [{key, label, offset_m}]."""
-    return [{"key": d.key, "label": d.label, "offset_m": d.offset_m} for d in _grid().datums]
+    return [{"key": d.key, "label": d.label, "offset_m": d.offset_m} for d in _grid("datums()", "grid.datums").datums]
 
 
 def to_model_height(level, key):
     """Deprecated, Site.grid.to_model_height(level, key), on the current site."""
-    return _grid().to_model_height(level, key)
+    return _grid("to_model_height()", "grid.to_model_height()").to_model_height(level, key)
 
 
 def from_model_height(h, key):
     """Deprecated, Site.grid.from_model_height(h, key), on the current site."""
-    return _grid().from_model_height(h, key)
+    return _grid("from_model_height()", "grid.from_model_height()").from_model_height(h, key)

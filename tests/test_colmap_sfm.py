@@ -10,7 +10,7 @@ its Reconstruction container.
 import numpy as np
 import pytest
 
-from domus import sfm
+from domus.capture import sfm
 
 pycolmap = pytest.importorskip("pycolmap")
 

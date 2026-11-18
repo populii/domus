@@ -20,8 +20,7 @@ SCALE = 0.4                                                            # metres 
 
 def made_up_walk(site, tag):
     """Writes the walk's reconstruction and its control into the site's data/video."""
-    from domus import demo
-    from domus.project import rasters
+    from domus.project import demo, rasters
 
     house = site.settings()["house"]
     fl, plane = house["fl_upper"], house["roof_plane_at_wall"]
@@ -79,8 +78,8 @@ def made_up_walk(site, tag):
 
 @pytest.mark.parametrize("above", [None, 2.6])
 def test_placing_takes_the_eaves_from_the_roof_unless_the_site_gives_them(tmp_path, at_site, monkeypatch, above):
-    from domus import demo
     from domus.capture import georef_sfm
+    from domus.project import demo
 
     demo.write(tmp_path / "demo")
     if above is not None:          # [house] is the last table in the demo's site.toml

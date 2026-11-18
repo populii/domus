@@ -9,7 +9,8 @@ from domus.errors import DomusError
 
 def _cloud(project, name, lift=0.05, n=4000, seed=0):
     """A cloud of `n` red points `lift` metres over the model's ground, over s and o from 2 to 6 m in the demo."""
-    from domus import design, terrain
+    from domus.model import terrain
+    from domus.options import design
 
     rng = np.random.default_rng(seed)
     en = design.frame(project).en(np.column_stack([rng.uniform(2, 6, n), rng.uniform(2, 6, n)]))

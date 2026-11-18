@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from domus import buildcache
+from domus.build import cache as buildcache
 
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
 

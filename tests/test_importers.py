@@ -8,8 +8,10 @@ import pytest
 import rasterio
 from rasterio.transform import from_origin
 
-from domus import importers, publicdata
+from domus import importers
+from domus.errors import DomusDeprecationWarning
 from domus.importers import osm
+from domus.importers.nz import publicdata
 
 
 def test_an_address_is_looked_for_in_new_zealand_first_then_anywhere(monkeypatch):
@@ -65,7 +67,7 @@ def test_copernicus_tiles_are_named_for_their_south_west_corner():
 
 
 def test_fetch_takes_the_site_s_patch_of_the_ground_model(site, tmp_path, monkeypatch, at_site, project):
-    from domus import raster
+    from domus.geo import raster
 
     west, south, east, north = osm.site_box(project)
     step = 1 / 3600                                                     # one arc-second, as GLO-30's are here
@@ -82,7 +84,8 @@ def test_fetch_takes_the_site_s_patch_of_the_ground_model(site, tmp_path, monkey
     (tmp_path / "data" / "site.toml").write_bytes((site / "data" / "site.toml").read_bytes())     # the demo, moved
     monkeypatch.setattr(osm, "tile", lambda lat, lon: str(tile))
     moved = at_site(tmp_path)
-    assert raster.DEM == tmp_path / "data" / "lidar" / "dem.tif"                # the old name, on the current site
+    with pytest.warns(DomusDeprecationWarning):
+        assert raster.DEM == tmp_path / "data" / "lidar" / "dem.tif"                # the old name, on the current site
     osm.fetch(moved)
     with rasterio.open(tmp_path / "data" / "lidar" / "dem.tif") as src:
         assert src.crs.to_epsg() == 4326 and src.units == ("metre",)
@@ -92,7 +95,7 @@ def test_fetch_takes_the_site_s_patch_of_the_ground_model(site, tmp_path, monkey
 
 
 def test_fetch_asks_the_source_for_where_the_site_is(site, monkeypatch, project):
-    from domus import linz
+    from domus.importers.nz import linz
 
     asked = []
     monkeypatch.setattr(linz, "main", lambda site, say: asked.append("LINZ"))
@@ -116,7 +119,7 @@ def test_a_place_abroad_is_written_with_its_own_grid_datum_and_credit(tmp_path):
 
 
 def test_the_checklist_speaks_of_new_zealand_only_there(site, project):
-    from domus import enrich
+    from domus.checks import enrich
 
     here = {c["id"]: c for c in enrich.checklist(project)}       # the demo, off New Zealand's coast
     assert "LINZ" in here["boundary"]["where"] and here["lim"]["title"] == "LIM report"

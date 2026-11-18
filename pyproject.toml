@@ -52,6 +52,8 @@ packages = ["src/domus"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Domus's own code and tests use no name it has deprecated: a test of one catches its warning.
+filterwarnings = ["error::domus.errors.DomusDeprecationWarning"]
 
 [tool.ruff]
 line-length = 130

@@ -147,7 +147,7 @@ polygon_so = [[7.0, 2.0], [7.0, 20.0], [14.0, 20.0], [14.0, 2.0]]
 def enrich(root):
     """The demo, with house parts, drain levels, a drain at an assumed depth, a lot that isn't listed first, trees
     over the drive beside it, and its option B in walls of a named block that say how they're built."""
-    from domus import demo
+    from domus.project import demo
 
     x0, y0 = demo.X0, demo.Y0
     site = root / "data" / "site"
@@ -212,7 +212,7 @@ def trees_over_the_drive(root):
     import rasterio
     from PIL import Image
 
-    from domus import demo
+    from domus.project import demo
 
     x0, y0 = demo.X0, demo.Y0
     rng = np.random.default_rng(11)
@@ -251,7 +251,7 @@ def move_abroad(root):
     """The demo moved onto the British National Grid: its layers, rasters and settings."""
     import rasterio
 
-    from domus import demo
+    from domus.project import demo
 
     dx, dy = ABROAD_X0 - demo.X0, ABROAD_Y0 - demo.Y0
 
@@ -331,7 +331,7 @@ polygon = {lower_polygon}
 
 def make_format_1(root):
     """The demo, said the way a format 1 site says it (see the module's docstring)."""
-    from domus import demo
+    from domus.project import demo
 
     x0, y0 = demo.X0, demo.Y0
     settings = root / "data" / "site.toml"
@@ -412,7 +412,7 @@ def make_left(root):
 
 
 def write(out):
-    from domus import demo
+    from domus.project import demo
 
     if out.exists() and any(out.iterdir()):
         raise SystemExit(f"{out} isn't empty: give a new folder")

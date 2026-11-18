@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from domus.errors import DomusError
+from domus.errors import DomusDeprecationWarning, DomusError
 from domus.project import formats, upgrade
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
@@ -59,7 +59,7 @@ def test_old_compass_words_point_the_same_way_on_the_grid(old_site):
     # The frame runs 200 degrees from north, the lot on its right: format 1's "east", towards the boundary, is 110, and
     # its "north", back along it, 20 (a little off both, as the frame's far point is rounded to the millimetre).
     assert upper["fall_to"] == pytest.approx(110.0, abs=0.01) and lower["fall_to"] == pytest.approx(20.0, abs=0.01)
-    from domus import design
+    from domus.options import design
 
     assert np.allclose(design.compass(upper["fall_to"]), [math.sin(math.radians(110)), math.cos(math.radians(110))], atol=1e-3)
     assert np.allclose(design.compass("east"), [1, 0]) and np.allclose(design.compass(90), [1, 0])
@@ -120,7 +120,7 @@ def test_a_format_2_site_keeps_what_it_took_from_new_zealand(old_site, tmp_path,
 def test_a_format_3_site_reads_clean_with_how_sure_its_levels_are_under_local(old_site, at_site, capsys):
     """[datums.<datum>] uncertainty_m and [house] fl_upper_uncertainty_m aren't Domus's settings since format 4: a
     format 3 site that gives them reads with them under [local], with no warning, in the tests' strict settings."""
-    from domus import crs
+    from domus.geo import crs
     from domus.project import schema
 
     three = old_site.parent / "format3"
@@ -132,12 +132,13 @@ def test_a_format_3_site_reads_clean_with_how_sure_its_levels_are_under_local(ol
     assert site["local"] == {"datums": {"plans": {"uncertainty_m": 0.05}}, "house": {"fl_upper_uncertainty_m": 0.02}}
     assert "uncertainty_m" not in site["datums"]["plans"] and "fl_upper_uncertainty_m" not in site["house"]
     assert schema.unknown(site, schema.SITE) == []
-    at_site(three)
+    current = at_site(three)
     capsys.readouterr()
-    s = crs.settings()
+    s = current.settings()
     assert "Warning" not in capsys.readouterr().err
     assert s["local"]["house"]["fl_upper_uncertainty_m"] == 0.02 and s["local"]["datums"]["plans"]["uncertainty_m"] == 0.05
-    assert crs.datums() == [{"key": "plans", "label": "The plans' own datum (made up)", "offset_m": 57.3}]
+    with pytest.warns(DomusDeprecationWarning):                     # crs.datums(), by its name from before
+        assert crs.datums() == [{"key": "plans", "label": "The plans' own datum (made up)", "offset_m": 57.3}]
 
 
 def test_upgrading_a_format_3_site_moves_them_under_local(old_site, tmp_path, capsys):
@@ -175,8 +176,9 @@ def test_moving_them_under_local_keeps_what_local_has():
     assert formats.site_3({"datums": {"a": {"offset_m": 1.0}}, "house": {"fl_upper": 9.0}}) == []
 
 
+@pytest.mark.filterwarnings("ignore::domus.errors.DomusDeprecationWarning")      # crs's names from before
 def test_a_format_3_site_names_its_grid(site, monkeypatch):
-    from domus import crs
+    from domus.geo import crs
 
     assert crs.site_epsg() == 2193
     monkeypatch.setattr(crs, "settings", lambda: {"crs": {}})

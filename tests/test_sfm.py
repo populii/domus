@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from domus import sfm
+from domus.capture import sfm
 
 
 def synthetic(seed=0, ncam=8, npts=300, noise=0.3):

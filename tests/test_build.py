@@ -64,8 +64,8 @@ def test_the_model_carries_what_a_sketch_is_worked_out_with(built, project):
     import pytest
     from shapely.geometry import Polygon
 
-    from domus import design, terrain
-    from domus.options import scheme, sketch
+    from domus.model import terrain
+    from domus.options import design, scheme, sketch
 
     m = model(built)
     regrade = m["regrade"]

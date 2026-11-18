@@ -82,7 +82,7 @@ def test_feature_textures_rectify_and_tile(site, prep_json, project):
 
 
 def test_check_finds_a_duplicate_id_on_the_demo(site, built, project):
-    from domus.prep import check
+    from domus.checks import model as check
 
     m = check.Model(project)
     findings = []
@@ -115,7 +115,7 @@ def box(x0, z0, x1, z1, y):
 
 
 def test_the_option_checks_find_nothing_wrong_on_the_demo(site, built, project):
-    from domus.prep import check
+    from domus.checks import model as check
 
     for f in (check.check_through, check.check_fixes, check.check_blocks):
         findings = []
@@ -123,7 +123,7 @@ def test_the_option_checks_find_nothing_wrong_on_the_demo(site, built, project):
 
 
 def test_ground_through_a_wall_or_over_a_tread_is_found(site, tmp_path, monkeypatch, at_site):
-    from domus.prep import check
+    from domus.checks import model as check
 
     model = {"origin": [100.0, 200.0, 40.0], "summary": {"options": [{"id": "x", "keep_existing": []}]},
              "layers": [{"id": "option-x-ground", "type": "mesh", "role": "ground", "option": "x", **box(-5, -5, 5, 5, 1.0)},
@@ -171,7 +171,7 @@ def tucked_corner(tmp_path, toe):
 
 def test_a_top_hidden_inside_another_wall_is_not_ground_through_it(site, tmp_path, at_site):
     """Inside the thicker wall the ground rises over the thin wall's tucked end, but nothing of it shows there."""
-    from domus.prep import check
+    from domus.checks import model as check
 
     tucked_corner(tmp_path, toe=0.0)
     there = at_site(site, output=tmp_path)
@@ -185,7 +185,7 @@ def test_ground_through_a_wall_just_beside_a_thicker_one_is_still_found(site, tm
     counted."""
     import re
 
-    from domus.prep import check
+    from domus.checks import model as check
 
     tucked_corner(tmp_path, toe=-0.1)
     there = at_site(site, output=tmp_path)
@@ -197,7 +197,7 @@ def test_ground_through_a_wall_just_beside_a_thicker_one_is_still_found(site, tm
 
 
 def test_a_block_piece_is_whole_half_or_cut():
-    from domus.prep import check
+    from domus.checks import model as check
 
     assert check._piece(3.0, 0, True) == 1.0 and check._piece(3.5, 1, False) == 1.0      # on a joint
     assert abs(check._piece(3.5, 0, True) - 0.5) < 1e-9 and not check._cut(0.5)          # half a block: a corner's end
@@ -205,7 +205,8 @@ def test_a_block_piece_is_whole_half_or_cut():
 
 
 def test_a_profile_reads_the_ground_along_a_line_and_either_side(site, project):
-    from domus import design, terrain
+    from domus.model import terrain
+    from domus.options import design
     from domus.prep import profile
 
     assert [round(s, 3) for s, _, _ in profile.stations(np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 1.5]]), 1.0)] == [0, 1, 2, 3, 3.5]

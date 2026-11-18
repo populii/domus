@@ -4,7 +4,8 @@ import laspy
 import numpy as np
 import pytest
 
-from domus import create, points
+from domus import create
+from domus.importers.nz import points
 
 
 def test_tile_names_with_and_without_a_year():

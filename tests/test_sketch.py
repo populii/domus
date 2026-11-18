@@ -33,7 +33,8 @@ def script(site, code):
 
 CENTRE = """
 import json, numpy as np
-from domus import design, terrain, sketch
+from domus.model import terrain
+from domus.options import design, sketch
 from domus.project.site import started
 site = started()
 c = design.regrade_area(site).representative_point()
@@ -50,7 +51,7 @@ def test_behind_is_square_to_the_line_and_mitred_at_a_corner():
 
 def serve_sketch():
     # Importing domus.sketch reads the site from the environment, which is harmless here: behind() needs none.
-    from domus import sketch
+    from domus.options import sketch
     return sketch
 
 

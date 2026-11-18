@@ -9,7 +9,8 @@ from shapely.geometry import Polygon
 
 
 def test_the_models_parts_are_drawn_where_a_camera_sees_them(site, project):
-    from domus import geojson, terrain
+    from domus.geo import geojson
+    from domus.model import terrain
     from domus.prep import fitting, overlay
 
     # A camera 30 m over the middle of the demo's lot looking straight down, image x east and y south: the lot, the

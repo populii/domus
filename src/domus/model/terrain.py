@@ -4,7 +4,7 @@ draws it, with the site's existing walls cut in, is the ground its wall options 
 
 The geometry is domus.tin's, which reads no site; this module reads the site it's handed and passes it on. Its names
 are kept here for the site tools that use them, which call ground(), wall_levels() and build() without a site
-(deprecated): they then read the current one.
+(deprecated, and they say so): they then read the current one.
 """
 
 

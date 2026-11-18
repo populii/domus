@@ -9,7 +9,7 @@ import pytest
 import domus
 
 
-@pytest.mark.filterwarnings("ignore:domus.(cli|serve) is domus.app:DeprecationWarning")
+@pytest.mark.filterwarnings("ignore::domus.errors.DomusDeprecationWarning")      # tests/test_old_names.py has them
 def test_an_old_name_is_the_module_itself():
     for old, new in domus.MOVED.items():
         assert importlib.import_module(f"domus.{old}") is importlib.import_module(f"domus.{new}"), old
@@ -20,6 +20,7 @@ def test_an_old_name_is_the_module_itself():
     assert old_georef is georef_sfm and old_georef.__spec__.name == "domus.capture.georef_sfm"
 
 
+@pytest.mark.filterwarnings("ignore::domus.errors.DomusDeprecationWarning")
 def test_patching_an_old_name_patches_the_module(monkeypatch):
     from domus import terrain
     from domus.model import terrain as moved
