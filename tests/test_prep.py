@@ -147,6 +147,60 @@ def test_ground_through_a_wall_or_over_a_tread_is_found(site, tmp_path, monkeypa
     assert check.check_through(findings) == 0 and findings[0][1] == "info"
 
 
+def block(x0, z0, x1, z1, y0, y1):
+    """A closed box from y0 up to y1 over a rectangle, in viewer metres: positions and indices."""
+    positions = [c for y in (y0, y1) for c in (x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1)]
+    indices = [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7]                     # its base and its top
+    for i in range(4):
+        j = (i + 1) % 4
+        indices += [i, j, 4 + j, i, 4 + j, 4 + i]                       # its sides
+    return {"positions": positions, "indices": indices}
+
+
+def ramp(toe, back=0.4, low=0.4, high=1.0):
+    """Ground in viewer metres: level at `low` up to x = `toe`, rising evenly to `high` at x = `back`, level beyond."""
+    positions = [c for x, y in ((-3.0, low), (toe, low), (back, high), (3.0, high)) for c in (x, y, -3.0, x, y, 3.0)]
+    indices = [k for a in (0, 2, 4) for k in (a, a + 2, a + 3, a, a + 3, a + 1)]
+    return {"positions": positions, "indices": indices}
+
+
+def tucked_corner(tmp_path, toe):
+    """A made-up option: a thin wall's end tucked 0.08 m into a thicker wall at a corner, on ground that rises from
+    `toe` across the thicker wall's body to the ground it holds, as the option's ground runs from its face to its back."""
+    model = {"origin": [100.0, 200.0, 40.0], "summary": {"options": [{"id": "x", "keep_existing": []}]},
+             "layers": [{"id": "option-x-ground", "type": "mesh", "role": "ground", "option": "x", **ramp(toe)},
+                        {"id": "option-x-W1", "type": "mesh", "option": "x", **block(0.0, -2.0, 0.4, 2.0, -0.6, 1.2)},
+                        {"id": "option-x-W2", "type": "mesh", "option": "x", **block(-0.5, -0.1, 0.08, 0.1, -0.3, 0.45)}]}
+    (tmp_path / "model.json").write_text(json.dumps(model), encoding="utf-8")
+
+
+def test_a_top_hidden_inside_another_wall_is_not_ground_through_it(site, tmp_path, at_site):
+    """Inside the thicker wall the ground rises over the thin wall's tucked end, but nothing of it shows there."""
+    from domus.prep import check
+
+    tucked_corner(tmp_path, toe=0.0)
+    at_site(site, output=tmp_path)
+    findings = []
+    assert check.check_through(findings) == 0, findings
+
+
+def test_ground_through_a_wall_just_beside_a_thicker_one_is_still_found(site, tmp_path, at_site):
+    """The ground starts rising 0.1 m out from the thicker wall's face, so it comes through the thin wall's top just
+    beside it, by at most its height at that face over the top (0.07 m). The tucked end, where it would be more, isn't
+    counted."""
+    import re
+
+    from domus.prep import check
+
+    tucked_corner(tmp_path, toe=-0.1)
+    at_site(site, output=tmp_path)
+    findings = []
+    assert check.check_through(findings) == 1, findings
+    assert findings[0][2] == "x/W2" and findings[0][3].startswith("ground comes through")
+    by = float(re.search(r"by up to ([\d.]+) m", findings[0][3]).group(1))
+    assert check.TOL_THROUGH < by <= 0.070, findings
+
+
 def test_a_block_piece_is_whole_half_or_cut():
     from domus.prep import check
 

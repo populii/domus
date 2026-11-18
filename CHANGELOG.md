@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `domus prep check through` leaves out a wall's or a flight's top where it lies inside another of the option's walls
+  or flights, under that one's top, as where a wall's end tucks into a thicker wall at a corner. Nothing shows there,
+  but the option's ground inside the thicker wall, which rises from its face to the ground it holds, was reported as
+  coming through the tucked end. Ground that comes through just beside the thicker wall is still found.
+
 ## 2026.11.38
 
 - **For site projects:** Domus's package is laid out by what each part does: `geo/` (grids, rasters, GeoJSON, meshes,

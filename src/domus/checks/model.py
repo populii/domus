@@ -20,7 +20,8 @@ Checks:
 - clouds: each placed cloud's lowest flat surface per 0.25 m cell against the drawn ground on open
   ground (not under modelled objects or vegetation), and its house-wall points against each face.
 - through: in the built model, ground that comes through a wall option's walls and flights of steps (and the
-  existing walls it keeps), or stands over a tread's edge more than a skin's thickness: the step looks sunk.
+  existing walls it keeps), or stands over a tread's edge more than a skin's thickness: the step looks sunk. A top
+  inside another of them, such as a wall's end tucked into a thicker wall at a corner, is hidden and isn't checked.
 - fixes: ground-fix points a wall option keeps as breaklines inside one of its walls, near its top or above it,
   where they show through the wall.
 - blocks: block walls set out in whole units: each course of each straight stretch starts and ends with a whole
@@ -525,7 +526,8 @@ def _where(model, point):
 
 
 def check_through(findings, tol=TOL_THROUGH):
-    """Ground that comes through an option's walls and flights, or stands over a tread's edge, in the built model."""
+    """Ground that comes through an option's walls and flights, or stands over a tread's edge, in the built model. A
+    top inside another of the option's walls and flights, under that one's top, is hidden, so it isn't checked."""
     path = crs.OUTPUT / "model.json"
     if not path.exists():
         findings.append(("through", "info", "model", "no model built yet: run domus build first"))
@@ -544,11 +546,15 @@ def check_through(findings, tol=TOL_THROUGH):
         solid = [(x["id"].replace(f"option-{oid}-", ""), _triangles(x)) for x in solids]
         tops = [_level_faces(t) for _, t in solid]
         every_top = np.vstack(tops) if tops else np.zeros((0, 3, 3))
-        for name, t in solid:
+        for i, (name, t) in enumerate(solid):
             p = _top_points(t)
             if not len(p):
                 continue
             p = p[p[:, 1] >= _height(_level_faces(t), p[:, 0], p[:, 2]) - 1e-6]      # its top, not an underside
+            # Less what's inside another of the option's walls and flights, under its top, as a wall's end tucked into
+            # a thicker wall at a corner: nothing of it shows, and the ground there is checked against that one's top.
+            others = np.vstack([top for j, top in enumerate(tops) if j != i] or [np.zeros((0, 3, 3))])
+            p = p[_height(others, p[:, 0], p[:, 2]) <= p[:, 1] + 1e-6]
             for gname, g in ground:
                 over = _height(g, p[:, 0], p[:, 2]) - p[:, 1]
                 bad = over > tol
