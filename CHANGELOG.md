@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.62
 
 - **For site projects:** a flight of steps whose side lies within 10 mm of a wall's face beside it runs out to the
   face, as one drawn by hand between two walls' cheeks is meant to: its treads and risers reach the face, and the
