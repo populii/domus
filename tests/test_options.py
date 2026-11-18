@@ -1,7 +1,8 @@
 """Wall options beyond walls and terraces, on the demo site: steps, an option restyled, a painted
 picture for every wall material, fill against the house, walls in level bays and timber posts, walls of a
 named block, steps of sleepers, the ground's edges at walls, steps and the house, steps on a foot that slopes
-across them, the lawns an option leaves alone, and walls of named blocks set out in whole blocks."""
+across them, the lawns an option leaves alone, walls of named blocks set out in whole blocks, and the ground options
+are worked out on."""
 
 import json
 
@@ -705,3 +706,22 @@ def test_a_step_of_one_course_is_capped_as_a_stair():
     assert plain[0][2][-1] == pytest.approx(2.5 * block)
     stair = walls._caps(chain, top, [0.0, 5 * block], [], block, 0.2285, lap=0.2)
     assert np.diff(stair[0][2]) == pytest.approx([block] * 3) and stair[1][2][0] == pytest.approx(2.5 * block)
+
+
+def test_options_are_worked_out_on_the_ground_the_build_draws(built, project):
+    """The wall options are designed on and measured from the ground as the build draws it, with the ground fixes and
+    the existing walls' faces and tops in it: just behind the demo's old wall, the wall's top, a third of a metre
+    above the LiDAR there."""
+    from domus import design, mesh, terrain, walls
+
+    ground = design.context(project).ground
+    assert ground is terrain.existing(project) and ground.surface is terrain.drawn(project)
+    drawn = next(x for x in json.loads((built / "model.json").read_text(encoding="utf-8"))["layers"] if x["id"] == "ground")
+    assert len(drawn["indices"]) == terrain.drawn(project).faces.size      # the triangles the model shows
+    old = design.existing_walls(project)[0]
+    pts, _, _, _, top = walls.wall_levels(old, terrain.ground(project))
+    k = len(pts) // 2
+    behind = mesh.offset_behind(pts, old["thickness"] + 0.01, old["side"])[k]
+    here = ground.sample(behind[:1], behind[1:])[0]
+    assert here == pytest.approx(top[k], abs=0.03)
+    assert here > terrain.ground(project).sample(behind[:1], behind[1:])[0] + 0.3

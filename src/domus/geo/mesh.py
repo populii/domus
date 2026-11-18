@@ -40,48 +40,68 @@ class Mesh:
         return len(self.faces)
 
 
+class Surface:
+    """A triangulated surface (`vertices` x, y, z; `faces` in threes), indexed once to be read at points again and
+    again: z(e, n) gives the highest of the triangles over each point, NaN where none is. Each point tests only the
+    triangles whose boxes cover its cell of a grid as fine as the triangles' median box, so it finds the triangle the
+    surface has, however it was cut."""
+
+    def __init__(self, vertices, faces):
+        V, F = np.asarray(vertices, float), np.asarray(faces, int).reshape(-1, 3)
+        self.sums = np.zeros((0, 9))
+        if not len(F):
+            return
+        tri = V[F]
+        a, b, c = tri[:, 0], tri[:, 1], tri[:, 2]
+        den = (b[:, 1] - c[:, 1]) * (a[:, 0] - c[:, 0]) + (c[:, 0] - b[:, 0]) * (a[:, 1] - c[:, 1])
+        some = np.abs(den) > 1e-15              # a triangle with no area covers no point
+        tri, a, b, c, den = tri[some], a[some], b[some], c[some], den[some]
+        # Each triangle's sums, so a point needs only its offset from the third corner: the first two corners' weights
+        # (u, v; the third's is what's left), and the height.
+        self.sums = np.column_stack([c[:, 0], c[:, 1], (b[:, 1] - c[:, 1]) / den, (c[:, 0] - b[:, 0]) / den,
+                                     (c[:, 1] - a[:, 1]) / den, (a[:, 0] - c[:, 0]) / den,
+                                     c[:, 2], a[:, 2] - c[:, 2], b[:, 2] - c[:, 2]])
+        if not len(tri):
+            return
+        lo, hi = tri[:, :, :2].min(axis=1), tri[:, :, :2].max(axis=1)
+        self.size = float(np.median((hi - lo).max(axis=1))) or 1.0
+        self.base = lo.min(axis=0)
+        i0, i1 = np.floor((lo - self.base) / self.size).astype(np.int64), np.floor((hi - self.base) / self.size).astype(np.int64)
+        span = i1 - i0 + 1
+        count = span[:, 0] * span[:, 1]
+        face = np.repeat(np.arange(len(tri)), count)
+        k = np.arange(count.sum()) - np.repeat(np.cumsum(count) - count, count)
+        self.width = int(i1[:, 0].max()) + 2
+        key = (i0[face, 0] + k % span[face, 0]) + self.width * (i0[face, 1] + k // span[face, 0])
+        order = np.argsort(key, kind="stable")
+        self.key, self.face = key[order], face[order]
+
+    def z(self, e, n):
+        e, n = np.asarray(e, float), np.asarray(n, float)
+        out = np.full(e.size, np.nan)
+        if not len(self.sums) or not e.size:
+            return out.reshape(e.shape)
+        size, base, width = self.size, self.base, self.width
+        pe, pn = e.ravel(), n.ravel()
+        cx, cy = np.floor((pe - base[0]) / size).astype(np.int64), np.floor((pn - base[1]) / size).astype(np.int64)
+        inside_grid = (cx >= 0) & (cy >= 0) & (cx < width)
+        pkey = np.where(inside_grid, cx + width * cy, -1)
+        start, stop = np.searchsorted(self.key, pkey, "left"), np.searchsorted(self.key, pkey, "right")
+        many = np.where(inside_grid, stop - start, 0)
+        point = np.repeat(np.arange(pe.size), many)
+        s = self.sums[self.face[np.repeat(start, many) + (np.arange(many.sum()) - np.repeat(np.cumsum(many) - many, many))]]
+        dx, dy = pe[point] - s[:, 0], pn[point] - s[:, 1]
+        u = s[:, 2] * dx + s[:, 3] * dy
+        v = s[:, 4] * dx + s[:, 5] * dy
+        hit = (u >= -1e-9) & (v >= -1e-9) & (1 - u - v >= -1e-9)
+        np.fmax.at(out, point[hit], (s[:, 6] + u * s[:, 7] + v * s[:, 8])[hit])
+        return out.reshape(e.shape)
+
+
 def surface_z(vertices, faces, e, n):
     """Heights of a triangulated surface (`vertices` x, y, z; `faces` in threes) at points (e, n): the highest of the
-    triangles over each point, NaN where none is. Each point tests only the triangles whose boxes cover its cell of a
-    grid as fine as the triangles' median box, so it finds the triangle the surface has, however it was cut."""
-    V, F = np.asarray(vertices, float), np.asarray(faces, int).reshape(-1, 3)
-    e, n = np.asarray(e, float), np.asarray(n, float)
-    out = np.full(e.size, np.nan)
-    if not len(F) or not e.size:
-        return out.reshape(e.shape)
-    tri = V[F]
-    lo, hi = tri[:, :, :2].min(axis=1), tri[:, :, :2].max(axis=1)
-    size = float(np.median((hi - lo).max(axis=1))) or 1.0
-    base = lo.min(axis=0)
-    i0, i1 = np.floor((lo - base) / size).astype(np.int64), np.floor((hi - base) / size).astype(np.int64)
-    span = i1 - i0 + 1
-    count = span[:, 0] * span[:, 1]
-    face = np.repeat(np.arange(len(F)), count)
-    k = np.arange(count.sum()) - np.repeat(np.cumsum(count) - count, count)
-    width = int(i1[:, 0].max()) + 2
-    key = (i0[face, 0] + k % span[face, 0]) + width * (i0[face, 1] + k // span[face, 0])
-    order = np.argsort(key, kind="stable")
-    key, face = key[order], face[order]
-    pe, pn = e.ravel(), n.ravel()
-    cx, cy = np.floor((pe - base[0]) / size).astype(np.int64), np.floor((pn - base[1]) / size).astype(np.int64)
-    inside_grid = (cx >= 0) & (cy >= 0) & (cx < width)
-    pkey = np.where(inside_grid, cx + width * cy, -1)
-    start, stop = np.searchsorted(key, pkey, "left"), np.searchsorted(key, pkey, "right")
-    many = np.where(inside_grid, stop - start, 0)
-    point = np.repeat(np.arange(pe.size), many)
-    cand = face[np.repeat(start, many) + (np.arange(many.sum()) - np.repeat(np.cumsum(many) - many, many))]
-    a, b, c = tri[cand, 0], tri[cand, 1], tri[cand, 2]
-    x, y = pe[point], pn[point]
-    den = (b[:, 1] - c[:, 1]) * (a[:, 0] - c[:, 0]) + (c[:, 0] - b[:, 0]) * (a[:, 1] - c[:, 1])
-    ok = np.abs(den) > 1e-15
-    den = np.where(ok, den, 1.0)
-    u = ((b[:, 1] - c[:, 1]) * (x - c[:, 0]) + (c[:, 0] - b[:, 0]) * (y - c[:, 1])) / den
-    v = ((c[:, 1] - a[:, 1]) * (x - c[:, 0]) + (a[:, 0] - c[:, 0]) * (y - c[:, 1])) / den
-    w = 1 - u - v
-    hit = ok & (u >= -1e-9) & (v >= -1e-9) & (w >= -1e-9)
-    z = u * a[:, 2] + v * b[:, 2] + w * c[:, 2]
-    np.fmax.at(out, point[hit], z[hit])
-    return out.reshape(e.shape)
+    triangles over each point, NaN where none is (Surface, for points read once)."""
+    return Surface(vertices, faces).z(e, n)
 
 
 def signed_area(ring):

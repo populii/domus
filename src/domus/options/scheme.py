@@ -9,10 +9,15 @@ vertex, its own level at each corner. A wall is a line; by default its top is th
 behind it plus `upstand_m` and its toe the designed ground in front of it, so moving a terrace's
 level moves its walls with it.
 
-The designed ground is the existing ground (the ground model it's given) with each terrace's level inside its
-polygon. Terrace edges not held by a wall slope back to the existing ground at the terrace's
+The designed ground is the existing ground (the ground it's given: a site's best, as its build draws it) with each
+terrace's level inside its polygon. Terrace edges not held by a wall slope back to the existing ground at the terrace's
 batter, inside the regrade area only: whatever a batter cannot reach there is reported as a step
 at the edge of that area.
+
+Cut and fill are soil, measured from the existing ground (soil_change). The soil a new wall holds back counts; the wall
+itself, from its face to its back and from its toe to its top, doesn't, and nor does the paving of a paved terrace
+(`kind` paving), whose level is the paving's top: the soil is `paving_m` under it. An existing wall isn't soil either:
+under one, the soil is at its toe.
 
 A flight of steps is a line from its foot to its head and a width. It takes its levels from the
 designed ground just beyond each end, so it follows the terraces it joins, and the ground under it
@@ -31,12 +36,13 @@ from shapely.geometry import LineString, Polygon
 from shapely.ops import unary_union
 
 from ..errors import DomusError
-from ..geo.mesh import Mesh, prism, resample_line
+from ..geo.mesh import Mesh, offset_behind, prism, resample_line
 from ..model import walls as walls_mod
 from ..model.house import COMPASS
 from ..model.walls import bay_levels, line_normals
 
 LIDAR_TOLERANCE_M = 0.15     # height uncertainty of the existing ground, for the range on cut and fill
+PAVING_M = 0.2               # a paved terrace's paving, from its top to the soil: pavers on sand over a basecourse
 
 
 class SiteFrame:
@@ -96,8 +102,10 @@ class Terrace:
     def __init__(self, cfg, defaults, frame):
         self.id = cfg["id"]
         self.name = cfg.get("name", self.id)
-        self.kind = cfg.get("kind", "lawn")       # lawn | planting | paving
+        self.kind = cfg.get("kind", "lawn")       # lawn | planting | paving | ground
         self.batter = float(cfg.get("batter", defaults["batter"]))
+        # A paved terrace's level is the paving's top: the soil is this far under it.
+        self.paving = float(cfg.get("paving_m", defaults.get("paving_m", PAVING_M))) if self.kind == "paving" else 0.0
         pts = _points(cfg, "polygon", "polygon_so", frame)
         self.poly = Polygon(pts[:, :2]).buffer(0)
         if pts.shape[1] == 3:
@@ -393,6 +401,39 @@ class Design:
             z[cand] = np.where(up >= down, h0[cand] + up, h0[cand] - down)
         return z.reshape(shape)
 
+    def regraded(self, e, n, z=None, h0=None):
+        """Where the option regrades the ground, at points (e, n): in its terraces and under its flights of steps,
+        inside the regrade area, and where a batter reaches. Everywhere else it leaves the ground as it is. `z` and
+        `h0` are the designed ground and the ground as it is at those points, when they're known already."""
+        e = np.asarray(e, float)
+        n = np.asarray(n, float)
+        z = self.sample(e, n) if z is None else z
+        h0 = self.existing.sample(e, n) if h0 is None else h0
+        moved = np.asarray(z != h0)             # a batter, or anything else that moves the ground
+        garden = shapely.contains_xy(self.garden, e, n)
+        for shape in [t.poly for t in self.terraces] + [st.poly for st in self.stairs]:
+            moved |= garden & shapely.contains_xy(shape, e, n)
+        return moved
+
+    def paving(self, e, n):
+        """How deep the paving is at points (e, n): a paved terrace's (`kind` paving) where its level is the designed
+        ground, and none elsewhere, nor under a flight of steps."""
+        e = np.asarray(e, float)
+        n = np.asarray(n, float)
+        shape = np.shape(e)
+        e, n = e.ravel(), n.ravel()
+        out = np.zeros(len(e))
+        if any(t.paving for t in self.terraces):
+            garden = shapely.contains_xy(self.garden, e, n)
+            taken = np.zeros(len(e), bool)
+            for t in self.terraces:         # the first terrace a point is in gives its level, as in _terraced
+                m = garden & shapely.contains_xy(t.poly, e, n) & ~taken
+                out[m] = t.paving
+                taken |= m
+            for st in self.stairs:
+                out[shapely.contains_xy(st.poly, e, n)] = 0.0
+        return out.reshape(shape)
+
     # --- walls -------------------------------------------------------------------------------
     def wall_levels(self, spacing=0.25):
         """Each wall with `side`, `top`/`toe` (and their chains) from the designed ground: the top
@@ -445,6 +486,53 @@ def grid_in(poly, step):
     E, N = np.meshgrid(np.arange(e0 + step / 2, e1, step), np.arange(n0 + step / 2, n1, step))
     m = shapely.contains_xy(poly, E, N)
     return E[m], N[m]
+
+
+def wall_body(w, ground=None):
+    """A wall's own plan, from its face to its back, and its toe along it: (plan, line, chain, toe). A new wall's
+    (levelled by Design.wall_levels) is `thickness` deep behind its face line, on its retained `side`. An existing
+    wall's (a domus.walls dict) is where the build draws it into `ground` (domus.tin.build): from its face's foot, half
+    any batter in front of its line, to its back, and its toe is `ground`'s at the foot. The plan reaches a micrometre
+    past its outline, so a point on the outline is the wall's on any grid, however its sums round."""
+    line = np.asarray(w["line"], float)[:, :2]
+    if ground is None:
+        face, back, chain, toe = line, offset_behind(line, w["thickness"], w["side"]), w["toe_chain"], w["toe"]
+    else:
+        pts, nrm, chain, _, _ = walls_mod.wall_levels(w, ground)
+        half = 0.5 * w.get("batter", 0.0)
+        face = pts - nrm * half
+        back = pts + nrm * half + offset_behind(pts, w["thickness"], w["side"]) - pts
+        toe = ground.sample(face[:, 0], face[:, 1])
+    return Polygon(np.vstack([face, back[::-1]])).buffer(1e-6), LineString(line), chain, toe
+
+
+def _on_toes(bodies, e, n, z):
+    """`z` at points (e, n), but a wall's toe inside the wall (`bodies`, wall_body's): the lowest where two meet."""
+    under = np.full(np.shape(e), np.inf)
+    for plan, line, chain, toe in bodies:
+        inside = shapely.contains_xy(plan, e, n)
+        if inside.any():
+            at = shapely.line_locate_point(line, shapely.points(e[inside], n[inside]))
+            under[inside] = np.minimum(under[inside], np.interp(at, chain, toe))
+    return np.where(np.isfinite(under), under, z)
+
+
+def soil_change(design, walls, existing_walls, e, n):
+    """How far an option (`design`) moves the soil at points (e, n): up for fill, down for cut. Cut and fill are soil.
+
+    Before, the soil is the ground as it is (`design.existing`), but inside an existing wall (`existing_walls`, from
+    its face to its back) it's at the wall's toe: the wall itself isn't soil. After, it's the designed ground where the
+    option regrades, less the paving where a terrace is paved, and as it was everywhere else; inside a new wall
+    (`walls`, levelled by Design.wall_levels), or an existing wall the option keeps, it's at that wall's toe, which
+    the wall stands on. So the soil a new wall holds back counts, and the wall from its toe to its top doesn't."""
+    e = np.asarray(e, float)
+    n = np.asarray(n, float)
+    h0, z = design.existing.sample(e, n), design.sample(e, n)
+    old = [wall_body(w, design.existing) for w in existing_walls]
+    before = _on_toes(old, e, n, h0)
+    after = np.where(design.regraded(e, n, z, h0), z - design.paving(e, n), before)
+    kept = [b for w, b in zip(existing_walls, old, strict=True) if w["id"] in design.keep_existing]
+    return _on_toes([wall_body(w) for w in walls] + kept, e, n, after) - before
 
 
 def flat_area(sample, poly, step=0.25, slope=0.05, exclude=None):
@@ -546,8 +634,9 @@ class Context:
     """What a site gives its wall options to be worked out on: domus.design reads a site's (design.context()).
 
     `frame` is the options' SiteFrame, `settings` options/_site.toml as read (its defaults and rules), `ground` the
-    ground as it is (anything with sample(e, n)), `garden` the regrade area and `regrade` its settings. The rest are for
-    the checks: the existing walls (domus.walls dicts), the house's outline, the building itself and any walls retaining
+    ground as it is, which the options are designed on and measured from (anything with sample(e, n): a site's is the
+    ground as its build draws it), `garden` the regrade area and `regrade` its settings. The rest are for cut and fill
+    and the checks: the existing walls (domus.walls dicts), the house's outline, the building itself and any walls retaining
     the ground against it (shapely geometry, empty or None where there are none), the point features a footing must
     miss ((name, E, N)), the easements ((name, intent, shape)), and the services (GeoJSON features) with their settings
     ([services] in data/site.toml)."""
@@ -576,10 +665,9 @@ def evaluate(opt, site, existing=None, step=0.1):
     built = [LineString(w["line"]).buffer(w["thickness"] + 0.3) for w in walls] + [st.poly.buffer(0.1) for st in d.stairs]
     wall_zone = unary_union(built) if built else None
 
-    # Cut and fill over the regrade area.
+    # Cut and fill over the regrade area: soil, from the ground as it is (soil_change).
     e, n = grid_in(garden, step)
-    h0 = d.existing.sample(e, n)
-    dz = d.sample(e, n) - h0
+    dz = soil_change(d, walls, site.existing_walls, e, n)
     ok = np.isfinite(dz)
     e, n, dz = e[ok], n[ok], dz[ok]
     cell = step * step

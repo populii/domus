@@ -691,14 +691,19 @@ was named changed.
 Set the frame in `options/_site.toml` first: `[frame] origin` and `toward` name the boundary the options are drawn
 along, so `s` is metres along it and `o` metres in from it. `[regrade]` is where schemes may change the ground (the lot
 less the house and a margin, narrowed by `s_max` or `polygon_so`), `[defaults]` what walls and terraces take unless
-they say (`upstand_m`, `batter`, `thickness_m`), and `[rules] drain_cover_m` the least cover over a drain after a cut.
-The template's numbers are placeholders: set the person's own.
+they say (`upstand_m`, `batter`, `thickness_m`, and `paving_m`, how deep a paved terrace's paving is), and `[rules]
+drain_cover_m` the least cover over a drain after a cut. The template's numbers are placeholders: set the person's own.
 
 Then each scheme is a file in `options/`: copy `options/option.toml.example`, or sketch it in the viewer (**Design**,
 **Wall** and **Level area**, then **Make it an option**, which writes `options/sketch-<name>.toml`). Sketches saved in
 the viewer are in the server's store at `/api/db/sketches`. A scheme can be `based_on` another and restyled to compare
 the same layout in other walls. [docs/options.md](docs/options.md) has every key, including stairs, stepped tops and
 walls of a named block.
+
+Options are designed on, and measured from, today's best ground: the ground as the build draws it, with the ground
+fixes and the existing walls' faces and tops in it, and the LiDAR only where nothing better is known. So the fixes
+and the walls you measure (sections 7.5, 8.3 and 8.4) move the options' numbers too. Cut and fill are soil: a new wall's
+own body and paving don't count.
 
 Options compare how a scheme looks and what it does to the ground. Domus doesn't estimate cost or say what needs
 consent, so don't offer either from it. `domus shots` saves pictures of each from views and cameras you list
@@ -770,8 +775,8 @@ print(float(ground(c.x, c.y)))                  # 42.27, on the demo
 for option in site.options():
     result = site.evaluate(option)
     print(option["id"], result["volumes"]["fill_m3"], result["flat"]["gain_m2"])
-# a-one-wall 28.1 89.0
-# b-two-tiers 82.6 163.9
+# a-one-wall 23.4 86.1
+# b-two-tiers 74.7 159.4
 ```
 
 | | What it gives |

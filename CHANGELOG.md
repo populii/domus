@@ -14,6 +14,18 @@
   so in a line, where `build`, `fetch` and `canopy` printed a traceback, and one given an argument it doesn't take
   says so, where `build`, `fetch` and `canopy` went on without it. `domus --help` lists the commands, and
   `domus video --help` and `domus prep --help` the steps.
+- **For site projects:** every wall option's cut and fill change once, because they now mean soil, measured from
+  today's best ground. The options are designed on and measured from the ground as the build draws it: the ground
+  fixes from measurements and placed walks, and the existing walls' faces and tops, with the LiDAR only where
+  nothing better is known. Until now they were worked out on the LiDAR with the fixes and without the walls, which
+  smears a wall's step into a slope. So where batters meet the ground, the flat lawn before, the cover over the
+  drains and the step at the regrade area's edge are worked out on that ground too, and the fixes and walls a site
+  measures move its options' numbers. Cut and fill count soil only: the soil a new wall holds back counts, but the
+  wall itself, from its face to its back and from its toe to its top, doesn't, nor does an existing wall, nor does
+  paving. A terrace of `kind = "paving"` (what a path sketched in the viewer becomes) has its level at the paving's
+  top and the soil `paving_m` under it: 0.2 m, unless the terrace or `[defaults] paving_m` in `options/_site.toml`
+  says otherwise. The range on cut and fill is worked out as before. The viewer colours the ground by the same cut
+  and fill, and says under its comparison what they mean ([docs/options.md](docs/options.md#what-the-build-works-out)).
 
 ## 2026.11.44
 

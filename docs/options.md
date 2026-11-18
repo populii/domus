@@ -57,13 +57,16 @@ line_so = [[5.0, 2.4], [-1.5, 2.4], [-1.5, 6.5]]   # its face
 [[terraces]]
 id = "lawn"
 name = "Lawn"
-kind = "lawn"           # lawn | planting (sets the look) | ground (a regrade, drawn as the ground round it)
+kind = "lawn"           # lawn | planting (sets the look) | paving | ground (a regrade, drawn as the ground round it)
 level = 42.55           # NZVD2016 at `at_so`
 at_so = [7.5, 5.0]
 fall = "1:25"           # or "2%" or 0.02; flat lawn is counted up to 1:20
 fall_to = "north"       # north | east | south | west on the site's grid, or a bearing in degrees
 batter = 2.5            # edges not on a wall slope back to the ground at 1 : batter
 polygon_so = [[-1.5, 2.4], [5.0, 2.4], [5.0, 0.3], [7.5, 0.3], [7.5, 10.9], [3.0, 10.9], [-1.5, 6.5]]
+# A paved terrace (kind = "paving", what a path sketched in the viewer becomes) has its level at the paving's
+# top. paving_m = 0.2 says how deep its paving is, pavers, bedding and any basecourse: the soil is that far under
+# its level. Without it, [defaults] paving_m in _site.toml, else 0.2.
 
 [[stairs]]
 id = "steps"
@@ -160,6 +163,10 @@ build paints.
 - The designed ground: each terrace's level inside it, batters from its free edges out to the
   existing ground, all inside the regrade area (the lot, or the part of it `[regrade]` names, less any house
   and a margin round it). A batter that cannot reach the ground there is reported as a step at the area's edge.
+- The existing ground is today's best: the ground as the build draws it, with the ground fixes from measurements
+  and placed walks where there are some, the existing walls' faces and tops, and the LiDAR only where nothing
+  better is known. Options are designed on it (where batters meet the ground, the flat lawn before, the cover over
+  the drains, the step at the regrade area's edge) and measured from it.
 - Each wall's top, toe, exposed and retained heights, length and face area. Behind a wall the ground is
   the designed ground it holds, below the wall's top where the wall stands above it.
 - Each flight's risers and goings, flagged when they are steep (a riser over 0.19 m or a going under 0.25 m).
@@ -173,7 +180,11 @@ build paints.
   any sliver under 0.3 m wide that a wall cuts off. It is drawn as its grass without the bare patches it has
   today, and so is a new lawn within a metre of it, so the two read as one lawn. Beds, their plants and
   stumps are not drawn while an option is shown.
-- Cut, fill and the area disturbed, with a range from the LiDAR's tolerance.
+- Cut, fill and the area disturbed, with a range from the LiDAR's tolerance. Cut and fill are soil. The soil a
+  new wall holds back counts, but the wall itself, from its face to its back and from its toe to its top, doesn't:
+  the soil under it is at its toe. Nor does paving: under a paved terrace the soil is `paving_m` below its level.
+  An existing wall isn't soil either, so taking one out and filling where it stood fills from its toe, and an
+  option that keeps one, or leaves its ground alone, moves no soil there.
 - Flat lawn: ground in the regrade area no steeper than 1:20 over 1 m, away from the walls, before and
   after.
 - What to look at: cover over the drains after a cut and walls crossing drains; footings near posts,

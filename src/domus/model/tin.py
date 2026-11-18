@@ -7,6 +7,9 @@ low-side face (at its toe level) and high-side face (at its top level), then eve
 Where the ground model is known to be wrong (steep banks under trees, where LiDAR only interpolates), a site's
 ground fixes replace it: their polygons drop the ground model inside them and their 3D lines and points stand in.
 
+The surface drawn that way is the best ground there is, and DrawnGround reads it as a ground: the wall options are
+worked out on it.
+
 A pure part of the model: it reads no site, and takes the ground model, its fixes and the model's origin from the
 caller (`domus.terrain` gives a site's).
 """
@@ -20,7 +23,7 @@ from scipy.spatial import Delaunay
 from shapely.ops import unary_union
 
 from ..geo import geojson
-from ..geo.mesh import Mesh, cross2, offset_behind, resample_line
+from ..geo.mesh import Mesh, Surface, cross2, offset_behind, resample_line
 from .walls import wall_levels
 
 
@@ -75,6 +78,28 @@ class Ground:
         fix = self.inside(e, n)
         if fix.any():
             h[fix] = self.interp(e[fix], n[fix])
+        return h
+
+
+class DrawnGround:
+    """The ground as the build draws it, read like a Ground (sample(e, n)): the heights of `surface`, the triangulated
+    ground build() makes of `ground` with the existing walls cut in, read in its own triangles, and `ground`'s where
+    it has none, outside the area drawn. So the ground the wall options are designed on and measured from is the ground
+    the model shows: the LiDAR only where nothing better is known, the fixes where there are some, and the walls' faces
+    and tops."""
+
+    def __init__(self, surface, ground):
+        self.surface, self.ground = surface, ground
+        self.points = ground.points         # the fixes, as build() keeps them as breaklines
+        self._triangles = Surface(surface.vertices, surface.faces)
+
+    def sample(self, e, n):
+        e = np.asarray(e, float)
+        n = np.asarray(n, float)
+        h = self._triangles.z(e, n)
+        off = ~np.isfinite(h)
+        if off.any():
+            h[off] = self.ground.sample(e[off], n[off])
         return h
 
 

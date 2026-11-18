@@ -135,12 +135,12 @@ class Terrace(scheme.Terrace):
 
 
 class Design(scheme.Design):
-    """scheme.Design on `site`: its options' defaults, regrade area and frame, and its ground as it is unless
-    `existing` gives another."""
+    """scheme.Design on `site`: its options' defaults, regrade area and frame, and its ground as it is (the ground as
+    the build draws it, terrain.existing()) unless `existing` gives another."""
 
     def __init__(self, opt, existing=None, site=None):
         site = given(site)
-        super().__init__(opt, settings(site)["defaults"], existing or terrain.ground(site), regrade_area(site), frame(site))
+        super().__init__(opt, settings(site)["defaults"], existing or terrain.existing(site), regrade_area(site), frame(site))
 
 
 def existing_walls(site):
@@ -174,8 +174,10 @@ def easement_shapes(site):
 
 
 def context(site):
-    """What the site gives its wall options to be worked out on (scheme.Context)."""
-    return scheme.Context(frame(site), settings(site), terrain.ground(site), regrade_area(site), regrade_settings(site),
+    """What the site gives its wall options to be worked out on (scheme.Context). The ground is today's best, as the
+    build draws it: the ground fixes and the existing walls' faces and tops where there are some, the LiDAR elsewhere
+    (terrain.existing())."""
+    return scheme.Context(frame(site), settings(site), terrain.existing(site), regrade_area(site), regrade_settings(site),
                           existing_walls(site), house_outline(site), house_building(site), house_retaining_walls(site),
                           obstacles(site), easement_shapes(site),
                           geojson.read_optional(site.path / "data" / "site" / "services.geojson"),

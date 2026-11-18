@@ -195,8 +195,11 @@ what each holds.
   <img src="docs/images/cut-and-fill-light.svg" alt="A cross-section of sloping ground: a level lawn cut into the high side and filled on the low side, held by a retaining wall, with a batter where no wall holds it.">
 </picture>
 
-For every scheme, Domus works out how much ground moves (cut and fill, with a range from the LiDAR's tolerance), how
-high each wall stands, and how much flat lawn you gain. Tick **Colour the ground by cut and fill** to see where.
+For every scheme, Domus works out how much soil moves (cut and fill, with a range from the LiDAR's tolerance), how
+high each wall stands, and how much flat lawn you gain. Tick **Colour the ground by cut and fill** to see where. It
+measures from the best ground there is today, as the model draws it: your measurements and placed walks where you
+have them, the existing walls' faces and tops, and the LiDAR only where nothing better is known. A new wall itself and
+paving aren't soil, so they don't count.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/viewer-design-dark.webp">
@@ -207,10 +210,10 @@ Here's how the made-up demo's two schemes come out, as its build works them out:
 
 | | The ground now | A. One low wall | B. Two tiers |
 |---|---:|---:|---:|
-| Flat lawn | 0 m² | 89 m² | 164 m² |
+| Flat lawn | 5 m² | 91 m² | 164 m² |
 | Walls | one old wall, 18 m | one timber wall, 18 m | two block walls, 36 m |
-| Highest wall face | 0.75 m | 0.68 m | 0.85 m |
-| Cut / fill | | 0.3 / 28 m³ (±19) | 0 / 83 m³ (±38) |
+| Highest wall face | 0.75 m | 0.70 m | 0.85 m |
+| Cut / fill | | 1.3 / 23 m³ (±18) | 0.3 / 75 m³ (±38) |
 | Things to check | | 1 | 3 |
 
 ### 8. Checks

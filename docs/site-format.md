@@ -184,6 +184,7 @@ gives them in `[datums.<datum>]` and `[house]` reads with them there, and `domus
 | `defaults.upstand_m` | required | How far a wall's top stands above the ground it retains |
 | `defaults.batter` | required | Unretained terrace edges slope back at 1 vertical : this horizontal |
 | `defaults.thickness_m` | required | A wall's thickness |
+| `defaults.paving_m` | `0.2` | How deep a paved terrace's paving is, from its top (the terrace's level) to the soil under it: the pavers, their bedding and any basecourse, which cut and fill don't count |
 | `[rules]` | | Checks every option is held to |
 | `rules.drain_cover_m` | `0.3` | Least cover over a drain under lawn after a cut |
 | `local.<key>` |  | Anything a site keeps for its own tools or records: Domus doesn't read it or warn about it |

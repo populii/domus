@@ -30,7 +30,7 @@ from ..geo import geojson, mesh
 from ..geo.georef import invert_affine
 from ..importers.nz import title
 from ..model import canopy, features, house, house_texture, terrain, vegetation, walls
-from ..options import design
+from ..options import design, scheme
 from ..project import rasters
 from ..project.site import given
 from . import cache as buildcache
@@ -521,14 +521,14 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
                 "id": f"option-{oid}-contours", "role": "contours", **tag,
                 "labels": [{"text": f"{lv:.0f}", "at": r(frame.xyz([[*cs[lv][len(cs[lv]) // 2][:2], lv + 0.1]])[0], 2)}
                            for lv in levels if abs(lv - round(lv)) < 1e-6 and cs.get(lv)]})
-    # Cut and fill drape: the plain relief, coloured by the change in ground level.
+    # Cut and fill drape: the plain relief, coloured by the change in the soil's level, as cut and fill are counted.
     def cutfill(Eg, Ng):
         base = relief_sampler(site, Eg, Ng).astype(float)
         if base.ndim == 2:
             base = np.repeat(base[..., None], 3, axis=-1)
         dz = np.zeros(Eg.shape)
         inside = (Eg > patch[0]) & (Eg < patch[2]) & (Ng > patch[1]) & (Ng < patch[3])
-        dz[inside] = d.sample(Eg[inside], Ng[inside]) - d.existing.sample(Eg[inside], Ng[inside])
+        dz[inside] = scheme.soil_change(d, wall_defs, existing_walls, Eg[inside], Ng[inside])
         dz = np.nan_to_num(dz)
         a = np.clip(np.abs(dz) / 1.0, 0, 1)[..., None] * (np.abs(dz) > 0.02)[..., None]
         a = np.where(a > 0, 0.25 + 0.75 * a, 0)
@@ -558,8 +558,8 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
 
 def add_ground(b):
     """Ground."""
-    cfg, extent, frame, ground, labels, layers, wall_defs = b.cfg, b.extent, b.frame, b.ground, b.labels, b.layers, b.wall_defs
-    tin = terrain.build(extent, cfg["model"]["terrain_step_m"], wall_defs, site=b.site)
+    cfg, extent, frame, ground, labels, layers = b.cfg, b.extent, b.frame, b.ground, b.labels, b.layers
+    tin = terrain.drawn(b.site)     # the existing walls cut in: the ground the wall options are worked out on, too
     e0, n0, e1, n1 = extent
     uv = np.column_stack([(tin.vertices[:, 0] - e0) / (e1 - e0), (tin.vertices[:, 1] - n0) / (n1 - n0)])
     # The ground's drapes: the aerial photo (with paving under the trees where the site records it, and as

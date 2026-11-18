@@ -238,6 +238,8 @@ OPTIONS_SITE = Table("options/_site.toml", {
         "upstand_m": Key("How far a wall's top stands above the ground it retains", REQUIRED),
         "batter": Key("Unretained terrace edges slope back at 1 vertical : this horizontal", REQUIRED),
         "thickness_m": Key("A wall's thickness", REQUIRED),
+        "paving_m": Key("How deep a paved terrace's paving is, from its top (the terrace's level) to the soil under it: "
+                        "the pavers, their bedding and any basecourse, which cut and fill don't count", 0.2),
     }),
     "rules": Table("Checks every option is held to", {
         "drain_cover_m": Key("Least cover over a drain under lawn after a cut", 0.3),
