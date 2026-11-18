@@ -1,7 +1,7 @@
 """The made-up sites CI builds with a pull request's base and with its head, so a change to the build can be proved
 without anyone's real property.
 
-    uv run python tools/made_up_sites.py write OUT     # writes OUT/demo, OUT/richer, OUT/abroad and OUT/format1 to OUT/format3
+    uv run python tools/made_up_sites.py write OUT     # writes OUT/demo, OUT/richer, OUT/abroad, OUT/format1 to OUT/format3 and OUT/left
     python tools/made_up_sites.py report DIR           # what moved between DIR/base-<site> and DIR/head-<site>
 
 The sites, all in the sea, so none is a real place:
@@ -24,6 +24,9 @@ The sites, all in the sea, so none is a real place:
   format3  The demo as a site in format 3 (Domus 2026.11.38 and before) with what format 4 changed: how sure a
            datum's offset and the upper floor's level are, in [datums.<datum>] and [house], which format 4 keeps
            under [local]. It stays as it is for good too.
+  left     The demo with its options' frame run the other way, north along the lot's east boundary from its
+           south-east corner, so the lot lies on the frame line's left ([frame] side = "left"). Its options are the
+           demo's, with s counted from that end, so its walls and terraces stand where the demo's do.
 
 `report` reads what CI leaves in DIR for each side (base and head) and site: the copy it built (`<side>-<site>/`,
 with the model in `viewer/data/`), the build's output (`<side>-<site>.log`) and whether it built
@@ -45,7 +48,7 @@ import tomllib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SITES = ("demo", "richer", "abroad", "format1", "format2", "format3")
+SITES = ("demo", "richer", "abroad", "format1", "format2", "format3", "left")
 TWIN_M = 0.0015         # how far the abroad site's model may be from the demo's: the same site on another grid
 IMAGE_MEAN, IMAGE_MAX = 0.5, 16      # and its pictures: the mean and largest difference in a colour, out of 255
 # The abroad site's grid: the British National Grid, in the Celtic Sea.
@@ -310,6 +313,31 @@ def make_format_3(root):
     settings.write_text(text, encoding="utf-8", newline="\n")
 
 
+def make_left(root):
+    """The demo with its options' frame run the other way along the same boundary, from where it ran towards to where
+    it started, so the lot is on the frame line's left; o is as it was, and the options' s is counted from that end, so
+    they stand where the demo's do."""
+    shared = root / "options" / "_site.toml"
+    text = shared.read_text(encoding="utf-8")
+    frame = tomllib.loads(text)["frame"]
+    length = math.dist(frame["origin"], frame["toward"])
+    text = text.replace("(on the right looking along it)", "(on the left looking along it)")
+    text = re.sub(r"^origin = .*$", f"origin = {json.dumps(frame['toward'])}", text, count=1, flags=re.MULTILINE)
+    text = re.sub(r"^toward = .*$", f'toward = {json.dumps(frame["origin"])}\nside = "left"', text, count=1,
+                  flags=re.MULTILINE)
+    shared.write_text(text, encoding="utf-8", newline="\n")
+
+    def turned(m):
+        """An option's points in (s, o), with s counted from the other end."""
+        v = json.loads(m[2])
+        v = [length - v[0], *v[1:]] if isinstance(v[0], (int, float)) else [[length - p[0], *p[1:]] for p in v]
+        return f"{m[1]} = {json.dumps(v)}"
+
+    for path in (root / "options").glob("[!_]*.toml"):
+        path.write_text(re.sub(r"^(\w+_so) = (\[.*\])$", turned, path.read_text(encoding="utf-8"), flags=re.MULTILINE),
+                        encoding="utf-8", newline="\n")
+
+
 def write(out):
     from domus import demo
 
@@ -323,6 +351,7 @@ def write(out):
     make_format_1(out / "format1")
     make_format_2(out / "format2")
     make_format_3(out / "format3")
+    make_left(out / "left")
     print(f"Wrote {', '.join(SITES)} to {out}")
 
 

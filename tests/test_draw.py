@@ -43,3 +43,29 @@ def test_a_site_with_only_a_boundary_is_fine(tmp_path, at_site):
     (site / "boundary.geojson").write_text(fc(feature("Polygon", [[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]], id="lot")), encoding="utf-8")
     s = build.snap_targets(at_site(tmp_path), (0.0, 0.0, 0.0))
     assert len(s["lines"]) == 1 and s["points"] == []
+
+
+def test_the_viewers_s_and_o_are_the_options_frames():
+    """The viewer's s and o (the corner readout while dragging, the sketch editor's corners, the s and o saved with a
+    sketch) are domus.options.scheme.SiteFrame's, with the lot on the frame line's right, as unless a site says, and on
+    its left, as [frame] side = "left" has it."""
+    import numpy as np
+
+    from domus.options.scheme import SiteFrame
+
+    here = Path(__file__).parent
+    core = here.parent / "src" / "domus" / "app" / "viewer" / "draw-core.js"
+    rng = np.random.default_rng(4)
+    en = (rng.uniform(-25.0, 25.0, (10, 2)) + [1500011.0, 5500015.0]).tolist()
+    so = rng.uniform(-5.0, 30.0, (10, 2)).tolist()
+    frames = [{"origin": [1500022.0, 5500030.0], "toward": [1500022.0, 5500000.0]},                    # the demo's
+              {"origin": [1500022.0, 5500000.0], "toward": [1500022.0, 5500030.0], "side": "left"},     # the left site's
+              {"origin": [1500003.0, 5500001.0], "toward": [1500021.0, 5500009.5], "side": "right"},
+              {"origin": [1500003.0, 5500001.0], "toward": [1500021.0, 5500009.5], "side": "left"}]
+    out = subprocess.run(["node", str(here / "options_frame_check.mjs"), str(core)], capture_output=True, text=True,
+                         input=json.dumps([{"frame": f, "en": en, "so": so} for f in frames]), check=False)
+    assert out.returncode == 0, out.stderr
+    for f, got in zip(frames, json.loads(out.stdout), strict=True):
+        frame = SiteFrame(f["origin"], f["toward"], f.get("side", "right"))
+        assert np.allclose(got["so"], frame.so(np.array(en)), rtol=0, atol=1e-6), f
+        assert np.allclose(got["en"], frame.en(np.array(so)), rtol=0, atol=1e-6), f

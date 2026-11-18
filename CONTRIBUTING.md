@@ -13,7 +13,7 @@ This repository is meant to be read by anyone. Nothing about a real property eve
 photo, a video frame, a measurement, a coordinate, a feature's id or anything else that could point at one. That
 covers code, comments, tests, docs, examples, pictures, commit messages, issues and pull requests.
 
-- **Use the made-up sites.** `domus demo` writes one, and `tools/made_up_sites.py` writes five more. They're all in the
+- **Use the made-up sites.** `domus demo` writes one, and `tools/made_up_sites.py` writes six more. They're all in the
   sea, so none is anyone's house. Examples use their made-up ids, frame names and numbers.
 - **Keep real sites out of git.** In a copy of this repo a property lives in `site/` or `sites/<name>/`, which git
   ignores, or in a folder or private repository of its own. A test fails if git tracks anything its ignore rules leave
@@ -152,7 +152,7 @@ CI does this for every pull request, on the made-up sites:
 
 ```mermaid
 flowchart LR
-  W["tools/made_up_sites.py write"] --> S[(six made-up sites)]
+  W["tools/made_up_sites.py write"] --> S[(seven made-up sites)]
   S --> B["built with the<br/>pull request's base"]
   S --> H["built with its head"]
   B --> R["tools/made_up_sites.py report"]
@@ -166,6 +166,7 @@ flowchart LR
 | `richer` | The demo with more of what real sites have: house parts, levels along the drain, a sewer at an assumed depth, a right of way listed before the lot, and trees over the drive with the paving under them painted into the photo |
 | `abroad` | The demo moved onto the British National Grid, rasters and all. Its build must match the demo's within 1.5 mm |
 | `format1`, `format2`, `format3` | The demo as a site in each older format, with what the next format changed. They stay as they are for good |
+| `left` | The demo with its options' frame run the other way along the same boundary, so the lot lies on the frame line's left (`[frame] side = "left"`), and its options drawn to stand where the demo's do |
 
 A change that shouldn't move a model shows "nothing" for every site. The job fails only when the head can't build a
 site the base could, or builds the abroad site other than the demo. To run the same locally, write the sites, copy

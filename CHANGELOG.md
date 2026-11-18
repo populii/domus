@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **For site projects:** on a site whose options' frame has the lot on its left (`[frame] side = "left"`), the viewer's
+  s and o (the corner readout while dragging, the sketch editor's corners and the s and o saved with a sketch) had o
+  the wrong way round: the viewer took the lot to be on the frame line's right. It now reads the frame's side, as the
+  options do. Sketches saved on such a site before this have o's sign flipped in their `so`; their points on the grid
+  (`en`), which **Make it an option** uses, were right. `tools/made_up_sites.py` has a site like that, `left`, which
+  CI builds with the others.
 - The README drops its small 3D model, which GitHub's viewer drew as a little blue patch on a wire floor, and the
   README's and AGENTS.md's flowcharts of many steps read top to bottom, so GitHub doesn't shrink them.
 

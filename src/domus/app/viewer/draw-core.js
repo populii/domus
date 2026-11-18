@@ -1,4 +1,5 @@
-// The sums behind exact drawing, in plan metres (x east, z south), so they can run without a browser.
+// The sums behind exact drawing, in plan metres (x east, z south), and the wall options' frame, on the site's grid, so
+// they can run without a browser.
 
 const DEG = Math.PI / 180;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -116,5 +117,19 @@ export function createHistory(first, limit = 100) {
       back.push(s);
       return s;
     },
+  };
+}
+
+// The wall options' frame, from the model's summary.options_site.frame ({ origin, toward, side }), as
+// domus.options.scheme.SiteFrame has it: s is metres along the line from origin towards toward, and o metres in from
+// it on the lot's side, its right looking along the line unless side is "left". so(E, N) and en(s, o) turn points on
+// the site's grid into the frame and back. Null without a frame.
+export function optionsFrame(frame) {
+  if (!frame) return null;
+  const [oe, on] = frame.origin, de = frame.toward[0] - oe, dn = frame.toward[1] - on, L = Math.hypot(de, dn);
+  const a = [de / L, dn / L], k = frame.side === "left" ? 1 : -1, w = [-a[1] * k, a[0] * k];   // along, and in
+  return {
+    so: (E, N) => [(E - oe) * a[0] + (N - on) * a[1], (E - oe) * w[0] + (N - on) * w[1]],
+    en: (s, o) => [oe + s * a[0] + o * w[0], on + s * a[1] + o * w[1]],
   };
 }

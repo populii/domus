@@ -85,6 +85,27 @@ def test_the_format_3_site_says_how_sure_its_levels_are_where_format_3_did(sites
         {k: v for k, v in demo.items() if k not in ("domus", "datums", "house")}
 
 
+def test_the_left_site_draws_the_demos_options_with_the_lot_on_its_frames_left(sites):
+    import numpy as np
+
+    from domus.options.scheme import SiteFrame
+
+    def frame(root):
+        f = tomllib.loads((root / "options" / "_site.toml").read_text(encoding="utf-8"))["frame"]
+        return f, SiteFrame(f["origin"], f["toward"], f.get("side", "right"))
+
+    (d, demo), (f, left) = frame(sites / "demo"), frame(sites / "left")
+    assert f["side"] == "left" and "side" not in d and (f["origin"], f["toward"]) == (d["toward"], d["origin"])
+    for name in ("a-one-wall", "b-two-tiers"):
+        a, b = (tomllib.loads((root / "options" / f"{name}.toml").read_text(encoding="utf-8"))
+                for root in (sites / "demo", sites / "left"))
+        assert len(a["walls"]) == len(b["walls"]) and len(a["terraces"]) == len(b["terraces"])
+        for x, y in [*zip(a["walls"], b["walls"]), *zip(a["terraces"], b["terraces"])]:
+            for key in ("line_so", "polygon_so", "at_so"):
+                if key in x:
+                    assert np.allclose(left.en(np.array(y[key], float)), demo.en(np.array(x[key], float))), (name, key)
+
+
 def test_it_wont_write_over_a_folder_with_something_in_it(tmp_path):
     (tmp_path / "keep.txt").write_text("mine", encoding="utf-8")
     with pytest.raises(SystemExit, match="isn't empty"):
