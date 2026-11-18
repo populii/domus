@@ -486,7 +486,9 @@ def pad(f, ground, step=0.25):
                       if poly.contains(Point(e, n)) and poly.exterior.distance(Point(e, n)) > step / 4]).reshape(-1, 2)
     edge, _ = resample_line(ring if same(ring[0], ring[-1]) else np.vstack([ring, ring[:1]]), step)
     pts = np.vstack([edge[:-1], inner]) if len(inner) else edge[:-1]
-    tri = Delaunay(pts)
+    # Triangulated about the pad's corner, to the micrometre: in whole grid coordinates the arithmetic can't place
+    # points a few tenths of a metre apart among the triangles, and leaves some out of all of them (as tin.Ground's).
+    tri = Delaunay(np.round(pts - np.floor([e0, n0]), 6))
     keep = [s for s in tri.simplices if poly.buffer(1e-6).contains(Point(pts[s].mean(axis=0)))]
     thick = p.get("thickness_m", 0.0)
     z = np.full(len(pts), p["top_m"]) if "top_m" in p else ground(pts[:, 0], pts[:, 1]) + (thick or 0.03)

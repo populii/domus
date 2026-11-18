@@ -1,7 +1,10 @@
 """Coordinates, the options' frame and the wall levels."""
 
+import json
+
 import numpy as np
 import pytest
+from shapely.geometry import Polygon
 
 from domus.errors import DomusError
 
@@ -199,6 +202,60 @@ def test_the_ground_is_triangulated_from_what_it_is_given():
     (v0, f0), (v1, f1) = built
     assert np.allclose(v0, v1, atol=1e-6) and np.array_equal(f0, f1)
     assert np.isclose(v0[:, 2], 40.2).sum() >= 20 and np.isclose(v0[:, 2], 41.0).sum() >= 20    # the wall's toe and top
+
+
+def test_ground_fixes_far_along_a_grid_keep_every_point(tmp_path):
+    from domus.model import tin
+
+    # A made-up 6 x 5 m fix area on a made-up ground model: a 3D line, resampled every 0.25 m as read_fixes does, and
+    # three points, the last on the line's middle corner (one place given twice). At coordinates in the millions, as a
+    # New Zealand site's are, every point is a corner of the fixed ground's triangles but the one given twice, the
+    # ground at each fix point is its level, and the triangles are those the same fixes make near the grid's start.
+    class Wavy:
+        def __init__(self, e0, n0):
+            self.e0, self.n0 = e0, n0
+
+        def sample(self, e, n):
+            return 40.0 + 0.1 * (np.asarray(n, float) - self.n0) + 0.3 * np.sin((np.asarray(e, float) - self.e0) / 3.0)
+
+    made = []
+    for e0, n0 in ((0.0, 0.0), (1500000.0, 5500000.0)):
+        def at(e, n, *z, e0=e0, n0=n0):
+            return [e0 + e, n0 + n, *z]
+
+        layer = {"type": "FeatureCollection", "features": [
+            {"type": "Feature", "properties": {"id": "fix-area"}, "geometry": {
+                "type": "Polygon", "coordinates": [[at(10, 20), at(16, 20), at(16, 25), at(10, 25), at(10, 20)]]}},
+            {"type": "Feature", "properties": {"id": "fix-line"}, "geometry": {
+                "type": "LineString", "coordinates": [at(10.4, 20.3, 41.6), at(13.1, 22.2, 42.3), at(15.6, 24.7, 42.0)]}},
+            {"type": "Feature", "properties": {"id": "fix-points"}, "geometry": {
+                "type": "MultiPoint", "coordinates": [at(11.2, 24.1, 42.9), at(14.7, 21.05, 41.75), at(13.1, 22.2, 42.3)]}}]}
+        path = tmp_path / "ground-fixes.geojson"
+        path.write_text(json.dumps(layer), encoding="utf-8")
+        areas, fixes = tin.read_fixes(path)
+        ground = tin.Ground(Wavy(e0, n0), areas, fixes)
+        assert np.abs(ground.sample(fixes[:, 0], fixes[:, 1]) - fixes[:, 2]).max() < 0.001
+        tri = ground.interp.tri
+        left = np.setdiff1d(np.arange(len(tri.points)), tri.simplices)
+        assert len(left) == 1 and (tri.points == tri.points[left[0]]).all(axis=1).sum() == 2      # the place given twice
+        made.append({frozenset(s) for s in tri.simplices.tolist()})
+    assert made[0] == made[1]
+
+
+def test_a_pad_far_along_a_grid_is_drawn_through_all_its_points():
+    from domus.geo.mesh import cross2
+    from domus.model import features
+
+    # A made-up L-shaped pad, draped on the ground, at the demo's coordinates: every point it's drawn through is a
+    # corner of its triangles, and they cover it.
+    e0, n0 = 1500000.0, 5500000.0
+    ring = [[e0 + e, n0 + n] for e, n in ((2.13, 3.07), (9.71, 3.9), (9.4, 6.62), (5.2, 6.1), (4.7, 10.3), (1.8, 9.95), (2.13, 3.07))]
+    pad = {"type": "Feature", "properties": {"id": "pad-a", "kind": "pad"}, "geometry": {"type": "Polygon", "coordinates": [ring]}}
+    m = features.pad(pad, lambda e, n: 40.0 + 0.1 * (np.asarray(n, float) - n0))["concrete"]
+    assert len(np.unique(m.faces)) == len(m.vertices)
+    v = m.vertices[m.faces]
+    assert 0.5 * np.abs(cross2(v[:, 1, :2] - v[:, 0, :2], v[:, 2, :2] - v[:, 0, :2])).sum() == pytest.approx(
+        Polygon(ring).area, abs=0.01)
 
 
 def test_a_surface_is_read_in_its_own_triangles():

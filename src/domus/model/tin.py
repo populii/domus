@@ -51,20 +51,26 @@ class Ground:
 
     `areas` are polygons (Nx2) inside which the DEM is not used; `points` (Mx3) are the
     fix lines (resampled) and points. Inside the areas the ground is the triangulation of
-    those points and the DEM grid points around the areas.
+    those points and the DEM grid points around the areas, made about `origin`: the
+    south-west corner of the areas' bounds, in whole metres.
     """
 
     def __init__(self, dem, areas=(), points=(), step=0.5):
         self.dem = dem
         self.points = np.asarray(points, float).reshape(-1, 3)
         self.region = unary_union([shapely.Polygon(a) for a in areas]) if len(areas) else None
-        self.interp = None
+        self.interp = self.origin = None
         if self.region is not None:
             E, N = grid(self.region.buffer(3.0).bounds, step)
             H = dem.sample(E, N)
             ok = np.isfinite(H) & ~self.inside(E, N)
             pts = np.vstack([np.column_stack([E[ok], N[ok], H[ok]]), self.points])
-            self.interp = LinearNDInterpolator(pts[:, :2], pts[:, 2])
+            # Triangulated about the areas' corner, to the micrometre, as build() is about the model's origin: in whole
+            # grid coordinates (millions of metres) the arithmetic can't place points a few tenths of a metre apart
+            # among the triangles, and leaves some out of all of them. The corner is the areas' own, in whole metres,
+            # so it moves with them: the same fixes moved along the grid by whole metres give the same triangles.
+            self.origin = np.floor(np.asarray(self.region.bounds[:2], float))
+            self.interp = LinearNDInterpolator(np.round(pts[:, :2] - self.origin, 6), pts[:, 2])
 
     def inside(self, e, n):
         if self.region is None:
@@ -77,7 +83,7 @@ class Ground:
         h = np.array(self.dem.sample(e, n), float)
         fix = self.inside(e, n)
         if fix.any():
-            h[fix] = self.interp(e[fix], n[fix])
+            h[fix] = self.interp(e[fix] - self.origin[0], n[fix] - self.origin[1])
         return h
 
 

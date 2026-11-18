@@ -8,6 +8,17 @@
   sketched area's outline, and the ground a sketched wall holds, can't cross themselves: an outline that would isn't
   closed, a corner dragged or typed where it would stays where it was, and a change to a wall's side or depth that
   would is undone, each saying why. The server won't save such a sketch as an option, with the same message.
+- **For site projects:** a site with ground fixes (`data/site/ground-fixes.geojson`) may see its ground inside their
+  areas change once, and the wall options' cut and fill with it. The ground there was triangulated on the site's grid,
+  in millions of metres on New Zealand's, where the arithmetic can't place points a few tenths of a metre apart among
+  the triangles and leaves some out of all of them: fix points were left out, and the ground was drawn between the
+  others without them. On a made-up 6 by 5 m fix area at New Zealand coordinates, a line and three points, half the
+  points were left out and the ground inside it was up to 0.23 m out. It's now triangulated about the fix areas' own
+  corner, as the drawn ground is about the model's origin, so every fix point is a corner of its triangles; where two
+  give the same place, only one of them can be. A site without ground fixes builds as before.
+- Paths, pads and paving (`kind` `pad` in `features-*.geojson`) were triangulated on the site's grid the same way, and
+  could be drawn through few of their own points. They're drawn through all of them now, so a pad draped on the
+  ground follows it.
 
 ## 2026.11.54
 
