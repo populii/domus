@@ -686,11 +686,18 @@ function label(text, at, cls = "") {
   return obj;
 }
 
-// Ground drape textures
+// Ground drape textures. Pictures arrive after the page has started drawing, as do point clouds: `loads` holds a
+// promise for each, which siteViewer.drawn() waits for.
 const loader = new THREE.TextureLoader();
+const loads = [];
+function loadTexture(url) {
+  let texture;
+  loads.push(new Promise((done) => { texture = loader.load(url, done, undefined, done); }));
+  return texture;
+}
 const textures = {};
 for (const [key, t] of Object.entries(model.textures)) {
-  textures[key] = loader.load(`data/${t.file}`);
+  textures[key] = loadTexture(`data/${t.file}`);
   textures[key].colorSpace = THREE.SRGBColorSpace;
   textures[key].anisotropy = renderer.capabilities.getMaxAnisotropy();
 }
@@ -700,7 +707,7 @@ const layerTextures = {};
 function layerTexture(file, repeat) {
   const key = `${file}|${repeat ? 1 : 0}`;
   if (!layerTextures[key]) {
-    const t = loader.load(`data/${file}`);
+    const t = loadTexture(`data/${file}`);
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = renderer.capabilities.getMaxAnisotropy();
     if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -720,7 +727,7 @@ const vegSprites = {};
 function vegFoliageMaterial(file) {
   if (vegFoliage) return vegFoliage;
   // The atlas is grey shading for the card colours, so it is read as linear values.
-  const map = loader.load(`data/${file}`);
+  const map = loadTexture(`data/${file}`);
   map.colorSpace = THREE.NoColorSpace;
   map.anisotropy = renderer.capabilities.getMaxAnisotropy();
   vegFoliage = new THREE.MeshStandardMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.8,
@@ -906,7 +913,7 @@ function vegetationLayer(layer, picks) {
     const mat = new THREE.MeshStandardMaterial({ map: layerTexture(d.texture, !!d.repeat), roughness: 1,
       metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
     if (d.detail) {
-      const detail = loader.load(`data/${d.detail}`);
+      const detail = loadTexture(`data/${d.detail}`);
       detail.wrapS = detail.wrapT = THREE.RepeatWrapping;
       detail.anisotropy = renderer.capabilities.getMaxAnisotropy();
       mat.onBeforeCompile = (shader) => {
@@ -981,7 +988,7 @@ for (const layer of model.layers) {
     obj = new THREE.Group();
     const group = obj;
     const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-    fetch(`data/${layer.file}`).then((r) => r.json()).then((d) => {
+    loads.push(fetch(`data/${layer.file}`).then((r) => r.json()).then((d) => {
       const q = new Int16Array(bytes(d.positions).buffer);
       const pos = new Float32Array(q.length);
       for (let i = 0; i < q.length; i++) pos[i] = q[i] * d.step;
@@ -989,7 +996,7 @@ for (const layer of model.layers) {
       g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
       g.setAttribute("color", new THREE.Uint8BufferAttribute(bytes(d.colours), 3, true));
       group.add(new THREE.Points(g, new THREE.PointsMaterial({ size: layer.size ?? 0.035, vertexColors: true })));
-    }).catch(() => status(`${layer.name} didn't load.`));
+    }).catch(() => status(`${layer.name} didn't load.`)));
   } else if (layer.type === "vegetation") {
     const picks = [];
     obj = vegetationLayer(layer, picks);
@@ -3256,8 +3263,11 @@ const gizmo = new ViewportGizmo(camera, renderer, {
 gizmo.attachControls(controls);
 gizmo.addEventListener("start", () => { flight = null; });
 
-// Scriptable hook (used to line the model up with photos): positions are viewer coordinates
-// (x east, y up, z south of the origin); siteViewer.site(E, N, H) converts site coordinates.
+// Scriptable hook (used to line the model up with photos, and by domus shots): positions are viewer coordinates
+// (x east, y up, z south of the origin); siteViewer.site(E, N, H) converts site coordinates. siteViewer.drawn()
+// resolves once every picture and point cloud the page has asked for has arrived, any camera move has finished and
+// the model has been drawn since: wait for it after changing the view, the option or the layers, before taking a picture.
+const nextFrame = () => new Promise((done) => requestAnimationFrame(done));
 window.siteViewer = {
   camera, controls, cameraControls, gizmo, turn, model, renderer, scene, root,
   site: (E, N, H) => [E - E0, H - H0, -(N - N0)],
@@ -3267,6 +3277,13 @@ window.siteViewer = {
     controls.target.set(...target);
     if (fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
     controls.update();
+  },
+  async drawn() {
+    let asked;
+    do { asked = loads.length; await Promise.all(loads); } while (asked !== loads.length);
+    await document.fonts.ready;
+    while (flight) await nextFrame();
+    for (let i = 0; i < 3; i++) await nextFrame();
   },
 };
 

@@ -318,6 +318,7 @@ Set `[frame]` and `[regrade]` in `options/_site.toml`. Draw options from `option
 the viewer are in the server's store (`/api/db/sketches`), and the viewer's **Make it an option** button, in the Design panel, turns one into an option.
 
 Options compare how a scheme looks and what it does to the ground. Domus doesn't estimate cost or say what needs consent, so don't offer either from it.
+`domus shots` saves pictures of each option from views and cameras you list ([docs/shots.md](docs/shots.md)), for the person to compare.
 
 ## Finishing up
 

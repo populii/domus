@@ -3,7 +3,8 @@ RUN pip install --no-cache-dir "uv>=0.8,<1"
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
-RUN uv sync --frozen --no-dev --no-editable --all-extras --python /usr/local/bin/python
+# Not the shots extra: Playwright drives a browser the image doesn't have.
+RUN uv sync --frozen --no-dev --no-editable --all-extras --no-extra shots --python /usr/local/bin/python
 
 FROM python:3.14-slim
 LABEL org.opencontainers.image.title="domus" \

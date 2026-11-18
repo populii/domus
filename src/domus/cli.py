@@ -13,6 +13,7 @@
     domus scan FILE                                           bring in a phone LiDAR scan
     domus prep <step>                                         plans, IFC, textures, checks from your documents
     domus serve                                               serve the viewer
+    domus shots SPEC.json                                     pictures of the viewer, from a spec (docs/shots.md)
     domus site upgrade                                        write an older site's migrations into its files
     domus site shift|edit SPEC BACKUP [--apply]               change the site's layers, keeping what was there
     domus site regrade CLOUD SPEC BACKUP [--apply]            give ground fixes the levels a placed cloud shows
@@ -29,7 +30,7 @@ import sys
 from . import __version__
 
 COMMANDS = ["create", "new", "demo", "fetch", "canopy", "marks", "title", "points", "sketch-worker", "build", "serve", "video", "scan", "prep",
-            "site"]
+            "site", "shots"]
 
 
 def choose_site(path):
@@ -71,6 +72,9 @@ def run(command, rest):
     if command == "serve":
         from . import serve
         return serve.main(rest)
+    if command == "shots":
+        from . import shots
+        return shots.main(rest)
     if command == "fetch":
         from . import importers
         return importers.fetch()

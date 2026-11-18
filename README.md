@@ -172,6 +172,9 @@ Domus works out the designed ground, cut and fill, wall heights and flat lawn, t
 a drain or ground lowered next to the house.
 [docs/options.md](docs/options.md) has the details.
 
+To show them to someone, `domus shots` saves pictures of each from the viewer, from the views and cameras you list in a
+small JSON file: [docs/shots.md](docs/shots.md).
+
 ## Host it at home
 
 Domus is a single container that keeps everything in one `/site` folder, so backing up that folder backs up everything. Set

@@ -27,6 +27,7 @@ Changelog = "https://github.com/populii/domus/blob/main/CHANGELOG.md"
 [project.optional-dependencies]
 plans = ["pdfplumber>=0.11"]
 ifc = ["ifcopenshell>=0.9.0.post1"]
+shots = ["playwright>=1.65.2"]     # domus shots: Playwright drives its own Chromium (uv run playwright install chromium)
 
 [project.scripts]
 domus = "domus.cli:main"

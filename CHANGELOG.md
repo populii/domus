@@ -18,6 +18,15 @@
   or flights, under that one's top, as where a wall's end tucks into a thicker wall at a corner. Nothing shows there,
   but the option's ground inside the thicker wall, which rises from its face to the ground it holds, was reported as
   coming through the tucked end. Ground that comes through just beside the thicker wall is still found.
+- `domus shots SPEC.json` takes pictures of the viewer: for each shot in a spec, the site as it is or a wall option,
+  from a view button or a camera placed in viewer metres, in the wall options' frame or on the site's grid, with the
+  layer groups it names switched off. It serves the model itself for the run, drives the viewer in Playwright's
+  Chromium, an optional extra (`uv sync --extra shots`, then `uv run playwright install chromium`), and leaves nothing
+  running afterwards; the whole run has a time limit (`--timeout`). The pictures are PNGs with no metadata.
+  [docs/shots.md](docs/shots.md) describes the spec, with examples on the made-up demo site. It grew from a real
+  site's own scripts. The container image leaves the extra out.
+- The viewer's `siteViewer.drawn()` waits until every picture and point cloud the page has asked for has arrived, any
+  camera move has finished and the model has been drawn since, for scripts that take pictures of it.
 - `domus new` and `domus create` write a `.gitignore` in a new site, so the site can be a git repository of its own.
   Git leaves out what Domus makes again: the built model, the build cache, the checks' reports, the server's logs, the
   copies `domus site upgrade` keeps, the frames taken from videos and the reconstructions' working files. It keeps
