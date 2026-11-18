@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.48
 
 - **For site projects:** a terrace that gives its own level at each corner now has that level along its edges too,
   straight from one corner to the next. A point on an edge, such as a batter's foot, that read as just outside the
