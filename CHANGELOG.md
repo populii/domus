@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.41
 
 - **For site projects:** a site's grid is a value of its own. `site.grid` in `domus.api` gives the site's grid and
   heights: its EPSG code, name and vertical datum, its origin and its other height datums, with the sums that turn
