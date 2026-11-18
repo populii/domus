@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.40
 
 - **For site projects:** `domus export PATH`, and `site.export(path, format=None, option=None)` in the public API,
   write the built model for other software. A `.glb` is glTF, for Blender and most 3D viewers: what the viewer shows,

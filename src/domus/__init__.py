@@ -14,7 +14,7 @@ import importlib.abc
 import importlib.util
 import sys
 
-__version__ = "2026.11.39"
+__version__ = "2026.11.40"
 
 MOVED = {
     "buildcache": "build.cache",
