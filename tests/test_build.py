@@ -59,7 +59,7 @@ def test_the_model_says_its_format(built):
 
 def test_the_model_carries_what_a_sketch_is_worked_out_with(built, project):
     """`regrade`, for the viewer to work a sketch out while it's drawn: the regrade area, each existing wall's face,
-    back and toe (the soil's level under it), the options' defaults and their rules' lengths, in viewer metres. The
+    back, plan and toe (the soil's level under it), the options' defaults and their rules' lengths, in viewer metres. The
     ground it's worked out on is the ground layer."""
     import pytest
     from shapely.geometry import Polygon
@@ -79,8 +79,13 @@ def test_the_model_carries_what_a_sketch_is_worked_out_with(built, project):
     assert np.allclose([[e0 + x, n0 - z] for x, z in wall["face"]], face, atol=6e-4)
     assert np.allclose([[e0 + x, n0 - z] for x, z in wall["back"]], back, atol=6e-4)
     assert np.allclose(np.asarray(wall["toe"]) + h0, toe, atol=6e-4) and np.allclose(wall["chain"], chain, atol=6e-4)
+    body = scheme.wall_body(old[0], terrain.existing(project))[0]
+    footprint = Polygon([(e0 + x, n0 - z) for x, z in wall["plan"][0]])
+    assert len(wall["plan"]) == 1 and footprint.symmetric_difference(body).area < 1e-3 * body.length
     defaults = design.settings(project)["defaults"]
-    assert regrade["defaults"] == {k: defaults[k] for k in ("upstand_m", "batter", "thickness_m", "paving_m")}
+    assert regrade["defaults"] == {**{k: defaults[k] for k in ("upstand_m", "batter", "thickness_m", "paving_m")},
+                                   **{k: defaults.get(k) for k in ("depth_m", "embed_m", "embed_per_m", "embed_courses",
+                                                                   "bedding_m", "base_m", "trench_m", "seal_m")}}
     assert regrade["rules"] == {"reach_m": scheme.BATTER_REACH_M, "held_m": scheme.HELD_M, "wall_step_m": scheme.WALL_STEP_M,
                                 "toe_probe_m": scheme.TOE_PROBE_M, "back_probe_m": scheme.BACK_PROBE_M,
                                 "sketch_back_m": sketch.DEFAULT_BACK_M}

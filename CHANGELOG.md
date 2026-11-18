@@ -13,6 +13,15 @@
   ([docs/options.md](docs/options.md)). The materials list no longer counts a cut piece where only a step of the foot
   cuts a course short within a block of an end or a corner: the step goes at a joint, and the course ends in the
   end's own piece.
+- A sketch in the viewer is worked out as solids while you draw and drag it: its walls as they're built, the level
+  ground they hold, its batters, and the soil it cuts (red) and fills (blue), with what that comes to under the sketch
+  ("As drawn"). The server's numbers still come once the sketch settles. The preview runs in a worker of its own with
+  Manifold: a JavaScript copy of the build's rules for a sketch (`app/viewer/sketch-core.js`), held to them by a set
+  of made-up sketches the tests work out both ways. Its batters' cones have 24 sides, and it comes within about 0.3% of
+  the build's cut and fill; while a sketch is dragged they have 16, and where two batters disagree it's read on a 5 cm
+  grid, not 2 cm, until the drag pauses. An area with a fall, or a wall whose top changes along it, isn't previewed
+  yet: it's drawn as before. A built model's `regrade` gives the viewer each existing wall's plan, and how the
+  options' walls are built ([docs/model-format.md](docs/model-format.md)).
 
 ## 2026.11.49
 

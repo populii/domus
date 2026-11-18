@@ -5,6 +5,7 @@ import http.client
 import json
 import os
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -126,6 +127,51 @@ def test_a_browser_compiles_manifold_under_the_servers_policy(server, tmp_path):
         finally:
             browser.close()
     assert volume == pytest.approx(4.0) and not errors
+
+
+@pytest.fixture
+def demo_server(built, tmp_path):
+    """domus serve on the made-up demo's built model."""
+    httpd = serve.make_server("127.0.0.1", 0, [tmp_path / "unbuilt", built], tmp_path / "db" / "v.db")
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield httpd.server_address[1], json.loads((built / "model.json").read_text(encoding="utf-8"))
+    httpd.shutdown()
+    httpd.server_close()
+
+
+def test_a_sketch_is_drawn_as_solids_in_a_worker_while_it_is_drawn(demo_server):
+    """The viewer works a sketch out in its preview worker (sketch-worker.js) under the server's policy, and draws it:
+    the cut and fill it shows are the preview's, which tests/test_sketch_preview.py holds to the build's."""
+    from domus.options import preview
+
+    sync_api = pytest.importorskip("playwright.sync_api")
+    port, model = demo_server
+    corpus = json.loads((Path(__file__).parent / "sketch_corpus.json").read_text(encoding="utf-8"))
+    item = next(sk for sk in corpus["sketches"] if sk["name"] == "a-straight-wall")["items"][0]
+    e0, n0 = model["origin"][:2]
+    wall = {**item, "pts": [[e - e0, 0.0, -(n - n0)] for e, n in item["en"]]}
+    state = json.dumps({"note": "", "items": [wall]})
+    with sync_api.sync_playwright() as p:
+        if not os.path.exists(p.chromium.executable_path):
+            pytest.skip("Playwright's Chromium isn't installed: uv run playwright install chromium")
+        browser = p.chromium.launch()
+        try:
+            page = browser.new_page()
+            errors = []
+            # (an empty store answers its documents' lookups with 404s, which the page takes in its stride)
+            page.on("console", lambda m: errors.append(m.text)
+                    if m.type == "error" and not m.text.startswith("Failed to load resource") else None)
+            page.on("pageerror", lambda err: errors.append(str(err)))
+            page.add_init_script(f"localStorage.setItem({json.dumps('domus-sketch-' + model['title'])}, {json.dumps(state)});")
+            page.goto(f"http://127.0.0.1:{port}/demo")
+            line = page.locator("#sketchPreview")
+            line.wait_for(state="attached", timeout=60000)
+            page.wait_for_function("() => !document.getElementById('sketchPreview').hidden", timeout=120000)
+            text = line.text_content()
+        finally:
+            browser.close()
+    v = preview.sketch_solids(model, [item])[0].volumes()
+    assert text == f"As drawn: cut about {v['cut_m3']:.1f} m³, fill about {v['fill_m3']:.1f} m³" and not errors
 
 
 def test_big_text_goes_out_gzipped_to_a_browser_that_takes_it(server, tmp_path):

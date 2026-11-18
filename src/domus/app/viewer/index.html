@@ -464,6 +464,7 @@ details > summary { cursor: pointer; font-size: 13px; color: var(--accent); marg
           </div>
       <div class="sk-list" id="sketchList"></div>
       <div class="sk-live" id="sketchLive" hidden aria-live="polite"></div>
+      <div class="sk-read" id="sketchPreview" hidden></div>
       <div class="sk-row" id="sketchOption" hidden><input id="sketchOptionName" aria-label="Name for the option" placeholder="Name this as an option"><button type="button" id="sketchOptionSave">Make it an option</button></div>
       <textarea id="sketchNote" rows="3" placeholder="Anything else? e.g. steps here, keep the big tree, wall in stone" aria-label="Notes"></textarea>
           <div class="rowbtns">
@@ -2519,6 +2520,8 @@ function drawSketch() {
       const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: MAT_COLOUR[it.material] || "#999",
         side: THREE.DoubleSide, roughness: 0.9 }));
       mesh.userData.sketchId = it.id;
+      mesh.userData.crude = true;
+      mesh.visible = !previewDrawn;
       sketchGroup.add(mesh);
       sketchGroup.add(polyline(P.map((p, i) => new THREE.Vector3(p.x, verts[6 * i + 4], p.z)), lineMat));
     } else {
@@ -2531,10 +2534,66 @@ function drawSketch() {
       const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: AREA_KINDS[it.area], side: THREE.DoubleSide,
         transparent: true, opacity: 0.8, roughness: 1 }));
       mesh.userData.sketchId = it.id;
+      mesh.userData.crude = true;
+      mesh.visible = !previewDrawn;
       sketchGroup.add(mesh);
       sketchGroup.add(polyline(top, lineMat, true));
     }
   }
+  queuePreview(!!drag);
+}
+// The sketch worked out as solids while it's drawn and dragged (sketch-worker.js, sketch-core.js: the build's rules,
+// copied): its walls, the ground they hold, its batters, and the soil it cuts (red) and fills (blue). It takes the
+// place of the plain shapes above, and the server's answer still gives the numbers once the sketch settles.
+const previewGroup = new THREE.Group();
+root.add(previewGroup);
+let previewWorker = null, previewTurn = 0, previewDrawn = false;
+const groundLayer = model.layers.find((l) => l.id === "ground");
+if (model.regrade && groundLayer && window.Worker) {
+  try {
+    previewWorker = new Worker("sketch-worker.js", { type: "module" });
+    previewWorker.postMessage({ type: "model", model: { origin: model.origin, regrade: model.regrade,
+      layers: [{ id: "ground", positions: groundLayer.positions, indices: groundLayer.indices }] } });
+    previewWorker.addEventListener("message", ({ data }) => { if (data.turn === previewTurn) showPreview(data); });
+    previewWorker.addEventListener("error", () => { previewWorker = null; showPreview({ error: "no worker" }); });
+  } catch {
+    previewWorker = null;
+  }
+}
+// While a sketch is dragged it's worked out quicker (cones of fewer sides, a coarser grid where batters disagree), and
+// in full when the drag pauses for a quarter of a second or ends.
+let previewPause = null;
+function queuePreview(dragging) {
+  if (!previewWorker) return;
+  clearTimeout(previewPause);
+  const items = sketchPayload().items.map((q, i) => ({ ...q, retains: sketch[i].retains, back: sketch[i].back }));
+  previewWorker.postMessage({ type: "sketch", turn: ++previewTurn, items, dragging });
+  if (dragging) previewPause = setTimeout(() => previewWorker.postMessage({ type: "sketch", turn: ++previewTurn, items }), 250);
+}
+const PREVIEW_LOOKS = {
+  designed: { color: "#7fa85a", opacity: 0.55 }, cut: { color: "#b3402a", opacity: 0.45 },
+  fill: { color: "#2a6fb3", opacity: 0.45 }, walls: { color: "#9a7650", opacity: 1 },
+};
+function showPreview(a) {
+  clearGroup(previewGroup);
+  previewDrawn = !!a.meshes && sketch.length > 0;
+  for (const m of sketchGroup.children) if (m.userData.crude) m.visible = !previewDrawn;
+  const line = $("sketchPreview");
+  line.hidden = !previewDrawn;
+  if (!previewDrawn) return;
+  for (const [kind, list] of Object.entries(a.meshes)) {
+    const look = PREVIEW_LOOKS[kind];
+    for (const part of list) {
+      if (!part.indices.length) continue;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(part.positions, 3));
+      geo.setIndex(new THREE.BufferAttribute(part.indices, 1));
+      geo.computeVertexNormals();
+      previewGroup.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: look.color, roughness: 0.9,
+        side: THREE.DoubleSide, transparent: look.opacity < 1, opacity: look.opacity, depthWrite: look.opacity >= 1 })));
+    }
+  }
+  line.textContent = `As drawn: cut about ${f1(a.cut_m3)} m³, fill about ${f1(a.fill_m3)} m³`;
 }
 function renderSketch() {
   const box = $("sketchList");

@@ -57,6 +57,12 @@ def option(name, project, ctx):
         return {"walls": [{**wall, "material": "segmental", "unit_m": [0.457, 0.2], "cap_m": 0.1, "thickness_m": 0.2285,
                            "depth_m": 0.3, "embed_m": 0.1, "embed_per_m": 0.125, "bedding_m": 0.03, "base_m": 0.15,
                            "trench_m": 0.6, "seal_m": 0.2}], "terraces": [upper]}
+    if name == "built-in-courses":  # the same, its top stepped, its foot a whole course down and stepping down the slope a
+        # course at a time with the ground, its cap set back and standing out (as a maker's guide gives such a wall)
+        return {"walls": [{"id": "W", "line_so": [[10.0, 4.0], [10.0, 11.0], [10.0, 18.0]], "tops": [low + 0.8, low + 1.0],
+                           "material": "segmental", "unit_m": [0.4, 0.2], "cap_m": 0.1, "depth_m": 0.3, "cap_depth_m": 0.27,
+                           "cap_overhang_m": 0.025, "embed_courses": 1, "embed_m": 0.15, "base_m": 0.15, "trench_m": 0.6,
+                           "seal_m": 0.2}], "terraces": [upper]}
     if name == "keeps-the-old-wall":
         return {"keep_existing": ["W1"], "walls": [{"id": "N", "line_so": [[12.0, 3.0], [12.0, 19.0]]}],
                 "terraces": [{"id": "T", "level": ground_at(ctx, 10.0, 10.0) + 0.3, "at_so": [10.0, 10.0], "fall": "1:40",
@@ -97,7 +103,7 @@ def like_the_point_rule(d, walls, s, existing_walls):
 
 
 @pytest.mark.parametrize("name", ["a-one-wall", "b-two-tiers", "steps", "sloping-foot", "paving-and-steep",
-                                  "keeps-the-old-wall", "sketch", "steep-batter-0.5", "steep-batter-1.0", "own-levels", "built"])
+                                  "keeps-the-old-wall", "sketch", "steep-batter-0.5", "steep-batter-1.0", "own-levels", "built", "built-in-courses"])
 def test_an_options_solids_stand_where_the_point_rule_puts_the_ground_and_measure_what_it_does(name, project, ctx):
     like_the_point_rule(*worked_out(name, project, ctx), ctx.existing_walls)
 

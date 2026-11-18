@@ -51,7 +51,7 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 |---|---|
 | `geo/` | Grids and datums (`crs`: a site's `Grid`, made from its settings), rasters read on their own grids, GeoJSON, meshes, fits: none of it reads a site |
 | `model/` | The model's parts: the ground (`terrain` reads the site's, `tin` triangulates), the house and its looks, walls, small features, plants (`canopy` reads the site's, `vegetation` draws), drains |
-| `options/` | The wall options: `scheme` works them out, `design` reads a site's for it, `sketch` turns a drawing into one, and `solids` builds one as closed solids with Manifold (its ground, walls, steps, cut and fill) |
+| `options/` | The wall options: `scheme` works them out, `design` reads a site's for it, `sketch` turns a drawing into one, `solids` builds one as closed solids with Manifold (its ground, walls, steps, cut and fill), and `preview` works a sketch out as solids from what a built model gives the viewer, the reference the viewer's JavaScript copy is held to |
 | `build/` | The build, and its cache |
 | `export/` | A built model for other software: glTF, and IFC through the optional IfcOpenShell |
 | `checks/` | `domus prep check`'s rules, and the viewer's checklist and video walk (`enrich`) |
@@ -59,7 +59,7 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 | `prep/` | A site's documents and photos into its data |
 | `importers/` | Places into site folders: New Zealand's (`nz/`), anywhere's (`osm`) |
 | `project/` | The site folder: the Site each part is handed (its folder, output, settings, format and grid) and its rasters, its settings' schema, formats and upgrades, trusted extensions, layer edits, `domus new` and the demo |
-| `app/` | On top of it all, the app: the command line (`cli`, with the video and prep steps' arguments in `video` and `prep`), the server (`serve`) and the viewer (`viewer/`, a page and its libraries). Nothing else in Domus imports it |
+| `app/` | On top of it all, the app: the command line (`cli`, with the video and prep steps' arguments in `video` and `prep`), the server (`serve`) and the viewer (`viewer/`, a page and its libraries, and its sketch preview: `sketch-core.js`, a JavaScript copy of the build's rules for a sketch, run with Manifold in `sketch-worker.js`). Nothing else in Domus imports it |
 | top level | The public API (`api`, `testing`), `create`, `shots` and the templates |
 
 The modules that moved there can still be imported by their old names (`domus.terrain`, `domus.video`, `domus.cli`,

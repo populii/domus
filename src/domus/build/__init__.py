@@ -810,10 +810,14 @@ def add_options(b):
                                    "frame": design.settings(b.site)["frame"]}
 
 
+# How a wall is built, for the sketch preview's soil (scheme.option_wall): None where the site leaves it to the rule.
+BUILT = ("depth_m", "embed_m", "embed_per_m", "embed_courses", "bedding_m", "base_m", "trench_m", "seal_m")
+
+
 def add_regrade(b):
     """What the viewer needs to work a sketch out as the build works an option out, for its preview while you draw:
-    the regrade area, each existing wall's face and back and the soil's level along it (its toe: the wall itself isn't
-    soil), the options' defaults and the lengths their rules take. The ground they're worked out on is the ground
+    the regrade area, each existing wall's face, back and plan and the soil's level along it (its toe: the wall itself
+    isn't soil), the options' defaults (how a wall is built among them) and the lengths their rules take. The ground they're worked out on is the ground
     layer, which the viewer has already. In viewer metres; nothing on a site with no [regrade] for its options."""
     if not design.options_site_path(b.site).exists() or "regrade" not in design.settings(b.site):
         return
@@ -829,13 +833,30 @@ def add_regrade(b):
     for w in design.existing_walls(b.site):
         face, back, chain, toe = scheme.wall_edges(w, ground)
         walls_out.append({"id": w["id"], "line": plan(w["line"]), "face": plan(face), "back": plan(back),
-                          "chain": r(chain), "toe": r(np.asarray(toe, float) - h0)})
+                          "plan": rings_of(scheme.wall_body(w, ground)[0], plan), "chain": r(chain),
+                          "toe": r(np.asarray(toe, float) - h0)})
     defaults = design.settings(b.site)["defaults"]
     b.regrade = {"area": rings, "walls": walls_out,
-                 "defaults": {k: defaults[k] for k in ("upstand_m", "batter", "thickness_m", "paving_m")},
+                 "defaults": {**{k: defaults[k] for k in ("upstand_m", "batter", "thickness_m", "paving_m")},
+                              **{k: defaults.get(k) for k in BUILT}},
                  "rules": {"reach_m": scheme.BATTER_REACH_M, "held_m": scheme.HELD_M, "wall_step_m": scheme.WALL_STEP_M,
                            "toe_probe_m": scheme.TOE_PROBE_M, "back_probe_m": scheme.BACK_PROBE_M,
                            "sketch_back_m": sketch.DEFAULT_BACK_M}}
+
+
+def rings_of(shape, plan):
+    """A shape's rings (every polygon's outline and holes) as `plan` puts them in viewer metres, each corner once:
+    even-odd, a ring inside another is a hole in it."""
+    out = []
+    for part in shapely.get_parts(shape):
+        if part.geom_type != "Polygon" or part.is_empty:
+            continue
+        for ring in (part.exterior, *part.interiors):
+            pts = plan(np.asarray(ring.coords)[:-1])
+            pts = [p for k, p in enumerate(pts) if p != pts[k - 1]]        # corners the rounding has made one
+            if len(pts) >= 3:
+                out.append(pts)
+    return out
 
 
 def shared_textures(site, layers):

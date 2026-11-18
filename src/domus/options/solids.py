@@ -40,20 +40,28 @@ drawn straight across each half of a cell: the line is that close to Domus's, an
 batters' own. A cone is a polygon of SEGMENTS sides, so a batter's reach round a corner, and the line between two
 pieces' parts of the plan, are a whisker short of a circle's.
 
+Only what an option can change need be worked out: within a box (option_window gives the one round an option's
+terraces, walls and steps, as far as a batter reaches), else the whole regrade area. A batter's free edge is
+Design.free's, the outline less shapely's buffers round the walls and steps, unless the design gives its own as
+straight pieces (`free_pieces`): free_pieces() works the edge out exactly, against true circles, so the viewer's sketch
+preview (app/viewer/sketch-core.js, a JavaScript copy of the part of this a sketch uses, step for step) can work out
+the same edge. domus.options.preview holds the two to each other.
+
 A pure part of the model: it reads no site, and takes the option worked out (a scheme.Design), its walls levelled and
 the site's existing walls from its caller.
 """
 
 import itertools
+import math
 
 import manifold3d as mf
 import numpy as np
 import shapely
 from shapely.geometry import Polygon, box
 
-from ..geo.mesh import offset_behind, resample_line
+from ..geo.mesh import offset_behind
 from ..model import walls as walls_mod
-from .scheme import BATTER_REACH_M, WALL_STEP_M, body_plan, drainage, trench_bottom, wall_body
+from .scheme import BATTER_REACH_M, HELD_M, body_plan, drainage, wall_body
 
 SEGMENTS = 128          # the sides of a batter's cone
 EDGE_M = 1e-6           # how far a solid reaches past the part of the plan it's worked out in, so no two share a face
@@ -264,6 +272,150 @@ def _overlay(shapes):
     return cells
 
 
+# --- free edges, worked out exactly ------------------------------------------------------------------------------
+
+def _between(v0, v1, lo, hi):
+    """Where v0 + t v1 lies between `lo` and `hi`: (t0, t1), unbounded where it never leaves, or None."""
+    if v1 == 0.0:
+        return (-math.inf, math.inf) if lo < v0 < hi else None
+    t0, t1 = (lo - v0) / v1, (hi - v0) / v1
+    return (t0, t1) if t0 < t1 else (t1, t0)
+
+
+def _capsule_span(a, d, p, q, r):
+    """Where the line a + t d comes within `r` of the segment p-q: (t0, t1), or None. Within r of a segment is a
+    convex shape (a strip square across it, and a disc round each end), so that's one stretch of the line."""
+    spans = []
+    A = d[0] * d[0] + d[1] * d[1]
+    for c in (p, q):
+        fx, fy = a[0] - c[0], a[1] - c[1]
+        B, C = 2.0 * (d[0] * fx + d[1] * fy), fx * fx + fy * fy - r * r
+        disc = B * B - 4.0 * A * C
+        if A > 0.0 and disc > 0.0:
+            root = math.sqrt(disc)
+            spans.append(((-B - root) / (2.0 * A), (-B + root) / (2.0 * A)))
+    length = math.hypot(q[0] - p[0], q[1] - p[1])
+    if length > 0.0:
+        ux, uy = (q[0] - p[0]) / length, (q[1] - p[1]) / length
+        ox, oy = a[0] - p[0], a[1] - p[1]
+        across = _between(ux * oy - uy * ox, ux * d[1] - uy * d[0], -r, r)
+        along = _between(ux * ox + uy * oy, ux * d[0] + uy * d[1], 0.0, length)
+        if across and along and max(across[0], along[0]) < min(across[1], along[1]):
+            spans.append((max(across[0], along[0]), min(across[1], along[1])))
+    if not spans:
+        return None
+    return min(t0 for t0, _ in spans), max(t1 for _, t1 in spans)
+
+
+def _convex_span(a, d, ring, r):
+    """Where the line a + t d comes within `r` of a convex polygon (`ring`, its corners) or inside it: (t0, t1), or
+    None. That's convex too, so it's from the first of the line's stretches near a side, or inside, to the last."""
+    spans = [s for s in (_capsule_span(a, d, ring[k], ring[(k + 1) % len(ring)], r) for k in range(len(ring))) if s]
+    area = sum(ring[k - 1][0] * ring[k][1] - ring[k][0] * ring[k - 1][1] for k in range(len(ring)))
+    sign = 1.0 if area > 0 else -1.0
+    inside = (-math.inf, math.inf)
+    for k in range(len(ring)):
+        p, q = ring[k], ring[(k + 1) % len(ring)]
+        ex, ey = q[0] - p[0], q[1] - p[1]
+        half = _between(sign * (ex * (a[1] - p[1]) - ey * (a[0] - p[0])), sign * (ex * d[1] - ey * d[0]), 0.0, math.inf)
+        if half is None:
+            inside = None
+            break
+        inside = (max(inside[0], half[0]), min(inside[1], half[1]))
+    if inside and inside[0] < inside[1]:
+        spans.append(inside)
+    if not spans:
+        return None
+    return min(t0 for t0, _ in spans), max(t1 for _, t1 in spans)
+
+
+def free_pieces(design):
+    """Each terrace's free edge as straight pieces (from, to), as Design.free has it but worked out exactly: its outline
+    less the parts within a wall's thickness and HELD_M of the wall's line, or within HELD_M of a flight of steps (or
+    in it). Design takes shapely's buffers there, polygons a whisker inside the circles round a wall's ends."""
+    holds = []                     # (corners, how near holds it, a flight's outline)
+    for w in design.walls:
+        line = [(float(x), float(y)) for x, y in np.asarray(w["line"], float)[:, :2]]
+        holds.append((line, float(w["thickness"]) + HELD_M, False))
+    for st in design.stairs:
+        holds.append(([(float(x), float(y)) for x, y in np.asarray(st.poly.exterior.coords)[:-1, :2]], HELD_M, True))
+    out = []
+    for t in design.terraces:
+        ring = [(float(x), float(y)) for x, y in np.asarray(t.poly.exterior.coords)[:, :2]]
+        pieces = []
+        for a, b in itertools.pairwise(ring):
+            d = (b[0] - a[0], b[1] - a[1])
+            length = math.hypot(*d)
+            if length <= 1e-12:
+                continue
+            held = []
+            for corners, r, flight in holds:
+                if flight:
+                    spans = [_convex_span(a, d, corners, r)]
+                else:
+                    spans = [_capsule_span(a, d, p, q, r) for p, q in itertools.pairwise(corners)]
+                held += [(max(t0, 0.0), min(t1, 1.0)) for t0, t1 in (s for s in spans if s) if t0 < 1.0 and t1 > 0.0]
+            held.sort()
+            u = 0.0
+            for h0, h1 in held:
+                if (h0 - u) * length > 1e-6:
+                    pieces.append(((a[0] + u * d[0], a[1] + u * d[1]), (a[0] + h0 * d[0], a[1] + h0 * d[1])))
+                u = max(u, h1)
+            if (1.0 - u) * length > 1e-6:
+                pieces.append(((a[0] + u * d[0], a[1] + u * d[1]), b))
+        out.append([(np.asarray(p0, float), np.asarray(p1, float)) for p0, p1 in pieces])
+    return out
+
+
+def batter_levels(design, pieces, e, n):
+    """What the batters do at points (e, n), as Design.batters does from the free edges' straight pieces (`pieces`, one
+    list for each terrace): the level they raise the ground to and the level they cut it to, -inf and inf where none
+    reaches. The first piece that's nearest gives the edge's level."""
+    e, n = np.ravel(np.asarray(e, float)), np.ravel(np.asarray(n, float))
+    raise_to, lower_to = np.full(len(e), -np.inf), np.full(len(e), np.inf)
+    for t, own in zip(design.terraces, pieces, strict=True):
+        if not own:
+            continue
+        best, fx, fy = np.full(len(e), np.inf), np.zeros(len(e)), np.zeros(len(e))
+        for a, b in own:
+            ab = b - a
+            u = np.clip(((e - a[0]) * ab[0] + (n - a[1]) * ab[1]) / float(ab @ ab), 0.0, 1.0)
+            x, y = a[0] + u * ab[0], a[1] + u * ab[1]
+            dist = np.hypot(e - x, n - y)
+            nearer = dist < best
+            best[nearer], fx[nearer], fy[nearer] = dist[nearer], x[nearer], y[nearer]
+        near = best < BATTER_REACH_M
+        if near.any():
+            ze = np.full(int(near.sum()), _level_of(t)) if _is_level(t) else t.z(fx[near], fy[near])
+            raise_to[near] = np.maximum(raise_to[near], ze - best[near] / t.batter)
+            lower_to[near] = np.minimum(lower_to[near], ze + best[near] / t.batter)
+    return raise_to, lower_to
+
+
+def option_window(design, walls):
+    """The box (E0, N0, E1, N1) round all an option can change: its terraces, its steps and its walls from face to
+    back, as far as a batter reaches and a metre more. None for an option with none of them."""
+    shapes = [t.poly for t in design.terraces] + [st.poly for st in design.stairs] + [wall_body(w)[0] for w in walls]
+    if not shapes:
+        return None
+    b = np.array([g.bounds for g in shapes])
+    reach = BATTER_REACH_M + 1.0
+    return (float(b[:, 0].min()) - reach, float(b[:, 1].min()) - reach, float(b[:, 2].max()) + reach, float(b[:, 3].max()) + reach)
+
+
+def _is_level(t):
+    """Whether terrace `t` is at one level all over: a plane that doesn't fall, or the same level at every corner."""
+    if t.plane is not None:
+        return not np.any(t.plane[2])
+    values = np.asarray(t._lin.values, float).ravel()
+    return bool(np.all(values == values[0]))
+
+
+def _level_of(t):
+    """A level terrace's level (_is_level)."""
+    return float(t.plane[0]) if t.plane is not None else float(np.asarray(t._lin.values, float).ravel()[0])
+
+
 # --- an option as solids ---------------------------------------------------------------------
 
 class Solids:
@@ -344,35 +496,56 @@ def _toe_columns(body, origin, low, high, segments=SEGMENTS):
             continue
         length = at[k + 1] - at[k]
         along = (pts[k + 1] - pts[k]) / length
-        across = np.array([-along[1], along[0]]) * far
         inner = chain[(chain > at[k] + 1e-9) & (chain < at[k + 1] - 1e-9)] - at[k]
         t = np.unique(np.r_[-far, 0.0, inner, length, length + far])      # where the toe along the piece bends
         z = np.interp(at[k] + np.clip(t, 0.0, length), chain, toe)
-        mid = pts[k] + t[:, None] * along
         col = prism(region, low - 1.0, high + 1.0)
-        below.append(strip(mid + across, mid - across, z, low) ^ col)
-        above.append(strip(mid + across, mid - across, high, z) ^ col)
+        below.append(_square_column(pts[k], along, t, z, low, far, False) ^ col)
+        above.append(_square_column(pts[k], along, t, z, high, far, True) ^ col)
     return union(below), union(above)
 
 
-def option_solids(design, walls, existing_walls, segments=SEGMENTS):
+def _square_column(start, along, t, z, level, far, up):
+    """The solid between heights `z` along a straight line (at distances `t` from `start` along the unit vector
+    `along`, rising) and the flat `level` below them (or above them, `up`), carried square across the line `far` to
+    either side: their profile extruded across the line and set in place, so every corner is in double precision (the
+    viewer's copy builds it the same way, where a mesh would round its corners to single precision)."""
+    line = [(float(ti), float(zi)) for ti, zi in zip(t, z, strict=True)]
+    ring = [*line, (line[-1][0], level), (line[0][0], level)] if up else [(line[0][0], level), (line[-1][0], level), *line[::-1]]
+    m = mf.Manifold.extrude(mf.CrossSection([np.asarray(ring, float)], mf.FillRule.Positive), 2.0 * far)
+    nx, ny = -float(along[1]), float(along[0])
+    return m.transform(np.array([[float(along[0]), 0.0, -nx, float(start[0]) + far * nx],
+                                 [float(along[1]), 0.0, -ny, float(start[1]) + far * ny],
+                                 [0.0, 1.0, 0.0, 0.0]]))
+
+
+def option_solids(design, walls, existing_walls=(), segments=SEGMENTS, old=None, within=None, conflict_step=CONFLICT_STEP_M):
     """An option as solids (Solids): `design` worked out (a scheme.Design, on a site's drawn ground for the solids to
-    be exact), `walls` its walls levelled (Design.wall_levels) and `existing_walls` the site's (domus.walls dicts)."""
-    garden = design.garden
-    origin = np.floor(np.asarray(garden.bounds[:2], float))
-    g0, g1, g2, g3 = garden.bounds
+    be exact), `walls` its walls levelled (Design.wall_levels) and `existing_walls` the site's (domus.walls dicts).
+    `old` gives the existing walls instead, each as (its id, scheme.wall_body's (plan, line, chain, toe)), and
+    `within` a box (E0, N0, E1, N1) to work out only what's in it (option_window), and `conflict_step` the grid where
+    batters disagree (_cut_wins)."""
+    origin = np.floor(np.asarray(design.garden.bounds[:2], float))
+    g0, g1, g2, g3 = design.garden.bounds
+    if within is not None:
+        g0, g1, g2, g3 = max(g0, within[0]), max(g1, within[1]), min(g2, within[2]), min(g3, within[3])
     window = (g0 - MARGIN_M, g1 - MARGIN_M, g2 + MARGIN_M, g3 + MARGIN_M)
     V, F = ground_triangles(design.existing, window)
     V = np.column_stack([np.asarray(V, float)[:, :2] - origin, np.asarray(V, float)[:, 2]])
     # Below and above everything: the ground, the terraces, and the batters' cones, which reach BATTER_REACH_M / batter
     # below and above their terrace's levels.
+    pieces = getattr(design, "free_pieces", None)       # each terrace's free edge as straight pieces
+    if pieces is None:
+        pieces = [list(_pieces(free)) for free in design.free]
     corners = [t.z(*np.asarray(t.poly.exterior.coords)[:, :2].T) for t in design.terraces]
-    deep = [0.0 if free.is_empty else BATTER_REACH_M / t.batter for t, free in zip(design.terraces, design.free, strict=True)]
+    deep = [BATTER_REACH_M / t.batter if own else 0.0 for t, own in zip(design.terraces, pieces, strict=True)]
     zb = float(np.floor(min([np.nanmin(V[F, 2]), *(np.min(z) - d for z, d in zip(corners, deep, strict=True))]))) - 3.0
     top = float(np.ceil(max([np.nanmax(V[F, 2]), *(np.max(z) + d for z, d in zip(corners, deep, strict=True))]))) + 5.0
     win = section(box(*window), origin)
     ground = close_surface(V, F, zb) ^ prism(win, zb - 1.0, top + 1.0)
-    area = section(garden, origin)
+    area = section(design.garden, origin)
+    if within is not None:
+        area = area ^ section(box(*within), origin)
 
     def tall(cs):
         """A plan, through everything."""
@@ -384,8 +557,9 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
     # The soil before: the ground, but at its toe inside an existing wall, the lowest where two meet. Only the walls
     # that come near the regrade area matter.
     near = box(*window)
-    old = [(w, wall_body(w, design.existing)) for w in existing_walls]
-    old = [(w, b) for w, b in old if b[0].intersects(near)]
+    if old is None:
+        old = [(w["id"], wall_body(w, design.existing)) for w in existing_walls]
+    old = [(i, b) for i, b in old if b[0].intersects(near)]
     before = ground
     if old:
         plans = [section(b[0], origin) for _, b in old]
@@ -411,8 +585,8 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
         named.extend([("fill", part, fill[-1]), ("cut", part, cut[-1])])
 
     # The walls, new and kept: the soil is at the wall's toe, the lowest where two meet.
-    kept = [b for w, b in old if w["id"] in design.keep_existing]
-    gone = [section(b[0], origin) for w, b in old if w["id"] not in design.keep_existing]
+    kept = [b for i, b in old if i in design.keep_existing]
+    gone = [section(b[0], origin) for i, b in old if i not in design.keep_existing]
     gone = mf.CrossSection.batch_boolean(gone, mf.OpType.Add) if gone else mf.CrossSection()
     bodies = []                                                  # (plan, below the toe, above it, a new wall's)
     for body, new in [(wall_body(w), True) for w in walls] + [(b, False) for b in kept]:
@@ -459,9 +633,9 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
     # The batters run on below the bottom of `box_all` and above its top, so what's above or below them in it is
     # only what's above the raise's surface or below the cut's.
     fills, cuts = [], []
-    for t, free in zip(design.terraces, design.free, strict=True):
-        if not free.is_empty:
-            raise_t, cut_t = _batter(t, free, origin, zb + 0.25, top + 2.5, segments)
+    for t, own in zip(design.terraces, pieces, strict=True):
+        if own:
+            raise_t, cut_t = _batter(t, own, origin, zb + 0.25, top + 2.5, segments)
             fills.append(raise_t)
             cuts.append(cut_t)
     designed = []
@@ -474,7 +648,7 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
         lowered = outline(ground ^ cut_to) ^ rest
         both = up ^ lowered
         if not both.is_empty():     # raised by one batter and cut by another: the larger change wins, as in Design
-            cut_wins = _cut_wins(both, design, origin)
+            cut_wins = _cut_wins(both, design, origin, conflict_step)
             up = up - cut_wins
         down = lowered - up
         soil(up - walled, raise_to, box_all - raise_to, "batters raise")
@@ -496,16 +670,14 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
         blocked = mf.CrossSection.batch_boolean([section(body_plan(w), origin) for w in walls]
                                                 + [b[0] for b in bodies if not b[3]], mf.OpType.Add)
         done = mf.CrossSection()
-        for i, (plan, _, _, _, depth) in sealed:
-            w = walls[i]
+        for i, (plan, line, chain, level, depth) in sealed:
             region = ((section(plan, origin) ^ area) - blocked) - done
             done = done + region
             if region.is_empty():
                 continue
-            pts, chain = resample_line(np.asarray(w["line"], float)[:, :2], WALL_STEP_M)
-            back = offset_behind(pts[:, :2], w["depth"], w["side"]) - origin
-            deep = offset_behind(pts[:, :2], w["trench"], w["side"]) - origin
-            above = strip(*_widened(back, deep, 2 * EDGE_M), top + 1.0, np.interp(chain, w["toe_chain"], trench_bottom(w)))
+            # above the trench's bottom, at each point the bottom at the nearest point of the wall's line, as
+            # scheme.soil_moved reads it
+            above = _toe_columns((plan, line, chain, level), origin, zb + 1.0, top + 1.0, segments)[1]
             for own, below in soils:
                 if (own ^ region).is_empty():
                     continue
@@ -521,8 +693,8 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
 
 
 def _batter(t, free, origin, low, high, segments):
-    """Terrace `t`'s batters from its free edge `free`, as two solids: all they raise the ground to (on down to `low`)
-    and all they cut away (on up to `high`), out to BATTER_REACH_M.
+    """Terrace `t`'s batters from its free edge (`free`, its straight pieces), as two solids: all they raise the ground
+    to (on down to `low`) and all they cut away (on up to `high`), out to BATTER_REACH_M.
 
     Design raises a point to the terrace's level at the nearest point of the free edge, less the distance over the
     batter, and cuts it to that level plus the distance. Where the level is the same all along the edge, the nearest
@@ -532,11 +704,12 @@ def _batter(t, free, origin, low, high, segments):
     whichever end is nearest."""
     pieces = _straight(t, free)
     ends = np.array([[p, q] for p, q in pieces]) - origin
-    z = [tuple(float(v) for v in t.z(np.array([p[0], q[0]]), np.array([p[1], q[1]]))) for p, q in pieces]
-    if t.plane is not None and not np.any(t.plane[2]):         # level: the nearest point gives the most
+    if _is_level(t):                                            # level: the nearest point gives the most
+        z = [(_level_of(t), _level_of(t))] * len(pieces)
         hulls = [(cone_hull(a, za, b, zb, t.batter, low, segments, False), cone_hull(a, za, b, zb, t.batter, high, segments, True))
                  for (a, b), (za, zb) in zip(ends, z, strict=True)]
         return union([h[0] for h in hulls]), union([h[1] for h in hulls])
+    z = [tuple(float(v) for v in t.z(np.array([p[0], q[0]]), np.array([p[1], q[1]]))) for p, q in pieces]
     bottom, roof = min(low, high) - 1.0, max(low, high) + 1.0
     raised, cut = [], []
     for (a, b), (za, zb), cell in zip(ends, z, _nearest_cells(ends, segments), strict=True):
@@ -568,10 +741,10 @@ def _region(corners):
 
 
 def _straight(t, free):
-    """The straight pieces of a terrace's free edge, cut where its level bends: a terrace with its own level at each
-    corner is linear on each triangle between them."""
-    pieces = list(_pieces(free))
-    if t.plane is not None:
+    """The straight pieces of a terrace's free edge (`free`, straight pieces), cut again where its level bends: a
+    terrace with its own level at each corner is linear on each triangle between them."""
+    pieces = list(free)
+    if t.plane is not None or _is_level(t):
         return pieces
     tri = t._lin.tri
     edges = shapely.MultiLineString([tri.points[[i, j]] for s in tri.simplices for i, j in ((s[0], s[1]), (s[1], s[2]), (s[2], s[0]))])
@@ -663,6 +836,8 @@ def _terrace_columns(t, plan_cs, origin, zb, top, paving):
     if t.plane is not None:
         level, at, grad = t.plane
         return split_by_plane(col, (at[0] - origin[0], at[1] - origin[1], level - paving), -np.asarray(grad, float))
+    if _is_level(t):                                    # its own level at each corner, the same at every one
+        return split_by_plane(col, (0.0, 0.0, _level_of(t) - paving), (0.0, 0.0))
     # Its own level at each corner, linear between them on the triangles Domus interpolates on (where four corners
     # lie on a circle there's a choice of diagonal: take the interpolator's).
     corners = np.asarray(t._lin.tri.points, float) - origin
@@ -685,19 +860,6 @@ def _stair_columns(st, origin, zb, top):
     level = (a[0], a[1], (left + right) / 2 - 0.03)
     below = split_by_plane(col, ramp, rise)[0] + split_by_plane(col, level, side * (left - right) / st.width)[0]
     return below, col - below
-
-
-def _widened(face, back, by):
-    """A strip's face and back moved `by` apart, and on past its ends: a solid that reaches past its plan."""
-    face, back = face.copy(), back.copy()
-    across = back - face
-    length = np.maximum(np.hypot(*across.T), 1e-12)[:, None]
-    face, back = face - across / length * by, back + across / length * by
-    for line in (face, back):
-        for k, j in ((0, 1), (-1, -2)):
-            t = line[k] - line[j]
-            line[k] = line[k] + t / max(float(np.hypot(*t)), 1e-12) * by
-    return face, back
 
 
 def _wall_solid(w, ground, origin):

@@ -1,0 +1,383 @@
+{
+ "about": "Sketches on the made-up demo (domus demo), as the viewer sends them: corners `en` on the demo's grid, and any `defaults` laid over the model's (how its walls are built). tests/test_sketch_preview.py works each out as the viewer's preview does, with app/viewer/sketch-core.js in node and domus.options.preview in Python, and holds the two to each other and to the build's own rule. A sketch with \"preview\": \"not yet\" has what the preview doesn't draw yet, and must say so.",
+ "sketches": [
+  {
+   "name": "a-straight-wall",
+   "about": "a wall with level ground behind it",
+   "items": [
+    {
+     "id": 1,
+     "kind": "wall",
+     "name": "Wall 1",
+     "material": "timber",
+     "mode": "level",
+     "en": [
+      [
+       1500004.0,
+       5500020.0
+      ],
+      [
+       1500014.0,
+       5500020.0
+      ]
+     ],
+     "tops": [
+      42.3,
+      42.3
+     ],
+     "top": 42.3,
+     "retains": "right",
+     "back": 3.0
+    }
+   ]
+  },
+  {
+   "name": "a-wall-round-a-corner",
+   "about": "a wall of two legs, the ground behind it level",
+   "items": [
+    {
+     "id": 1,
+     "kind": "wall",
+     "name": "Wall 1",
+     "material": "timber",
+     "mode": "level",
+     "en": [
+      [
+       1500004.0,
+       5500020.0
+      ],
+      [
+       1500014.0,
+       5500020.0
+      ],
+      [
+       1500016.5,
+       5500018.2
+      ]
+     ],
+     "tops": [
+      42.3,
+      42.3,
+      42.3
+     ],
+     "top": 42.3,
+     "retains": "right",
+     "back": 3.0
+    }
+   ]
+  },
+  {
+   "name": "across-the-old-wall",
+   "about": "a wall across the old one, which stays",
+   "items": [
+    {
+     "id": 1,
+     "kind": "wall",
+     "name": "Wall 1",
+     "material": "timber",
+     "mode": "level",
+     "en": [
+      [
+       1500008.0,
+       5500026.0
+      ],
+      [
+       1500008.0,
+       5500019.5
+      ]
+     ],
+     "tops": [
+      42.0,
+      42.0
+     ],
+     "top": 42.0,
+     "retains": "left",
+     "back": 3.0
+    }
+   ]
+  },
+  {
+   "name": "a-lawn-and-a-path",
+   "about": "a raised lawn and a sunken path whose batters meet",
+   "items": [
+    {
+     "id": 1,
+     "kind": "area",
+     "name": "Area 1",
+     "area": "lawn",
+     "level": 42.6,
+     "fall": "flat",
+     "fall_to": "north",
+     "en": [
+      [
+       1500002.0,
+       5500016.0
+      ],
+      [
+       1500009.0,
+       5500016.0
+      ],
+      [
+       1500009.0,
+       5500019.0
+      ],
+      [
+       1500002.0,
+       5500019.0
+      ]
+     ]
+    },
+    {
+     "id": 2,
+     "kind": "area",
+     "name": "Area 2",
+     "area": "path",
+     "level": 41.0,
+     "fall": "flat",
+     "fall_to": "north",
+     "en": [
+      [
+       1500011.0,
+       5500017.0
+      ],
+      [
+       1500016.0,
+       5500017.0
+      ],
+      [
+       1500016.0,
+       5500019.5
+      ],
+      [
+       1500011.0,
+       5500019.5
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a-free-standing-wall",
+   "about": "a wall a height above the ground, holding nothing",
+   "items": [
+    {
+     "id": 1,
+     "kind": "wall",
+     "name": "Wall 1",
+     "material": "block",
+     "mode": "height",
+     "height": 0.6,
+     "height_above_ground": 0.6,
+     "en": [
+      [
+       1500003.0,
+       5500024.0
+      ],
+      [
+       1500012.0,
+       5500025.0
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "two-walls-and-a-lawn",
+   "about": "two walls holding level ground, and a lawn between them",
+   "items": [
+    {
+     "id": 1,
+     "kind": "wall",
+     "name": "Wall 1",
+     "material": "timber",
+     "mode": "level",
+     "en": [
+      [
+       1500003.0,
+       5500021.0
+      ],
+      [
+       1500009.0,
+       5500021.0
+      ]
+     ],
+     "tops": [
+      42.2,
+      42.2
+     ],
+     "top": 42.2,
+     "retains": "right",
+     "back": 3.0
+    },
+    {
+     "id": 2,
+     "kind": "wall",
+     "name": "Wall 2",
+     "material": "timber",
+     "mode": "level",
+     "en": [
+      [
+       1500012.0,
+       5500026.0
+      ],
+      [
+       1500018.0,
+       5500026.0
+      ]
+     ],
+     "tops": [
+      41.3,
+      41.3
+     ],
+     "top": 41.3,
+     "retains": "left",
+     "back": 2.5
+    },
+    {
+     "id": 3,
+     "kind": "area",
+     "name": "Area 3",
+     "area": "lawn",
+     "level": 41.6,
+     "fall": "flat",
+     "fall_to": "north",
+     "en": [
+      [
+       1500010.0,
+       5500021.0
+      ],
+      [
+       1500014.0,
+       5500021.0
+      ],
+      [
+       1500014.0,
+       5500024.0
+      ],
+      [
+       1500010.0,
+       5500024.0
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a-built-wall",
+   "about": "a wall built in a trench, sunk below its toe on bedding and a base, with drainage aggregate behind it under a seal of soil (how a wall is built, in its options' defaults)",
+   "defaults": {
+    "depth_m": 0.3,
+    "embed_m": 0.1,
+    "embed_per_m": 0.1,
+    "bedding_m": 0.05,
+    "base_m": 0.1,
+    "trench_m": 0.7,
+    "seal_m": 0.25
+   },
+   "items": [
+    {
+     "id": 1,
+     "kind": "wall",
+     "name": "Wall 1",
+     "material": "timber",
+     "mode": "level",
+     "en": [
+      [
+       1500004.0,
+       5500020.0
+      ],
+      [
+       1500014.0,
+       5500020.0
+      ]
+     ],
+     "tops": [
+      42.3,
+      42.3
+     ],
+     "top": 42.3,
+     "retains": "right",
+     "back": 3.0
+    }
+   ]
+  },
+  {
+   "name": "a-built-wall-round-a-corner",
+   "about": "the same, round a corner",
+   "defaults": {
+    "depth_m": 0.3,
+    "embed_m": 0.1,
+    "embed_per_m": 0.1,
+    "bedding_m": 0.05,
+    "base_m": 0.1,
+    "trench_m": 0.7,
+    "seal_m": 0.25
+   },
+   "items": [
+    {
+     "id": 1,
+     "kind": "wall",
+     "name": "Wall 1",
+     "material": "timber",
+     "mode": "level",
+     "en": [
+      [
+       1500004.0,
+       5500020.0
+      ],
+      [
+       1500014.0,
+       5500020.0
+      ],
+      [
+       1500016.5,
+       5500018.2
+      ]
+     ],
+     "tops": [
+      42.3,
+      42.3,
+      42.3
+     ],
+     "top": 42.3,
+     "retains": "right",
+     "back": 3.0
+    }
+   ]
+  },
+  {
+   "name": "an-area-that-falls",
+   "about": "a lawn falling 1 in 50 to the north",
+   "preview": "not yet",
+   "items": [
+    {
+     "id": 1,
+     "kind": "area",
+     "name": "Area 1",
+     "area": "lawn",
+     "level": 42.4,
+     "fall": "1:50",
+     "fall_to": "north",
+     "en": [
+      [
+       1500003.0,
+       5500016.0
+      ],
+      [
+       1500009.0,
+       5500016.0
+      ],
+      [
+       1500009.0,
+       5500019.0
+      ],
+      [
+       1500003.0,
+       5500019.0
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}

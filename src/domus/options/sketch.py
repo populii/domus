@@ -68,7 +68,12 @@ def area_terrace(it):
 
 def to_option(site, items, name="Sketch"):
     """The option a sketch on the site makes. Existing walls stay, since a sketch doesn't say otherwise."""
-    upstand = design.settings(site)["defaults"]["upstand_m"]
+    return sketched(items, design.settings(site)["defaults"]["upstand_m"], [w["id"] for w in design.existing_walls(site)], name)
+
+
+def sketched(items, upstand, existing_ids=(), name="Sketch"):
+    """The option a sketch makes, its walls holding their ground `upstand` below their tops: to_option's, from what
+    it takes of the site, the options' upstand and the existing walls' ids, all of which it keeps."""
     walls, terraces = [], []
     for it in items:
         if it.get("kind") == "wall" and len(it.get("en", [])) >= 2:
@@ -79,7 +84,7 @@ def to_option(site, items, name="Sketch"):
         elif it.get("kind") == "area" and len(it.get("en", [])) >= 3:
             terraces.append(area_terrace(it))
     return {"id": "sketch", "name": name, "short": name, "description": "From a sketch in the viewer.", "steps": 0,
-            "walls": walls, "terraces": terraces, "keep_existing": [w["id"] for w in design.existing_walls(site)]}
+            "walls": walls, "terraces": terraces, "keep_existing": list(existing_ids)}
 
 
 def _toml_value(v):
