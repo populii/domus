@@ -12,7 +12,6 @@ only if two or more pairs put points in it, at the mean of those points. Writes 
 site coordinates on the site's grid and height datum, rgb, number of pairs per cell).
 """
 
-import argparse
 import json
 import time
 
@@ -76,14 +75,11 @@ def stereo_pair(img_a, img_b, k, dist, ra, ta, rb, tb, scale, z_near, z_far):
     return pts_a, a[v, u][:, ::-1]
 
 
-def main(site):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("tag")
-    ap.add_argument("--every", type=int, default=2)
-    ap.add_argument("--scale", type=float, default=0.5)
-    args = ap.parse_args()
-    rec = load(video_dir(site) / f"{args.tag}-sfm.npz")
-    params = np.array(json.loads((video_dir(site) / f"{args.tag}-georef.json").read_text(encoding="utf-8"))["params"])
+def dense(site, tag, every=2, scale=0.5):
+    """`domus video dense`: a dense cloud from placed reconstruction `tag`, by stereo on pairs of every `every`-th
+    frame scaled by `scale`, as data/video/<tag>-dense.npz; the module's docstring says how. Gives that file."""
+    rec = load(video_dir(site) / f"{tag}-sfm.npz")
+    params = np.array(json.loads((video_dir(site) / f"{tag}-georef.json").read_text(encoding="utf-8"))["params"])
     s_site = float(np.exp(params[0]))
     f, k1, cx, cy = rec["intr"]
     k = np.array([[f, 0, cx], [0, f, cy], [0, 0, 1]])
@@ -103,7 +99,7 @@ def main(site):
             near[i], median[i] = float(np.percentile(z[vis], 3)), float(np.median(z[vis]))
     cell = 0.04
     parts = []          # per pair: its cells, and the sums of position and colour in each
-    for i in reg[::args.every]:
+    for i in reg[::every]:
         if i not in median:
             continue
         best = None
@@ -123,10 +119,10 @@ def main(site):
         if best is None:
             continue
         j = best[1]
-        img_a = cv2.imread(str(frame_path(site, args.tag, names[i])))
-        img_b = cv2.imread(str(frame_path(site, args.tag, names[j])))
+        img_a = cv2.imread(str(frame_path(site, tag, names[i])))
+        img_b = cv2.imread(str(frame_path(site, tag, names[j])))
         pts, cols = stereo_pair(img_a, img_b, k, dist, rots[i], rec["tvecs"][i], rots[j], rec["tvecs"][j],
-                                args.scale, 0.7 * near[i], 4 * median[i])
+                                scale, 0.7 * near[i], 4 * median[i])
         on_site = apply(params, (pts - rec["tvecs"][i]) @ rots[i])     # camera a -> model -> site
         keys, inv = np.unique(np.floor(on_site / cell).astype(np.int64), axis=0, return_inverse=True)
         inv = inv.ravel()
@@ -147,12 +143,8 @@ def main(site):
     keep = n_pairs >= 2
     xyz_out = pos[keep] / n_pts[keep, None]
     rgb_out = (col[keep] / n_pts[keep, None]).clip(0, 255).astype(np.uint8)
-    np.savez_compressed(video_dir(site) / f"{args.tag}-dense.npz", xyz=xyz_out, rgb=rgb_out, pairs=n_pairs[keep])
-    log(f"wrote {args.tag}-dense.npz: {keep.sum()} of {len(uniq)} {cell * 100:.0f} cm cells seen by 2+ "
+    out = video_dir(site) / f"{tag}-dense.npz"
+    np.savez_compressed(out, xyz=xyz_out, rgb=rgb_out, pairs=n_pairs[keep])
+    log(f"wrote {tag}-dense.npz: {keep.sum()} of {len(uniq)} {cell * 100:.0f} cm cells seen by 2+ "
         f"of {len(parts)} pairs")
-
-
-if __name__ == "__main__":
-    from ..project.site import started
-
-    main(started())       # run by itself, on the site the environment names
+    return out

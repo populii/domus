@@ -24,7 +24,7 @@ setting, comes as a DomusError whose message says what.
 import copy
 import os
 import re
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
 
 from .errors import DomusError
@@ -357,15 +357,221 @@ class Site:
 
         return sketch.to_toml(sketch.to_option(self._project, items, name))
 
-    @contextmanager
     def _writing(self):
-        """Around something that writes the site's files: what Domus has read of them is forgotten after, so the next
-        to ask reads them as they are."""
-        try:
+        return _writes(self._project)
+
+    @property
+    def video(self):
+        """The site's video steps, as `domus video <step>` runs them (Video, provisional)."""
+        return Video(self._project)
+
+
+class Video:
+    """A site's video steps, as `domus video <step>` runs them (docs/video.md): from its videos to point clouds on its
+    grid. `site.video` gives them.
+
+    **Provisional**, as PEP 411 means it: public and documented, but a step may change from one release to the next
+    without a deprecation until the steps are declared stable. Each step prints what it does as it goes, and `say`
+    gets each line (print unless given). Paths are taken as the command takes them, from the current folder (but
+    `auto`'s video, which is in the site's folder unless it's a full path). `sheet`, `crop` and `picks_edit` work on
+    the files they're given, whichever site they're asked through."""
+
+    def __init__(self, project):
+        self._project = project
+
+    def __repr__(self):
+        return f"Video({str(self._project.path)!r})"
+
+    def auto(self, video, say=print):
+        """From a scan to the model, with no hand work, as domus video auto does: the video's frames, a reconstruction,
+        and with the phone's AR positions beside it (<clip>-poses.json), the cloud on the site's grid and a build."""
+        from .capture import auto
+
+        with _saying(say), _writes(self._project):
+            auto.run(self._project, video)
+
+    def frames(self, video, fps=6.0, say=print):
+        """The sharpest frame of each 1/`fps` seconds of `video`, in sources/raw/frames6/<clip>/, as domus video frames
+        writes them. Returns that folder."""
+        from .capture import extract_frames
+
+        with _saying(say), _writes(self._project):
+            return extract_frames.extract(self._project, video, fps)
+
+    def reconstruct(self, clip, step=1, extra=(), extra_step=3, focal=1100.0, tag="", threads=8, overlap=12, retrieve=5,
+                    max_features=8192, first_octave=0, mapper="global", min_matches=30, seed=0, fresh=False, say=print):
+        """Reconstructs a clip's frames with COLMAP, as domus video reconstruct does: every `step`-th, and every
+        `extra_step`-th of the `extra` clips (a list), into data/video/<tag>-sfm.npz (<clip>-colmap unless given). The
+        other arguments are the command's options of the same names."""
+        from .capture import colmap_sfm
+
+        with _saying(say), _writes(self._project):
+            colmap_sfm.reconstruct(self._project, clip, step, extra, extra_step, focal, tag, threads, overlap, retrieve,
+                                   max_features, first_octave, mapper, min_matches, seed, fresh)
+
+    def reconstruct_chain(self, clip, step=1, window=6, focal=1100.0, k1=0.0, fix_intrinsics=False, extra=(), extra_step=3,
+                          range_="", tag="", loops=True, loop_candidates=12, workers=None, say=print):
+        """Reconstructs a clip with the built-in chain of views, as domus video reconstruct-chain does. `range_` is
+        its --range, "first:last" frame of the clip; `loops` False is --no-loops; `workers` is all but four of the
+        machine's processors unless given. The other arguments are the command's options of the same names."""
+        from .capture import video_sfm
+
+        with _saying(say), _writes(self._project):
+            video_sfm.reconstruct(self._project, clip, step, window, focal, k1, fix_intrinsics, extra, extra_step, range_, tag,
+                                  loops, loop_candidates, workers)
+
+    def two_lens(self, clip, work_tag, t_main, t_wide, f_main, f_wide, stage="all", mapper="global", threads=8,
+                 min_matches=30, every=None, keep=None, ranges=None, name="", model=None, as_=None, say=print):
+        """Maps a clip filmed on two lenses again, with a camera for each, from the workspace `domus video reconstruct`
+        left in data/video/cache/colmap/<work_tag>, as domus video two-lens does. `as_` is its --as; the other
+        arguments are the command's of the same names."""
+        from .capture import two_lens
+
+        with _saying(say), _writes(self._project):
+            two_lens.map_lenses(self._project, clip, work_tag, t_main, t_wide, f_main, f_wide, stage, mapper, threads,
+                                min_matches, every, keep, ranges, name, model, as_)
+
+    def merge(self, clip, tag_a, tag_b, out=None, say=print):
+        """Joins reconstructions `tag_a` and `tag_b` of `clip`, which share frames, in `tag_a`'s frame, as domus video
+        merge does, into data/video/<out>-sfm.npz (<clip>-joined unless given)."""
+        from .capture import merge_sfm
+
+        with _saying(say), _writes(self._project):
+            merge_sfm.merge(self._project, clip, tag_a, tag_b, out)
+
+    def split(self, tag, new, t0, t1, say=print):
+        """Cuts the frames from `t0` to `t1` seconds out of reconstruction `tag` as one of their own, `new`, as domus
+        video split does. Returns its summary."""
+        from .capture import split_sfm
+
+        with _saying(say), _writes(self._project):
+            return split_sfm.split(self._project, tag, new, t0, t1)
+
+    def link(self, tag_a, tag_b, say=print):
+        """What carries reconstruction `tag_b` into `tag_a`'s frame, from matching their frames, as domus video link
+        does: data/video/<tag_b>-to-<tag_a>.json. Returns it, or None when too few points match."""
+        from .capture import link_sfm
+
+        with _saying(say), _writes(self._project):
+            return link_sfm.link(self._project, tag_a, tag_b)
+
+    def link_picks(self, tag_a, picks_a, tag_b, picks_b, say=print):
+        """The same as link, from the points with the same id in the picks files `picks_a` and `picks_b`, as domus
+        video link-picks does. Returns it, or None with fewer than three shared points."""
+        from .capture import link_picks
+
+        with _saying(say), _writes(self._project):
+            return link_picks.link(self._project, tag_a, picks_a, tag_b, picks_b)
+
+    def place(self, tag, via=None, say=print):
+        """Places reconstruction `tag` on the site's grid, as domus video place does: by its control file, or `via` a
+        placed reconstruction it's linked to. Writes data/video/<tag>-georef.json and <tag>-site.npz, and returns what
+        the -georef.json holds."""
+        from .capture import georef_sfm
+
+        with _saying(say), _writes(self._project):
+            return georef_sfm.place(self._project, tag, via)
+
+    def pick(self, picks, tags=(), say=print):
+        """Puts the points marked in the picks file `picks` on the site's grid, as domus video pick does, each with
+        the first of the placed reconstructions `tags` that registered two of its frames. Returns the CSV it wrote."""
+        from .capture import triangulate_picks
+
+        with _saying(say), _writes(self._project):
+            return triangulate_picks.pick(self._project, picks, tags)
+
+    def dense(self, tag, every=2, scale=0.5, say=print):
+        """A dense point cloud from placed reconstruction `tag`, as domus video dense does: stereo on pairs of every
+        `every`-th frame, scaled by `scale`. Returns the file it wrote, data/video/<tag>-dense.npz."""
+        from .capture import dense_sfm
+
+        with _saying(say), _writes(self._project):
+            return dense_sfm.dense(self._project, tag, every, scale)
+
+    def export(self, say=print):
+        """Combines the clouds `[video] clouds` lists, and the LiDAR scans, into data/video/points.npz for the build,
+        as domus video export does."""
+        from .capture import export_cloud
+
+        with _saying(say), _writes(self._project):
+            export_cloud.export(self._project)
+
+    def plot(self, tags, out="", say=print):
+        """Placed reconstructions `tags` in plan over the aerial, for checking, as domus video plot does. Returns the
+        picture, data/video/checks/<out>-plan.jpg (the first tag unless `out` is given)."""
+        from .capture import plot_video_cloud
+
+        with _saying(say):
+            return plot_video_cloud.plot(self._project, list(tags), out)
+
+    def sheet(self, frames, prefix, t0, t1, step, cols=6, width=480, rows=3, registered=None, say=print):
+        """Contact sheets of the frames in the folder `frames` from `t0` to `t1` seconds, at least `step` seconds
+        apart, as domus video sheet makes them: <prefix>-1.jpg and on. Returns [(file, width, height, first frame,
+        last frame)]."""
+        from .capture import sheet
+
+        with _saying(say):
+            return sheet.make(frames, prefix, t0, t1, step, cols, width, rows, registered)
+
+    def crop(self, photo, out, side, box, zoom=1.0, rotate=0.0, say=print):
+        """A piece of `photo` at full size, as domus video crop cuts it: `box` (X0, Y0, X1, Y1) read on a copy with a
+        long side of `side` pixels, turned `rotate` degrees anticlockwise and scaled by `zoom`, into `out`. Returns its
+        size and the box it took from the full-size photo."""
+        from .capture import crop
+
+        with _saying(say):
+            return crop.piece(photo, out, side, box, zoom, rotate)
+
+    def picks_edit(self, picks, edits, say=print):
+        """Adds, moves or drops marks in the picks file `picks`, as `edits` (a dict, or a JSON file holding one) says,
+        as domus video picks-edit does, keeping the old file beside it. Returns that backup."""
+        from .capture import picks_edit
+
+        with _saying(say):
+            return picks_edit.edit(picks, edits)
+
+
+class _Lines:
+    """What's printed, a line at a time, to `say`."""
+
+    def __init__(self, say):
+        self.say, self.part = say, ""
+
+    def write(self, text):
+        self.part += text
+        *lines, self.part = self.part.split("\n")
+        for line in lines:
+            self.say(line)
+        return len(text)
+
+    def flush(self):
+        pass
+
+
+@contextmanager
+def _saying(say):
+    """While a step runs, what it prints goes to `say`, a line at a time; print leaves it as it is."""
+    if say is print:
+        yield
+        return
+    lines = _Lines(say)
+    try:
+        with redirect_stdout(lines):
             yield
-        finally:
-            self._project.forget_settings()
-            self._project.cache.clear()
+    finally:
+        if lines.part:
+            say(lines.part)
+
+
+@contextmanager
+def _writes(project):
+    """Around something that writes a site's files: what Domus has read of them is forgotten after, so the next to
+    ask reads them as they are."""
+    try:
+        yield
+    finally:
+        project.forget_settings()
+        project.cache.clear()
 
 
 def _spec(spec):

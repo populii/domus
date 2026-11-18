@@ -7,7 +7,6 @@ looked at it), turned the way its EXIF says. The piece is cut from the photo at 
 anticlockwise and scaled by --zoom.
 """
 
-import argparse
 
 from PIL import Image, ImageOps
 
@@ -26,15 +25,10 @@ def crop(src, out, side, box, zoom=1.0, rotate=0.0):
     return c.size, full
 
 
-def main():
-    ap = argparse.ArgumentParser(prog="domus video crop", description=__doc__.split("\n\n")[0])
-    ap.add_argument("photo")
-    ap.add_argument("out")
-    ap.add_argument("side", type=float, help="the long side, in pixels, of the copy the corners were read on")
-    ap.add_argument("box", type=float, nargs=4, metavar=("X0", "Y0", "X1", "Y1"))
-    ap.add_argument("--zoom", type=float, default=1.0)
-    ap.add_argument("--rotate", type=float, default=0.0, help="degrees anticlockwise")
-    args = ap.parse_args()
-    size, full = crop(args.photo, args.out, args.side, args.box, args.zoom, args.rotate)
-    print(args.out, size, "full-res box", full)
-    return 0
+def piece(photo, out, side, box, zoom=1.0, rotate=0.0):
+    """`domus video crop`: the piece of `photo` whose corners `box` (X0, Y0, X1, Y1) were read on a copy with a
+    long side of `side` pixels, cut at full size, turned `rotate` degrees anticlockwise and scaled by `zoom`, as
+    `out`. Gives its size and the box it took from the full-size photo."""
+    size, full = crop(photo, out, side, box, zoom, rotate)
+    print(out, size, "full-res box", full)
+    return size, full

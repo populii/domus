@@ -11,7 +11,6 @@ squares on those. Writes data/video/<second>-to-<first>.json, which
 `domus video place <second> --via <first>` reads.
 """
 
-import argparse
 import itertools
 import json
 from pathlib import Path
@@ -43,20 +42,16 @@ def triangulated(site, tag, picks_path):
     return out
 
 
-def main(site):
-    ap = argparse.ArgumentParser(prog="domus video link-picks", description=__doc__.split("\n\n")[0])
-    ap.add_argument("a_tag", metavar="TAG_A", help="the reconstruction whose frame the other is carried into")
-    ap.add_argument("a_picks", metavar="PICKS_A", help="points marked in its clip's frames, a picks file")
-    ap.add_argument("b_tag", metavar="TAG_B", help="the reconstruction carried into it")
-    ap.add_argument("b_picks", metavar="PICKS_B", help="the same points marked in its clip's frames")
-    args = ap.parse_args()
-    a_tag, a_picks, b_tag, b_picks = args.a_tag, args.a_picks, args.b_tag, args.b_picks
+def link(site, a_tag, a_picks, b_tag, b_picks):
+    """`domus video link-picks`: the similarity that carries reconstruction `b_tag` into `a_tag`'s frame, from the
+    points with the same id in the picks files `a_picks` and `b_picks`, as data/video/<b_tag>-to-<a_tag>.json.
+    Gives it, or None with fewer than three shared points."""
     pa, pb = triangulated(site, a_tag, a_picks), triangulated(site, b_tag, b_picks)
     ids = sorted(pa.keys() & pb.keys())
     print(f"{len(ids)} shared features: {ids}")
     if len(ids) < 3:
         print("need at least three shared features")
-        return
+        return None
     A = np.array([pa[i] for i in ids])
     B = np.array([pb[i] for i in ids])
     tol = 0.05 * np.median(np.linalg.norm(A - A.mean(0), axis=1))
@@ -82,9 +77,4 @@ def main(site):
            "median_error": float(np.median(err[inl])), "method": "shared marked points"}
     (video_dir(site) / f"{b_tag}-to-{a_tag}.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in out.items() if k != "params"}))
-
-
-if __name__ == "__main__":
-    from ..project.site import started
-
-    main(started())       # run by itself, on the site the environment names
+    return out

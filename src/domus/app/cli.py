@@ -24,8 +24,8 @@ named by --site or the DOMUS_SITE environment variable. The command line reads w
 that Site (domus.project.site) to the command.
 
 A command is a call to the public API (domus.api): this module reads the arguments, makes the call, and prints what
-the call doesn't say itself. A step of `video` or `prep`, and `serve`, reads its own arguments. Every command and
-step prints its usage with --help, and does nothing else.
+the call doesn't say itself; domus.app.video does the same for the video steps. A step of `prep`, and `serve`, reads
+its own arguments. Every command and step prints its usage with --help, and does nothing else.
 """
 
 import argparse
@@ -46,7 +46,8 @@ def choose_site(path):
 def parser():
     """The command line: every command and step, each with its own --help. One that's `handed` on takes what follows
     it as it is, and reads it itself."""
-    from .. import capture, prep, shots
+    from .. import prep, shots
+    from . import video
 
     ap = argparse.ArgumentParser(prog="domus", description="3D site models for comparing retaining wall options.")
     ap.add_argument("--version", action="version", version=__version__)
@@ -105,11 +106,9 @@ def parser():
                                       "as the viewer shows it (default: the site as it is)")
     sub.add_argument("--format", choices=["glb", "ifc"], help="the format, if the path's suffix doesn't say it")
 
-    sub = command(commands, "video", _video, "Site videos into 3D point clouds on the site's grid. See docs/video.md.",
+    sub = command(commands, "video", video.listed, "Site videos into 3D point clouds on the site's grid. See docs/video.md.",
                   "turn site videos into point clouds")
-    steps = sub.add_subparsers(dest="step", metavar="step")
-    for name, (_, what) in capture.STEPS.items():
-        command(steps, name, _video, f"{what}.", what, handed=True)
+    video.add(sub.add_subparsers(dest="video_step", metavar="step"), command)
 
     sub = command(commands, "scan", _scan, "Bring in a phone LiDAR scan as a point cloud.", "bring in a phone LiDAR scan")
     sub.add_argument("file")
@@ -279,13 +278,6 @@ def _edit(args, site, named):
         s.regrade(args.clouds.split(","), args.spec, args.backup, args.apply)
     else:
         getattr(s, args.action)(args.spec, args.backup, args.apply)
-
-
-def _video(args, site, named):
-    """`domus video [STEP ARGS]`: the step, which reads its own arguments and is handed the site (domus.capture)."""
-    from .. import capture
-
-    return capture.main(site, [args.step, *args.rest] if args.step else [])
 
 
 def _prep(args, site, named):

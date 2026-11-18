@@ -8,7 +8,6 @@ Marks are kept in time order. The file is written to a temporary file, read back
 old one, and the old one is kept beside it as PICKS.json.bak-<n>.
 """
 
-import argparse
 import json
 import os
 import shutil
@@ -62,13 +61,12 @@ def write(path, data, raw):
     return backup
 
 
-def main():
-    ap = argparse.ArgumentParser(prog="domus video picks-edit", description=__doc__.split("\n\n")[0])
-    ap.add_argument("picks", help="the picks file, data/video/picks/<clip>.json")
-    ap.add_argument("edits", help="what to change: a JSON file of feature id: {desc, set, drop}")
-    args = ap.parse_args()
-    raw = Path(args.picks).read_text(encoding="utf-8")
-    data = apply(json.loads(raw), json.loads(Path(args.edits).read_text(encoding="utf-8")))
-    backup = write(args.picks, data, raw)
+def edit(picks, edits):
+    """`domus video picks-edit`: the marks in the picks file `picks` added, moved or dropped as `edits` says (a
+    dict, or a JSON file holding one), the old file kept beside it as <picks>.bak-<n>. Gives that backup."""
+    raw = Path(picks).read_text(encoding="utf-8")
+    edits = edits if isinstance(edits, dict) else json.loads(Path(edits).read_text(encoding="utf-8"))
+    data = apply(json.loads(raw), edits)
+    backup = write(picks, data, raw)
     print(f"written: {', '.join(f'{f['id']} {len(f['obs'])}' for f in data['features'])}; backup {backup}")
-    return 0
+    return backup

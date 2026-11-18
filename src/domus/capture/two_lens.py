@@ -25,12 +25,12 @@ a camera for each lens. The stages, all of them unless --stage names some:
             domus.sfm.project and must give the median error COLMAP's own camera model gives.
 """
 
-import argparse
 import json
 import shutil
 import sqlite3
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -51,27 +51,13 @@ def stamp(name):
     return float(Path(name).stem[1:])
 
 
-def main(site):
-    ap = argparse.ArgumentParser(prog="domus video two-lens", description=__doc__.split("\n\n")[0])
-    ap.add_argument("clip")
-    ap.add_argument("work_tag", help="the reconstruction's workspace, data/video/cache/colmap/<WORK_TAG>")
-    ap.add_argument("t_main", type=float, help="the last second on the main camera")
-    ap.add_argument("t_wide", type=float, help="the first second on the wide one")
-    ap.add_argument("f_main", type=float, help="the main camera's focal length, in pixels")
-    ap.add_argument("f_wide", type=float, help="the wide camera's")
-    ap.add_argument("--stage", default="all", help="some of copy, cameras, verify, map, convert (default all)")
-    ap.add_argument("--mapper", choices=("global", "incremental"), default="global")
-    ap.add_argument("--threads", type=int, default=8)
-    ap.add_argument("--min-matches", type=int, default=30)
-    ap.add_argument("--every", type=int, help="map only every N-th frame, and those in --keep")
-    ap.add_argument("--keep", help="a file of frame names to map whatever --every says, one a line")
-    ap.add_argument("--ranges", help="map only the frames in these stretches of seconds: 0-240,470-575")
-    ap.add_argument("--name", default="", help="a name for a mapping of part of the clip: its own folder and tags")
-    ap.add_argument("--model", help="convert this model rather than the largest")
-    ap.add_argument("--as", dest="as_", help="the name the converted model's files take, with --model")
-    args = ap.parse_args()
-    run(site, args)
-    return 0
+def map_lenses(site, clip, work_tag, t_main, t_wide, f_main, f_wide, stage="all", mapper="global", threads=8,
+               min_matches=30, every=None, keep=None, ranges=None, name="", model=None, as_=None):
+    """`domus video two-lens`: the clip mapped again from `work_tag`'s workspace with a camera for each lens; the
+    module's docstring says how, and what each argument does."""
+    run(site, SimpleNamespace(clip=clip, work_tag=work_tag, t_main=t_main, t_wide=t_wide, f_main=f_main, f_wide=f_wide,
+                              stage=stage, mapper=mapper, threads=threads, min_matches=min_matches, every=every,
+                              keep=keep, ranges=ranges, name=name, model=model, as_=as_))
 
 
 def run(site, args):

@@ -10,7 +10,6 @@ second) is enough. Features and matching run in --workers processes; finding the
 walk revisits uses a global descriptor per frame, so it grows only gently with clip length.
 """
 
-import argparse
 import json
 import os
 import time
@@ -63,71 +62,57 @@ def choose_initial_pair(rec, matches, lo=4, hi=15, want=300, exclude=()):
     return best
 
 
-def main(site):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("clip")
-    ap.add_argument("--step", type=int, default=1, help="use every n-th frame")
-    ap.add_argument("--window", type=int, default=6, help="match each frame with the next n")
-    ap.add_argument("--focal", type=float, default=1100.0)
-    ap.add_argument("--k1", type=float, default=0.0)
-    ap.add_argument("--fix-intrinsics", action="store_true",
-                    help="keep --focal and --k1 (from a well-conditioned clip) instead of refining them")
-    ap.add_argument("--extra", default="", help="comma-separated clips whose frames are added to the map")
-    ap.add_argument("--extra-step", type=int, default=3, help="use every n-th frame of the extra clips")
-    ap.add_argument("--range", default="", help="first:last frame index of the main clip to use")
-    ap.add_argument("--tag", default="", help="output name (default: the clip, plus the range if given)")
-    ap.add_argument("--no-loops", dest="loops", action="store_false",
-                    help="skip the search for frames that revisit a place")
-    ap.add_argument("--loop-candidates", type=int, default=12,
-                    help="most similar frames outside the window to match for each frame (on clip "
-                         "VIDEO, 12 leave 1 of the old exhaustive search's 246 revisit pairs "
-                         "without a found pair within 2 frames; 5 leave 9)")
-    ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 4),
-                    help="processes for features and matching")
-    args = ap.parse_args()
+def reconstruct(site, clip, step=1, window=6, focal=1100.0, k1=0.0, fix_intrinsics=False, extra=(), extra_step=3, range_="",
+                tag="", loops=True, loop_candidates=12, workers=None):
+    """`domus video reconstruct-chain`: the clip reconstructed with the built-in chain of views, as
+    data/video/<tag>-sfm.npz and .ply (and <tag>-m2 and on); the module's docstring says how. `range_` is
+    "first:last", the main clip's frames to use; the tag is the clip, and the range, unless given. `workers` is
+    the processes for features and matching, all but four of the machine's unless given."""
+    workers = workers or max(1, (os.cpu_count() or 2) - 4)
+    extra = [c for c in extra if c]
 
-    src = site.path / "sources" / "raw" / "frames6" / args.clip
-    paths = sorted(src.glob("*.jpg"))[::args.step]
+    src = site.path / "sources" / "raw" / "frames6" / clip
+    paths = sorted(src.glob("*.jpg"))[::step]
     log(f"{len(paths)} frames from {src.relative_to(site.path)}")
     cache = site.path / "data" / "video" / "cache"
     cache.mkdir(parents=True, exist_ok=True)
-    cfile = cache / f"{args.clip}-step{args.step}-w{args.window}.npz"
+    cfile = cache / f"{clip}-step{step}-w{window}.npz"
     if cfile.exists():
         c = safe_npz.load(cfile)
         frames = [sfm.Frame(n, k, d, col) for n, k, d, col in zip(c["names"], c["kps"], c["des"], c["cols"])]
         matches = c["matches"].item()
         log(f"loaded features and matches from {cfile.name}")
     else:
-        frames = sfm.load_features(paths, workers=args.workers)
+        frames = sfm.load_features(paths, workers=workers)
         matches = None
     log(f"features: median {int(np.median([len(f.keypoints) for f in frames]))} per frame")
     h, w = cv2.imread(str(paths[0])).shape[:2]
-    rec = sfm.Reconstruction(frames, f=args.focal, k1=args.k1, cx=w / 2, cy=h / 2)
+    rec = sfm.Reconstruction(frames, f=focal, k1=k1, cx=w / 2, cy=h / 2)
 
     if matches is None:
-        matches = compute_matches(frames, args.window, args.workers, cache)
+        matches = compute_matches(frames, window, workers, cache)
         np.savez(cfile, names=np.array([f.name for f in frames]),
                  kps=np.array([f.keypoints for f in frames], dtype=object),
                  des=np.array([f.descriptors for f in frames], dtype=object),
                  cols=np.array([f.colours for f in frames], dtype=object),
                  matches=np.array(matches, dtype=object))
-    tag = args.clip
-    if args.range:
-        a, b = (int(v) for v in args.range.split(":"))
+    name = clip
+    if range_:
+        a, b = (int(v) for v in range_.split(":"))
         frames = frames[a:b + 1]
         matches = {(i - a, j - a): m for (i, j), m in matches.items() if a <= i <= b and a <= j <= b}
         rec.frames = frames
-        tag = f"{args.clip}-{a}-{b}"
-    args.tag = args.tag or tag
+        name = f"{clip}-{a}-{b}"
+    tag = tag or name
     n_main = len(frames)
-    for clip in [c for c in args.extra.split(",") if c]:
-        add_extra_clip(site, frames, matches, clip, args.extra_step, n_main, cache)
-    if args.loops:
-        key = "+".join([args.clip, *[c for c in args.extra.split(",") if c]])
-        matches.update(loop_matches(frames, matches, args.window, cache / f"{key}-step{args.step}-loops.npz",
-                                    args.loop_candidates, args.workers))
+    for other in extra:
+        add_extra_clip(site, frames, matches, other, extra_step, n_main, cache)
+    if loops:
+        key = "+".join([clip, *extra])
+        matches.update(loop_matches(frames, matches, window, cache / f"{key}-step{step}-loops.npz",
+                                    loop_candidates, workers))
     rec.tracks = sfm.build_tracks(len(frames), matches)
-    _continue_after_tracks(site, rec, frames, matches, args, n_main)
+    _continue_after_tracks(site, rec, frames, matches, fix_intrinsics, tag, n_main)
 
 
 def loop_matches(frames, matches, window, cfile, candidates=12, workers=1):
@@ -205,7 +190,7 @@ def compute_matches(frames, window, workers=1, scratch=None):
     return matches
 
 
-def _continue_after_tracks(site, rec, frames, matches, args, n_main):
+def _continue_after_tracks(site, rec, frames, matches, fix_intrinsics, base_tag, n_main):
     lens = np.array([len(t) for t in rec.tracks])
     log(f"{len(rec.tracks)} tracks, median length {np.median(lens):.0f}, >=3 views: {(lens >= 3).sum()}")
     out = site.path / "data" / "video"
@@ -234,17 +219,11 @@ def _continue_after_tracks(site, rec, frames, matches, args, n_main):
             continue
         log(f"model {part}: global bundle adjustment of {len(regs)} frames")
         for it in range(3):
-            rms = sfm.bundle_adjust(rec, fix_frames=[i0], refine_intrinsics=not args.fix_intrinsics, max_nfev=80)
+            rms = sfm.bundle_adjust(rec, fix_frames=[i0], refine_intrinsics=not fix_intrinsics, max_nfev=80)
             dropped = sfm.prune(rec, max_reproj=2.5)
             log(f"  pass {it + 1}: median err {rms:.2f}px, f={rec.f:.1f}, k1={rec.k1:.4f}, dropped {dropped}")
-        tag = args.tag if part == 1 else f"{args.tag}-m{part}"
+        tag = base_tag if part == 1 else f"{base_tag}-m{part}"
         log(json.dumps(sfm.save(rec, out, tag, rms)))
         used |= regs
         if len(frames) - len(used) < 8:
             break
-
-
-if __name__ == "__main__":
-    from ..project.site import started
-
-    main(started())       # run by itself, on the site the environment names

@@ -9,16 +9,15 @@ something like a metre, and check it against the model. `domus video place` with
 without AR positions stops after the reconstruction, since nothing says where it is.
 """
 
-import argparse
 import json
 import re
-import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 from scipy.spatial.transform import Rotation
 
+from ..errors import DomusError
 from ..model import terrain
 from .sfm_georef import apply, fit_similarity, load
 
@@ -32,16 +31,6 @@ EYE_HEIGHT_M = 1.4
 WARN_RESIDUAL_M = 1.0
 MAX_GROUND_SHIFT_M = 4.0
 MAIN_LENS = 0.76     # a phone's main camera: focal length in pixels over the image's width
-
-
-def step(site, module, *args):
-    """A step's own main on the site, as if run by itself."""
-    argv = sys.argv
-    try:
-        sys.argv = [module.__name__, *map(str, args)]
-        module.main(site)
-    finally:
-        sys.argv = argv
 
 
 def camera_centres(rec):
@@ -101,30 +90,29 @@ def missing_clouds(site, cfg):
     return [t for t in cfg.get("video", {}).get("clouds", []) if not (video_dir(site) / f"{t}.npz").exists()]
 
 
-def main(site):
+def run(site, video):
+    """`domus video auto`: a scan's video, from its frames to the model, with no hand work. `video` is the
+    video file, in the site's folder unless it's a full path."""
     from . import colmap_sfm, export_cloud, extract_frames
 
-    ap = argparse.ArgumentParser(prog="domus video auto", description="From a scan to the model, with no hand work.")
-    ap.add_argument("video")
-    args = ap.parse_args()
-    video = Path(args.video)
+    video = Path(video)
     if not video.is_absolute():
         video = site.path / video
     if not video.exists():
-        raise SystemExit(f"No such video: {video}")
+        raise DomusError(f"No such video: {video}")
     clip = video.stem
     poses_file = video.with_name(f"{clip}-poses.json")
     poses = json.loads(poses_file.read_text(encoding="utf-8")) if poses_file.exists() else None
 
     print("Pulling out the frames", flush=True)
-    step(site, extract_frames, video)
+    extract_frames.extract(site, video)
     first = next(iter(sorted((site.path / "sources" / "raw" / "frames6" / clip).glob("*.jpg"))), None)
     if first is None:
-        raise SystemExit("No frames came out of that video.")
+        raise DomusError("No frames came out of that video.")
     width = Image.open(first).size[0]
     focal = (poses or {}).get("focal_px") or MAIN_LENS * width
     print(f"Reconstructing, from a focal length of {focal:.0f} px. This is the slow part.", flush=True)
-    step(site, colmap_sfm, clip, "--focal", f"{focal:.1f}", "--tag", clip)
+    colmap_sfm.reconstruct(site, clip, focal=float(f"{focal:.1f}"), tag=clip)
     if not poses or not poses.get("frames"):
         print("Reconstructed. This scan has no AR positions, so nothing says where it is: place it with `domus video place`, "
               "as docs/video.md explains.")
@@ -161,7 +149,7 @@ def main(site):
               "rebuilt. Run `domus video export` and `domus build` where they are.")
         return
     print("Adding it to the model", flush=True)
-    step(site, export_cloud)
+    export_cloud.export(site)
     from .. import build
 
     site.forget_settings()

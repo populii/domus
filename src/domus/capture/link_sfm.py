@@ -10,7 +10,6 @@ a 3D-3D correspondence. A similarity is fitted to those by RANSAC, then least sq
 inliers, and written to data/video/<second>-to-<first>.json.
 """
 
-import argparse
 import json
 from collections import Counter
 
@@ -56,12 +55,9 @@ def load_model(site, tag):
     return d, frames
 
 
-def main(site):
-    ap = argparse.ArgumentParser(prog="domus video link", description=__doc__.split("\n\n")[0])
-    ap.add_argument("a_tag", metavar="TAG_A", help="the reconstruction whose frame the other is carried into")
-    ap.add_argument("b_tag", metavar="TAG_B", help="the reconstruction carried into it")
-    args = ap.parse_args()
-    a_tag, b_tag = args.a_tag, args.b_tag
+def link(site, a_tag, b_tag):
+    """`domus video link`: the similarity that carries reconstruction `b_tag` into `a_tag`'s frame, from matching
+    their frames, as data/video/<b_tag>-to-<a_tag>.json. Gives it, or None when too few points match."""
     a, fa = load_model(site, a_tag)
     b, fb = load_model(site, b_tag)
     print(f"{a_tag}: {len(fa)} registered frames; {b_tag}: {len(fb)}", flush=True)
@@ -93,7 +89,7 @@ def main(site):
     print(f"{pair_count} frame pairs, {len(pairs)} distinct 3D-3D correspondences")
     if len(pairs) < 10:
         print("too few correspondences to link the models")
-        return
+        return None
     pa, pb = a["xyz"][pairs[:, 0]], b["xyz"][pairs[:, 1]]
     tol = 0.03 * np.median(np.linalg.norm(pa - np.median(pa, 0), axis=1))
     rng = np.random.default_rng(0)
@@ -117,9 +113,4 @@ def main(site):
            "median_error": float(np.median(err[inl])), "frame_pairs": pair_count}
     (video_dir(site) / f"{b_tag}-to-{a_tag}.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(out))
-
-
-if __name__ == "__main__":
-    from ..project.site import started
-
-    main(started())       # run by itself, on the site the environment names
+    return out

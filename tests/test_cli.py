@@ -68,12 +68,30 @@ def test_a_command_without_a_site_says_so(words, nowhere, capsys):
     assert not list(nowhere.iterdir())
 
 
-def test_a_step_takes_what_follows_it_as_it_is(nowhere, monkeypatch):
-    from domus import capture
+def test_the_server_takes_what_follows_it_as_it_is(nowhere, monkeypatch):
+    from domus.app import serve
 
     handed = []
-    monkeypatch.setattr(capture, "main", lambda site, argv: handed.append(argv) or 0)
-    assert run(["video", "place", "--tag", "x", "walk", "--via", "other"]) == 0
-    assert run(["video"]) == 0
-    assert handed == [["place", "--tag", "x", "walk", "--via", "other"], []]
+    monkeypatch.setattr(serve, "main", lambda argv: handed.append(argv))
+    assert run(["serve", "--port", "9", "--host", "127.0.0.2"]) is None
+    assert handed == [["--port", "9", "--host", "127.0.0.2"]]
     assert run(["build", "--fresh", "--frsh"]) == 2      # a command's own arguments are the command line's to check
+
+
+def test_video_with_no_step_lists_them(nowhere, capsys):
+    assert run(["video"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("usage: domus video <step> [args]") and "  place              Place a reconstruction" in out
+
+
+def test_a_video_step_reads_its_arguments_and_calls_the_api(nowhere, monkeypatch):
+    from domus import api
+
+    asked = []
+    monkeypatch.setattr(api.Video, "place", lambda self, tag, via=None, say=print: asked.append((tag, via)))
+    monkeypatch.setattr(api.Video, "reconstruct", lambda self, clip, **kw: asked.append((clip, kw["extra"], kw["step"])))
+    (nowhere / "data").mkdir()
+    (nowhere / "data" / "site.toml").write_text("", encoding="utf-8")
+    assert run(["video", "place", "walk", "--via", "other"]) is None
+    assert run(["video", "reconstruct", "walk", "--extra", "a,b", "--step", "2"]) is None
+    assert asked == [("walk", "other"), ("walk", ["a", "b"], 2)]

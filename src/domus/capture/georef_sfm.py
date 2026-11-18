@@ -59,7 +59,6 @@ Writes data/video/<tag>-georef.json (transform and residuals) and data/video/<ta
 (points on the site's grid and heights, with colours, and the cameras).
 """
 
-import argparse
 import json
 import math
 
@@ -550,12 +549,10 @@ def eaves_height(house):
     return house["roof_plane_at_wall"] if above is None else house["fl_upper"] + above
 
 
-def main(site):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("tag")
-    ap.add_argument("--via", help="a placed model this one is linked to (tools/link_sfm.py), instead of control")
-    args = ap.parse_args()
-    tag = args.tag
+def place(site, tag, via=None):
+    """`domus video place`: reconstruction `tag` on the site's grid, by its control file or, `via` a placed
+    reconstruction it's linked to, by that one's placement; the module's docstring says how. Writes
+    data/video/<tag>-georef.json and <tag>-site.npz, and gives what the -georef.json holds."""
     rec = load(video_dir(site) / f"{tag}-sfm.npz")
     house = site.settings()["house"]
     eaves = eaves_height(house)
@@ -568,7 +565,7 @@ def main(site):
 
     pin, held, res0 = None, {}, {}
     control_path = video_dir(site) / f"{tag}-control.json"
-    if not args.via:
+    if not via:
         control = json.loads(control_path.read_text(encoding="utf-8"))
     else:      # a linked model takes only the vertical from a control file of its own
         control = {k: v for k, v in json.loads(control_path.read_text(encoding="utf-8")).items() if k == "plumb"} \
@@ -578,11 +575,11 @@ def main(site):
     anchors = {c["name"]: cps[c["name"]] for c in control.get("anchors", []) if c["name"] in cps}
     plumb = measure_plumb(site, rec, tag, control["plumb"]) if control.get("plumb") else None
     hold_plumb = plumb is not None and not plumb["check"]
-    if args.via:
-        link = json.loads((video_dir(site) / f"{tag}-to-{args.via}.json").read_text(encoding="utf-8"))
-        base = json.loads((video_dir(site) / f"{args.via}-georef.json").read_text(encoding="utf-8"))
+    if via:
+        link = json.loads((video_dir(site) / f"{tag}-to-{via}.json").read_text(encoding="utf-8"))
+        base = json.loads((video_dir(site) / f"{via}-georef.json").read_text(encoding="utf-8"))
         p0 = compose(np.array(base["params"]), np.array(link["params"]))
-        print(f"via {args.via}: {link['inliers']} linking points, median error {link['median_error']:.4f}")
+        print(f"via {via}: {link['inliers']} linking points, median error {link['median_error']:.4f}")
     elif control.get("anchor"):
         a_local, a_site, _ = cps[control["anchor"]]
         foot, top = control["up"] if control.get("up") else (control["anchor"], control["vertical"])
@@ -759,9 +756,4 @@ def main(site):
               f"less); the start was {plumb['start_tilt_deg']:.2f}")
     (video_dir(site) / f"{tag}-georef.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in out.items() if k not in ("params",)}))
-
-
-if __name__ == "__main__":
-    from ..project.site import started
-
-    main(started())       # run by itself, on the site the environment names
+    return out

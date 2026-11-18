@@ -88,6 +88,21 @@ Each function that does what a command does takes `say`, which gets each line th
 fetch, draft and build in a process of their own, which prints its own, and a few notices from deeper in Domus, such
 as a house part a build can't draw, are printed as they were.
 
+## Provisional: the video steps
+
+`site.video` runs the steps of `domus video` ([video.md](video.md)): `site.video.place("walk-colmap")` places a
+reconstruction as `domus video place walk-colmap` does. They're **provisional**, as
+[PEP 411](https://peps.python.org/pep-0411/) means it: public and documented, but a step may change from one release
+to the next without a deprecation until they're declared stable. The promise above doesn't cover them yet.
+
+Each step is a method named after it: `auto`, `frames`, `reconstruct`, `reconstruct_chain`, `two_lens`, `merge`,
+`split`, `link`, `link_picks`, `place`, `pick`, `dense`, `export`, `plot`, `sheet`, `crop` and `picks_edit`. Its
+arguments are the command's, named after its options, such as `site.video.reconstruct("walk", extra=["walk-2"],
+focal=650)`: a list stands for a comma-separated option, `range_` and `as_` for `--range` and `--as`, and
+`loops=False` for `--no-loops`. Each takes `say`, which gets the lines the step prints. Paths are as the command takes
+them, from the current folder (but `auto`'s video, which is in the site's folder unless it's a full path), and `sheet`,
+`crop` and `picks_edit` work on the files they're given.
+
 ## Helpers
 
 | | What it does |

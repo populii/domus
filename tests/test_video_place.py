@@ -8,7 +8,6 @@ roof_plane_at_wall; a site that gives roof_at_wall_above_fl has its own.
 """
 
 import json
-import sys
 
 import numpy as np
 import pytest
@@ -97,8 +96,7 @@ def test_placing_takes_the_eaves_from_the_roof_unless_the_site_gives_them(tmp_pa
         return classify(site_pts, planes, dem_z, at, tol)
 
     monkeypatch.setattr(georef_sfm, "classify", watch)
-    monkeypatch.setattr(sys, "argv", ["domus video place", "made-up-walk"])
-    georef_sfm.main(site)
+    georef_sfm.place(site, "made-up-walk")
     want = house["roof_plane_at_wall"] if above is None else house["fl_upper"] + above
     assert len(eaves) == 4 and eaves == [pytest.approx(want)] * 4
     got = json.loads((video / "made-up-walk-georef.json").read_text(encoding="utf-8"))

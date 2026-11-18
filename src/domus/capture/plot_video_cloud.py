@@ -7,7 +7,6 @@ colour, each model's camera path in its own colour, the title boundary in yellow
 house outline in red, with a 5 m grid labelled in grid metres.
 """
 
-import argparse
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -19,11 +18,9 @@ MARGIN_M = 5.0     # shown beyond the boundary on each side
 PATH_COLOURS = [(255, 0, 255), (0, 220, 255), (255, 140, 0), (120, 255, 0), (255, 255, 255), (0, 90, 255)]
 
 
-def main(site):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("tags", nargs="+")
-    ap.add_argument("--out", default="")
-    args = ap.parse_args()
+def plot(site, tags, out=""):
+    """`domus video plot`: placed reconstructions `tags` in plan over the aerial, as
+    data/video/checks/<out>-plan.jpg (the first tag unless `out` is given). Gives that file."""
     ring = geojson.read(site.path / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0]
     e0, n0 = min(q[0] for q in ring) - MARGIN_M, min(q[1] for q in ring) - MARGIN_M
     e1, n1 = max(q[0] for q in ring) + MARGIN_M, max(q[1] for q in ring) + MARGIN_M
@@ -44,7 +41,7 @@ def main(site):
     for k in range(int(n0), int(n1) + 1, 5):
         dr.line([p(e0, k), p(e1, k)], fill=(150, 150, 150), width=1)
         dr.text((2, p(e0, k)[1] + 2), str(k)[-3:], fill=(0, 0, 0))
-    for tag in args.tags:
+    for tag in tags:
         d = np.load(site.path / "data" / "video" / f"{tag}-site.npz")
         xyz, rgb = d["xyz"], d["rgb"]
         inside = (xyz[:, 0] > e0) & (xyz[:, 0] < e1) & (xyz[:, 1] > n0) & (xyz[:, 1] < n1) & (d["nview"] >= 3)
@@ -53,20 +50,15 @@ def main(site):
     dr.line([p(*q[:2]) for q in ring], fill=(255, 220, 0), width=2)
     house = geojson.read(site.path / "data" / "site" / "house.geojson")["features"][0]["geometry"]["coordinates"][0]
     dr.line([p(*q[:2]) for q in house], fill=(230, 30, 30), width=2)
-    for k, tag in enumerate(args.tags):
+    for k, tag in enumerate(tags):
         cams = np.load(site.path / "data" / "video" / f"{tag}-site.npz")["cameras"]
         colour = PATH_COLOURS[k % len(PATH_COLOURS)]
         dr.line([p(c[0], c[1]) for c in cams], fill=colour, width=2)
         x, y = p(cams[0][0], cams[0][1])
         dr.text((x + 4, y), tag, fill=colour)
-    out = site.path / "data" / "video" / "checks"
-    out.mkdir(exist_ok=True)
-    name = args.out or args.tags[0]
-    img.save(out / f"{name}-plan.jpg", quality=88)
-    print(f"wrote {out / f'{name}-plan.jpg'}")
-
-
-if __name__ == "__main__":
-    from ..project.site import started
-
-    main(started())       # run by itself, on the site the environment names
+    checks = site.path / "data" / "video" / "checks"
+    checks.mkdir(exist_ok=True)
+    name = out or tags[0]
+    img.save(checks / f"{name}-plan.jpg", quality=88)
+    print(f"wrote {checks / f'{name}-plan.jpg'}")
+    return checks / f"{name}-plan.jpg"

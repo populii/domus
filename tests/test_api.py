@@ -16,7 +16,7 @@ from domus.errors import DomusError
 PUBLIC = {"DomusError", "Site", "clip", "create", "demo", "fit_affine", "linz_query", "new", "open_site", "resample_line"}
 SITE_METHODS = {"build", "check", "edit", "evaluate", "export", "fetch", "fetch_marks", "fetch_points", "fetch_title", "frame",
                 "grid", "ground", "house_walls", "layer", "lot", "map_canopy", "options", "output", "path", "regrade", "scan",
-                "settings", "shift", "shots", "title", "trust", "upgrade"}
+                "settings", "shift", "shots", "title", "trust", "upgrade", "video"}
 
 
 def test_the_promised_names_are_all_there():
@@ -178,6 +178,22 @@ def test_the_commands_are_the_apis_own(tmp_path):
         demo.shots(tmp_path / "shots.json", timeout=0)
     with pytest.raises(DomusError, match="There's no"):
         demo.shift(tmp_path / "nothing.json", tmp_path / "backup")
+
+
+def test_the_video_steps_are_the_sites_and_say_what_they_print(site, tmp_path):
+    from PIL import Image
+
+    frames = tmp_path / "frames"
+    frames.mkdir()
+    for t in (0.0, 1.0, 2.0):
+        Image.new("RGB", (64, 48), (90, 120, 150)).save(frames / f"t{t:07.3f}.jpg")
+    said = []
+    video = api.open_site(site).video
+    written = video.sheet(frames, str(tmp_path / "sheet"), 0, 2, 1, cols=2, width=32, rows=1, say=said.append)
+    assert [w[0] for w in written] == [str(tmp_path / "sheet-1.jpg"), str(tmp_path / "sheet-2.jpg")]
+    assert said == [f"{out} {w} x {h} {first} .. {last}" for out, w, h, first, last in written]
+    size, box = video.crop(frames / "t000.000.jpg", tmp_path / "piece.jpg", 64, (8, 8, 24, 16), say=said.append)
+    assert size == (16, 8) and said[-1] == f"{tmp_path / 'piece.jpg'} (16, 8) full-res box {box}"
 
 
 def test_the_helpers(monkeypatch):

@@ -10,7 +10,6 @@ go to site coordinates (the site's grid and height datum) with that model's plac
 Writes data/video/picks/<name>-site.csv.
 """
 
-import argparse
 import csv
 import json
 import math
@@ -42,13 +41,12 @@ def reproject(rec, x, obs):
     return np.array(errs), math.degrees(math.acos(max(-1.0, min(1.0, cosmin))))
 
 
-def main(site):
-    ap = argparse.ArgumentParser(prog="domus video pick", description=__doc__.split("\n\n")[0])
-    ap.add_argument("picks", help="the picks file, data/video/picks/NAME.json")
-    ap.add_argument("tags", metavar="TAG", nargs="*", help="the placed reconstructions to triangulate with, first first")
-    args = ap.parse_args()
-    picks_path = Path(args.picks)
-    tags = args.tags
+def pick(site, picks, tags=()):
+    """`domus video pick`: the points marked in the picks file `picks`, each triangulated with the first of the
+    placed reconstructions `tags` that registered two of its frames, onto the site's grid, as <picks>-site.csv.
+    Gives that file."""
+    picks_path = Path(picks)
+    tags = list(tags)
     picks = json.loads(picks_path.read_text(encoding="utf-8"))
     models = []
     for tag in tags:
@@ -101,9 +99,4 @@ def main(site):
         for r in rows:
             w.writerow({k: r.get(k, "") for k in fields})
     print(f"wrote {out.relative_to(site.path)}")
-
-
-if __name__ == "__main__":
-    from ..project.site import started
-
-    main(started())       # run by itself, on the site the environment names
+    return out

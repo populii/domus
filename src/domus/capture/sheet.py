@@ -8,7 +8,6 @@ placed. Each sheet holds --cols by --rows frames, each --width pixels wide, and 
 OUT_PREFIX-2.jpg and so on.
 """
 
-import argparse
 from pathlib import Path
 
 import cv2
@@ -55,26 +54,20 @@ def sheets(src, prefix, chosen, cols=6, width=480, rows=3):
     return written
 
 
-def main():
-    ap = argparse.ArgumentParser(prog="domus video sheet", description=__doc__.split("\n\n")[0])
-    ap.add_argument("frames", help="the clip's frames folder (t<seconds>.jpg)")
-    ap.add_argument("prefix", help="the sheets' names: PREFIX-1.jpg, PREFIX-2.jpg, ...")
-    ap.add_argument("t0", type=float, help="from this many seconds into the clip")
-    ap.add_argument("t1", type=float, help="to this many")
-    ap.add_argument("step", type=float, help="seconds between the frames taken")
-    ap.add_argument("--cols", type=int, default=6)
-    ap.add_argument("--width", type=int, default=480, help="each frame's width on the sheet, in pixels")
-    ap.add_argument("--rows", type=int, default=3)
-    ap.add_argument("--registered", help="a reconstruction (<tag>-sfm.npz): only the frames it placed")
-    args = ap.parse_args()
-    src = Path(args.frames)
+def make(frames, prefix, t0, t1, step, cols=6, width=480, rows=3, registered=None):
+    """`domus video sheet`: contact sheets of the frames in the folder `frames` from `t0` to `t1` seconds, one at
+    least every `step` seconds (only those reconstruction `registered`, a <tag>-sfm.npz, placed, if it's given),
+    `cols` by `rows` to a sheet, each `width` pixels wide, as <prefix>-1.jpg and on. Gives
+    [(file, width, height, first frame, last frame)]."""
+    src = Path(frames)
     if not src.is_dir():
         raise DomusError(f"{src} isn't a folder of frames")
-    registered = None
-    if args.registered:
-        with np.load(args.registered, allow_pickle=False) as d:
-            registered = {str(n) for n, r in zip(d["frame_names"], d["rvecs"], strict=True) if np.isfinite(r).all()}
-    chosen = pick([p.stem for p in src.glob("t*.jpg")], args.t0, args.t1, args.step, registered)
-    for out, w, h, first, last in sheets(src, args.prefix, chosen, args.cols, args.width, args.rows):
+    placed = None
+    if registered:
+        with np.load(registered, allow_pickle=False) as d:
+            placed = {str(n) for n, r in zip(d["frame_names"], d["rvecs"], strict=True) if np.isfinite(r).all()}
+    chosen = pick([p.stem for p in src.glob("t*.jpg")], t0, t1, step, placed)
+    written = sheets(src, prefix, chosen, cols, width, rows)
+    for out, w, h, first, last in written:
         print(out, w, "x", h, first, "..", last)
-    return 0
+    return written

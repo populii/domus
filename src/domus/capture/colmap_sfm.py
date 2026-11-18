@@ -38,7 +38,6 @@ re-run with the same frames, focal and matching settings keeps the database's fe
 matches, so trying the other mapper costs only the mapping; --fresh starts over.
 """
 
-import argparse
 import json
 import shutil
 import time
@@ -352,61 +351,38 @@ def run_mapper(site, kind, db, sparse, threads, seed, min_matches):
     return pycolmap.incremental_mapping(db, frames_dir(site), sparse, opts)
 
 
-# --------------------------------------------------------------------------- main
+# --------------------------------------------------------------------------- the step
 
-def main(site):
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("clip")
-    ap.add_argument("--step", type=int, default=1, help="use every n-th frame")
-    ap.add_argument("--extra", default="", help="comma-separated clips whose frames are added")
-    ap.add_argument("--extra-step", type=int, default=3, help="use every n-th frame of the extra clips")
-    ap.add_argument("--focal", type=float, default=1100.0,
-                    help="start focal length, px: about 1100 main camera, 630-650 wide lens at 1440 x 1080")
-    ap.add_argument("--tag", default="", help="output name (default <clip>-colmap)")
-    ap.add_argument("--threads", type=int, default=8)
-    ap.add_argument("--overlap", type=int, default=12,
-                    help="sequential matching: the next n frames, then the frames 2^k on")
-    ap.add_argument("--retrieve", type=int, default=5,
-                    help="revisit pairs per frame from image retrieval (0: none)")
-    ap.add_argument("--max-features", type=int, default=8192,
-                    help="SIFT features per frame at most (COLMAP may give one two orientations)")
-    ap.add_argument("--first-octave", type=int, default=0,
-                    help="0: features from the frame as it is (2900-6300 per 1440 x 1080 frame); -1 "
-                         "(COLMAP's own default) also from the frame doubled in size: more points, "
-                         "about three times the time (--max-features 4096 then keeps about 6800)")
-    ap.add_argument("--mapper", choices=["global", "incremental"], default="global")
-    ap.add_argument("--min-matches", type=int, default=30,
-                    help="mapping uses only frame pairs with this many verified matches (video_sfm.py "
-                         "also needs 30; with COLMAP's own 15 the global mapper joined clip VIDEO "
-                         "to VIDEO by pairs of 15-23 matches, and two runs put it 2.5 m apart)")
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--fresh", action="store_true", help="rebuild the database from scratch")
-    args = ap.parse_args()
-    tag = args.tag or f"{args.clip}-colmap"
-    extra = [c for c in args.extra.split(",") if c]
-    images, names = frame_list(site, args.clip, args.step, extra, args.extra_step)
+def reconstruct(site, clip, step=1, extra=(), extra_step=3, focal=1100.0, tag="", threads=8, overlap=12, retrieve=5,
+                max_features=8192, first_octave=0, mapper="global", min_matches=30, seed=0, fresh=False):
+    """`domus video reconstruct`: the clip's frames (every `step`-th, and every `extra_step`-th of the `extra` clips)
+    reconstructed with COLMAP, as data/video/<tag>-sfm.npz, .ply and .json (and <tag>-m2 and on for further models);
+    the module's docstring says how. The tag is <clip>-colmap unless given."""
+    tag = tag or f"{clip}-colmap"
+    extra = [c for c in extra if c]
+    images, names = frame_list(site, clip, step, extra, extra_step)
     sizes = set()
     for im in images:
         with Image.open(frames_dir(site) / im) as pic:
             sizes.add(pic.size)
     if len(sizes) > 1:
-        raise SystemExit(f"frames differ in size {sizes}: one shared camera needs one size")
+        raise DomusError(f"frames differ in size {sizes}: one shared camera needs one size")
     w, h = sizes.pop()
-    log(f"{len(images)} frames ({args.clip} every {args.step}"
-        + (f", {','.join(extra)} every {args.extra_step}" if extra else "") + f"), {w} x {h}")
+    log(f"{len(images)} frames ({clip} every {step}"
+        + (f", {','.join(extra)} every {extra_step}" if extra else "") + f"), {w} x {h}")
     work = site.path / "data" / "video" / "cache" / "colmap" / tag
-    settings = {"images": images, "focal": args.focal, "max_features": args.max_features,
-                "first_octave": args.first_octave, "overlap": args.overlap, "quadratic_steps": QUADRATIC_STEPS,
-                "retrieve": args.retrieve}
-    db = prepare_workspace(site, work, settings, args.fresh)
+    settings = {"images": images, "focal": focal, "max_features": max_features,
+                "first_octave": first_octave, "overlap": overlap, "quadratic_steps": QUADRATIC_STEPS,
+                "retrieve": retrieve}
+    db = prepare_workspace(site, work, settings, fresh)
     times = {}
 
     with stage("features", times):
-        ext = pycolmap.FeatureExtractionOptions(num_threads=args.threads)
-        ext.sift.max_num_features = args.max_features
-        ext.sift.first_octave = args.first_octave
+        ext = pycolmap.FeatureExtractionOptions(num_threads=threads)
+        ext.sift.max_num_features = max_features
+        ext.sift.first_octave = first_octave
         reader = pycolmap.ImageReaderOptions(camera_model="SIMPLE_RADIAL",
-                                             camera_params=f"{args.focal},{w / 2},{h / 2},0")
+                                             camera_params=f"{focal},{w / 2},{h / 2},0")
         pycolmap.extract_features(db, frames_dir(site), image_names=images, camera_mode=pycolmap.CameraMode.SINGLE,
                                   reader_options=reader, extraction_options=ext, device=pycolmap.Device.cpu)
         with pycolmap.Database.open(db) as d:
@@ -415,29 +391,29 @@ def main(site):
         log(f"{len(n_kp)} frames, median {int(np.median(n_kp))} keypoints; camera {cams[0].model_name} "
             f"{np.round(cams[0].params, 2).tolist()} (prior focal: {cams[0].has_prior_focal_length})")
 
-    matching = pycolmap.FeatureMatchingOptions(num_threads=args.threads)
+    matching = pycolmap.FeatureMatchingOptions(num_threads=threads)
     with stage("sequential matching", times):
-        pairs = sequential_pairs(db, args.overlap)
+        pairs = sequential_pairs(db, overlap)
         match_pairs(db, pairs, work / "sequential-pairs.txt", matching)
         log("{} sequential pairs; pairs matched {}, verified {}".format(len(pairs), *verified_pairs(db)))
 
-    if args.retrieve > 0:
+    if retrieve > 0:
         pairs_file = work / "revisit-pairs.txt"
         with stage("revisit search", times):
             if pairs_file.exists():          # a re-run: the same pairs, not the next best ones
                 pairs = [tuple(line.split()) for line in pairs_file.read_text(encoding="utf-8").splitlines()]
                 log(f"reusing {len(pairs)} revisit pairs from {pairs_file.relative_to(site.path)}")
             else:
-                pairs = revisit_pairs(db, args.retrieve, max(2, args.overlap // 2), np.random.default_rng(args.seed))
+                pairs = revisit_pairs(db, retrieve, max(2, overlap // 2), np.random.default_rng(seed))
         with stage("revisit matching", times):
             match_pairs(db, pairs, pairs_file, matching)
             n, v = verified_pairs(db)
             log(f"pairs matched {n}, verified {v} ({verified_pairs(db, pairs)[1]} of {len(pairs)} "
                 "revisit pairs verified)")
 
-    with stage(f"mapping ({args.mapper})", times):
-        recs = run_mapper(site, args.mapper, db, work / f"sparse-{args.mapper}", args.threads, args.seed,
-                          args.min_matches)
+    with stage(f"mapping ({mapper})", times):
+        recs = run_mapper(site, mapper, db, work / f"sparse-{mapper}", threads, seed,
+                          min_matches)
         models = sorted(recs.values(), key=lambda r: -r.num_reg_images())
         for r in models:
             log(f"  model: {r.num_reg_images()} frames, {r.num_points3D()} points, "
@@ -459,7 +435,7 @@ def main(site):
                 f"{own:.4f}px by COLMAP's camera model (COLMAP mean {r.compute_mean_reprojection_error():.4f}px)"
                 + (f"; {dup} second views of a point in one frame left out" if dup else ""))
             if not abs(saved - own) <= 1e-3:          # also stops on NaN
-                raise SystemExit(f"{out_tag}: conversion check failed ({saved:.6f} vs {own:.6f} px)")
+                raise DomusError(f"{out_tag}: conversion check failed ({saved:.6f} vs {own:.6f} px)")
         for r in models[len(kept):]:
             log(f"  model of {r.num_reg_images()} frames not written")
         for part in range(len(kept) + 1, MAX_MODELS + 1):
@@ -468,9 +444,3 @@ def main(site):
 
     log("stage times: " + ", ".join(f"{k} {v:.0f}s" for k, v in times.items())
         + f"; total {sum(times.values()):.0f}s")
-
-
-if __name__ == "__main__":
-    from ..project.site import started
-
-    main(started())       # run by itself, on the site the environment names
