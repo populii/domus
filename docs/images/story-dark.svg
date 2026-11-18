@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 452" width="960" height="452" role="img" aria-labelledby="title desc">
+<title id="title">How a Domus model comes about</title>
+<desc id="desc">Eight steps, each lighting up in turn: an address; public data; a phone walk; measurements; the model; schemes side by side; cut and fill; checks.</desc>
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; fill: #dde6e9; }
+.mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+.muted { fill: #95a3a9; }
+.title { font-weight: 650; }
+.card { fill: #141c20; stroke: #2a363c; stroke-width: 1.2; }
+
+.flow { fill: none; stroke: #43b9d6; stroke-width: 2.2; stroke-dasharray: 3 4; stroke-linecap: round; }
+.head { fill: none; stroke: #43b9d6; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.badge { fill: #173540; }
+.badge-n { fill: #43b9d6; }
+@media (prefers-reduced-motion: no-preference) {
+  .flow { animation: march 1.2s linear infinite; }
+  .step .ring { animation: glow 16s ease-in-out infinite; animation-delay: inherit; }
+  .step .badge { animation: badge 16s ease-in-out infinite; animation-delay: inherit; }
+  .step .badge-n { animation: badgen 16s ease-in-out infinite; animation-delay: inherit; }
+}
+@keyframes march { to { stroke-dashoffset: -14; } }
+@keyframes glow { 0%, 14%, 100% { stroke: #2a363c; stroke-width: 1.2; } 4%, 9% { stroke: #43b9d6; stroke-width: 2.6; } }
+@keyframes badge { 0%, 14%, 100% { fill: #173540; } 4%, 9% { fill: #43b9d6; } }
+@keyframes badgen { 0%, 14%, 100% { fill: #43b9d6; } 4%, 9% { fill: #062027; } }
+
+</style>
+<g class="step" style="animation-delay:0.0s">
+<rect class="card ring" x="20" y="22" width="213" height="184" rx="14"/>
+<circle cx="44" cy="46" r="13" class="badge"/>
+<text x="44" y="51" font-size="13" font-weight="700" text-anchor="middle" class="badge-n">1</text>
+<g transform="translate(126.5 84)">
+<path d="M-30 22 H30" stroke="#95a3a9" stroke-width="2" stroke-dasharray="5 5"/>
+<path d="M0 -28 C12 -28 20 -20 20 -9 C20 4 0 20 0 20 C0 20 -20 4 -20 -9 C-20 -20 -12 -28 0 -28 Z" fill="#173540" stroke="#43b9d6" stroke-width="2.2"/>
+<path d="M-8 -6 V-13 L0 -19 L8 -13 V-6 Z" fill="none" stroke="#43b9d6" stroke-width="2" stroke-linejoin="round"/>
+</g>
+<text x="38" y="140" font-size="16" class="title">An address</text>
+<text x="38" y="161" font-size="13" class="muted" text-anchor="start">Domus finds the lot,</text>
+<text x="38" y="178" font-size="13" class="muted" text-anchor="start">its boundary and the</text>
+<text x="38" y="195" font-size="13" class="muted" text-anchor="start">buildings round it.</text>
+</g>
+<g class="step" style="animation-delay:2.0s">
+<rect class="card ring" x="255" y="22" width="213" height="184" rx="14"/>
+<circle cx="279" cy="46" r="13" class="badge"/>
+<text x="279" y="51" font-size="13" font-weight="700" text-anchor="middle" class="badge-n">2</text>
+<g transform="translate(361.5 84)">
+<path d="M0 5 L26 16 L0 27 L-26 16 Z" fill="#2c261d" stroke="#b89d76" stroke-width="1.8"/>
+<path d="M0 -7 L26 4 L0 15 L-26 4 Z" fill="#183457" stroke="#4f95e0" stroke-width="1.8"/>
+<path d="M0 -19 L26 -8 L0 3 L-26 -8 Z" fill="#173540" stroke="#43b9d6" stroke-width="1.8"/>
+<g transform="translate(0 -6)">
+<circle cx="-12" cy="-16" r="1.4" fill="#6f9bff"/>
+<circle cx="-4" cy="-19" r="1.4" fill="#6f9bff"/>
+<circle cx="5" cy="-15" r="1.4" fill="#6f9bff"/>
+<circle cx="12" cy="-17" r="1.4" fill="#6f9bff"/>
+<circle cx="-6" cy="-12" r="1.4" fill="#6f9bff"/>
+<circle cx="3" cy="-10" r="1.4" fill="#6f9bff"/>
+<circle cx="-15" cy="-14" r="1.4" fill="#6f9bff"/>
+<circle cx="9" cy="-12" r="1.4" fill="#6f9bff"/>
+</g>
+</g>
+<text x="273" y="140" font-size="16" class="title">Public data</text>
+<text x="273" y="161" font-size="13" class="muted" text-anchor="start">The ground and the</text>
+<text x="273" y="178" font-size="13" class="muted" text-anchor="start">roofs and trees from</text>
+<text x="273" y="195" font-size="13" class="muted" text-anchor="start">LiDAR, and a photo.</text>
+</g>
+<g class="step" style="animation-delay:4.0s">
+<rect class="card ring" x="490" y="22" width="213" height="184" rx="14"/>
+<circle cx="514" cy="46" r="13" class="badge"/>
+<text x="514" y="51" font-size="13" font-weight="700" text-anchor="middle" class="badge-n">3</text>
+<g transform="translate(596.5 84)">
+<path d="M-30 18 C-18 2 -6 26 6 10 S 22 -2 30 -12" fill="none" stroke="#ff6b9a" stroke-width="2.2" stroke-dasharray="4 5" stroke-linecap="round"/>
+<rect x="-11" y="-28" width="22" height="38" rx="4" fill="#141c20" stroke="#dde6e9" stroke-width="2"/>
+<circle cx="0" cy="-21" r="2.4" fill="#43b9d6"/>
+<path d="M-6 3 H6" stroke="#95a3a9" stroke-width="2"/>
+</g>
+<text x="508" y="140" font-size="16" class="title">A phone walk</text>
+<text x="508" y="161" font-size="13" class="muted" text-anchor="start">A slow video round the</text>
+<text x="508" y="178" font-size="13" class="muted" text-anchor="start">property becomes 3D</text>
+<text x="508" y="195" font-size="13" class="muted" text-anchor="start">points on the grid.</text>
+</g>
+<g class="step" style="animation-delay:6.0s">
+<rect class="card ring" x="725" y="22" width="213" height="184" rx="14"/>
+<circle cx="749" cy="46" r="13" class="badge"/>
+<text x="749" y="51" font-size="13" font-weight="700" text-anchor="middle" class="badge-n">4</text>
+<g transform="translate(831.5 84)">
+<rect x="-28" y="-14" width="26" height="26" rx="6" fill="none" stroke="#dde6e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="-15" cy="-1" r="5" fill="none" stroke="#43b9d6" stroke-width="2"/>
+<path d="M-2 6 H30 V12 H-2" fill="#3a2a16" stroke="#f0a650" stroke-width="1.8"/>
+<path d="M3 6 V11" stroke="#f0a650" stroke-width="1.2"/>
+<path d="M7 6 V9" stroke="#f0a650" stroke-width="1.2"/>
+<path d="M11 6 V11" stroke="#f0a650" stroke-width="1.2"/>
+<path d="M15 6 V9" stroke="#f0a650" stroke-width="1.2"/>
+<path d="M19 6 V11" stroke="#f0a650" stroke-width="1.2"/>
+<path d="M23 6 V9" stroke="#f0a650" stroke-width="1.2"/>
+<path d="M27 6 V11" stroke="#f0a650" stroke-width="1.2"/>
+<rect x="-22" y="-30" width="44" height="10" rx="5" fill="none" stroke="#dde6e9" stroke-width="2"/>
+<circle cx="2" cy="-25" r="3" fill="#77a854"/>
+</g>
+<text x="743" y="140" font-size="16" class="title">Measurements</text>
+<text x="743" y="161" font-size="13" class="muted" text-anchor="start">A tape and a level for</text>
+<text x="743" y="178" font-size="13" class="muted" text-anchor="start">what matters most:</text>
+<text x="743" y="195" font-size="13" class="muted" text-anchor="start">walls and levels.</text>
+</g>
+<g class="step" style="animation-delay:8.0s">
+<rect class="card ring" x="725" y="246" width="213" height="184" rx="14"/>
+<circle cx="749" cy="270" r="13" class="badge"/>
+<text x="749" y="275" font-size="13" font-weight="700" text-anchor="middle" class="badge-n">5</text>
+<g transform="translate(831.5 308)">
+<path d="M-30 14 L0 28 L30 14 L0 0 Z" fill="#77a854" stroke="#3f6b35" stroke-width="1.5"/>
+<path d="M-12 8 L0 14 L12 8 V-6 L0 -12 L-12 -6 Z" fill="#8f8170" stroke="#dde6e9" stroke-width="1.6"/>
+<path d="M-12 -6 L0 0 L12 -6 M0 0 V14" fill="none" stroke="#dde6e9" stroke-width="1.4"/>
+<path d="M-15 -5 L-2 -22 L15 -7 L0 1 Z" fill="#7a8189" stroke="#dde6e9" stroke-width="1.4" stroke-linejoin="round"/>
+<circle cx="21" cy="0" r="7" fill="#4f9a43"/>
+</g>
+<text x="743" y="364" font-size="16" class="title">The model</text>
+<text x="743" y="385" font-size="13" class="muted" text-anchor="start">Ground, house, walls,</text>
+<text x="743" y="402" font-size="13" class="muted" text-anchor="start">drains and trees, in</text>
+<text x="743" y="419" font-size="13" class="muted" text-anchor="start">your browser.</text>
+</g>
+<g class="step" style="animation-delay:10.0s">
+<rect class="card ring" x="490" y="246" width="213" height="184" rx="14"/>
+<circle cx="514" cy="270" r="13" class="badge"/>
+<text x="514" y="275" font-size="13" font-weight="700" text-anchor="middle" class="badge-n">6</text>
+<g transform="translate(596.5 308)">
+<rect x="-32" y="-26" width="30" height="46" rx="4" fill="#141c20" stroke="#dde6e9" stroke-width="1.8"/>
+<path d="M-30 12 H-23 V2 H-4" fill="none" stroke="#5f9a45" stroke-width="2.4" stroke-linejoin="round"/>
+<text x="-17" y="-12" font-size="12" font-weight="700" text-anchor="middle" fill="#43b9d6">A</text>
+<rect x="2" y="-26" width="30" height="46" rx="4" fill="#141c20" stroke="#dde6e9" stroke-width="1.8"/>
+<path d="M4 12 H11 V5 H19 V-2 H30" fill="none" stroke="#5f9a45" stroke-width="2.4" stroke-linejoin="round"/>
+<text x="17" y="-12" font-size="12" font-weight="700" text-anchor="middle" fill="#43b9d6">B</text>
+<path d="M-17 12 V2" stroke="#9aa1a8" stroke-width="3"/>
+</g>
+<text x="508" y="364" font-size="16" class="title">Schemes side by side</text>
+<text x="508" y="385" font-size="13" class="muted" text-anchor="start">Retaining walls drawn</text>
+<text x="508" y="402" font-size="13" class="muted" text-anchor="start">in the viewer or as</text>
+<text x="508" y="419" font-size="13" class="muted" text-anchor="start">small text files.</text>
+</g>
+<g class="step" style="animation-delay:12.0s">
+<rect class="card ring" x="255" y="246" width="213" height="184" rx="14"/>
+<circle cx="279" cy="270" r="13" class="badge"/>
+<text x="279" y="275" font-size="13" font-weight="700" text-anchor="middle" class="badge-n">7</text>
+<g transform="translate(361.5 308)">
+<path d="M-32 -16.0 L-2 0 L-32 0 Z" fill="#ef7d3c"/>
+<path d="M-2 0 L22 0 L22 11.0 Z" fill="#4f95e0"/>
+<path d="M-32 -16.0 L32 16.0" stroke="#95a3a9" stroke-width="1.8" stroke-dasharray="4 3"/>
+<path d="M-32 0 H22" fill="none" stroke="#dde6e9" stroke-width="2.4"/>
+<rect x="22" y="-3" width="6" height="17.0" fill="#9aa1a8" stroke="#dde6e9" stroke-width="1.4"/>
+<text x="-28" y="-20" font-size="11" fill="#ef7d3c" font-weight="700">cut</text>
+<text x="2" y="25" font-size="11" fill="#4f95e0" font-weight="700">fill</text>
+</g>
+<text x="273" y="364" font-size="16" class="title">Cut and fill</text>
+<text x="273" y="385" font-size="13" class="muted" text-anchor="start">How much ground each</text>
+<text x="273" y="402" font-size="13" class="muted" text-anchor="start">scheme moves, and the</text>
+<text x="273" y="419" font-size="13" class="muted" text-anchor="start">flat lawn it gains.</text>
+</g>
+<g class="step" style="animation-delay:14.0s">
+<rect class="card ring" x="20" y="246" width="213" height="184" rx="14"/>
+<circle cx="44" cy="270" r="13" class="badge"/>
+<text x="44" y="275" font-size="13" font-weight="700" text-anchor="middle" class="badge-n">8</text>
+<g transform="translate(126.5 308)">
+<rect x="-24" y="-26" width="34" height="46" rx="4" fill="none" stroke="#dde6e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-17 -14 l3 3 l6 -7 M-17 -1 l3 3 l6 -7" fill="none" stroke="#5f9a45" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M-4 -12 H4 M-4 1 H4 M-17 12 H4" stroke="#95a3a9" stroke-width="2"/>
+<path d="M20 -4 L32 18 H8 Z" fill="#3a2a16" stroke="#f0a650" stroke-width="2" stroke-linejoin="round"/>
+<path d="M20 3 V10 M20 14 V14.5" stroke="#f0a650" stroke-width="2.4" stroke-linecap="round"/>
+</g>
+<text x="38" y="364" font-size="16" class="title">Checks</text>
+<text x="38" y="385" font-size="13" class="muted" text-anchor="start">Drains, easements, lids</text>
+<text x="38" y="402" font-size="13" class="muted" text-anchor="start">and the house: what to</text>
+<text x="38" y="419" font-size="13" class="muted" text-anchor="start">look at before you dig.</text>
+</g>
+<path class="flow" d="M236 114.0 h16" />
+<path d="M249 110.0 l4 4 l-4 4" class="head"/>
+<path class="flow" d="M471 114.0 h16" />
+<path d="M484 110.0 l4 4 l-4 4" class="head"/>
+<path class="flow" d="M706 114.0 h16" />
+<path d="M719 110.0 l4 4 l-4 4" class="head"/>
+<path class="flow" d="M831.5 209 v34" />
+<path d="M827.5 237 l4 4 l4 -4" class="head"/>
+<path class="flow" d="M722 338.0 h-16" />
+<path d="M709 334.0 l-4 4 l4 4" class="head"/>
+<path class="flow" d="M487 338.0 h-16" />
+<path d="M474 334.0 l-4 4 l4 4" class="head"/>
+<path class="flow" d="M252 338.0 h-16" />
+<path d="M239 334.0 l-4 4 l4 4" class="head"/>
+</svg>

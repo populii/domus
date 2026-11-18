@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" width="960" height="380" role="img" aria-labelledby="title desc">
+<title id="title">Cut and fill</title>
+<desc id="desc">A cross-section of sloping ground beside a house. A level lawn is cut into the high side and filled on the low side, held by a retaining wall at its low edge, with a sloping batter where no wall holds it.</desc>
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; fill: #dde6e9; }
+.mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+.muted { fill: #95a3a9; }
+.title { font-weight: 650; }
+.card { fill: #141c20; stroke: #2a363c; stroke-width: 1.2; }
+
+.t-now { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .scheme { animation: scheme 9s ease-in-out infinite; }
+  .t-scheme { animation: scheme 9s ease-in-out infinite; }
+  .t-now { animation: now 9s ease-in-out infinite; }
+}
+@keyframes scheme { 0%, 12% { opacity: 0; } 24%, 88% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes now { 0%, 12% { opacity: 1; } 24%, 88% { opacity: 0; } 100% { opacity: 1; } }
+
+</style>
+<path d="M44 112 H150 V60 H44 Z" fill="#8f8170" stroke="#dde6e9" stroke-width="1.5"/>
+<path d="M32 62 L97 22 L162 62 Z" fill="#7a8189"/>
+<rect x="64" y="78" width="26" height="20" fill="#0b1114" stroke="#dde6e9" stroke-width="1"/>
+<text x="97" y="134" font-size="12" text-anchor="middle" class="muted">house</text>
+<path d="M20 112 L160 112 L160 112.0 L170 113.8 L180 115.6 L190 117.4 L200 119.2 L210 121.0 L220 122.8 L230 124.6 L240 126.4 L250 128.2 L260 130.0 L270 131.8 L280 133.6 L290 135.4 L300 137.2 L310 139.0 L320 140.8 L330 142.6 L340 144.4 L350 146.2 L360 148.0 L370 149.8 L380 151.6 L390 153.4 L400 155.2 L410 157.0 L420 158.8 L430 160.6 L440 162.4 L450 164.2 L460 166.0 L470 167.8 L480 169.6 L490 171.4 L500 173.2 L510 175.0 L520 176.8 L530 178.6 L540 180.4 L550 182.2 L560 184.0 L570 185.8 L580 187.6 L590 189.4 L600 191.2 L610 193.0 L620 194.8 L630 196.6 L640 198.4 L650 200.2 L660 202.0 L670 203.8 L680 205.6 L690 207.4 L700 209.2 L710 211.0 L720 212.8 L730 214.6 L740 216.4 L750 218.2 L760 220.0 L770 221.8 L780 223.6 L790 225.4 L800 227.2 L810 229.0 L820 230.8 L830 232.6 L840 234.4 L850 236.2 L860 238.0 L870 239.8 L880 241.6 L890 243.4 L900 245.2 L910 247.0 L920 248.8 L930 250.6 L930 318 L20 318 Z" fill="#2c261d"/>
+<path d="M20 112 L160 112 L160 112.0 L170 113.8 L180 115.6 L190 117.4 L200 119.2 L210 121.0 L220 122.8 L230 124.6 L240 126.4 L250 128.2 L260 130.0 L270 131.8 L280 133.6 L290 135.4 L300 137.2 L310 139.0 L320 140.8 L330 142.6 L340 144.4 L350 146.2 L360 148.0 L370 149.8 L380 151.6 L390 153.4 L400 155.2 L410 157.0 L420 158.8 L430 160.6 L440 162.4 L450 164.2 L460 166.0 L470 167.8 L480 169.6 L490 171.4 L500 173.2 L510 175.0 L520 176.8 L530 178.6 L540 180.4 L550 182.2 L560 184.0 L570 185.8 L580 187.6 L590 189.4 L600 191.2 L610 193.0 L620 194.8 L630 196.6 L640 198.4 L650 200.2 L660 202.0 L670 203.8 L680 205.6 L690 207.4 L700 209.2 L710 211.0 L720 212.8 L730 214.6 L740 216.4 L750 218.2 L760 220.0 L770 221.8 L780 223.6 L790 225.4 L800 227.2 L810 229.0 L820 230.8 L830 232.6 L840 234.4 L850 236.2 L860 238.0 L870 239.8 L880 241.6 L890 243.4 L900 245.2 L910 247.0 L920 248.8 L930 250.6" fill="none" stroke="#b89d76" stroke-width="2.4" stroke-dasharray="7 5"/>
+<rect x="780" y="146" width="160" height="40" rx="8" class="card"/>
+<text x="792" y="163" font-size="13" font-weight="700" fill="#b89d76">the ground now</text>
+<text x="792" y="179" font-size="12" class="muted">from LiDAR and fixes</text>
+<path d="M860 186 V232" stroke="#b89d76" stroke-width="1.4"/>
+<g class="scheme">
+<path d="M172.7 114.3 L180 115.6 L190 117.4 L200 119.2 L210 121.0 L220 122.8 L230 124.6 L240 126.4 L250 128.2 L260 130.0 L270 131.8 L280 133.6 L290 135.4 L300 137.2 L310 139.0 L320 140.8 L330 142.6 L340 144.4 L350 146.2 L360 148.0 L370 149.8 L380 151.6 L390 153.4 L400 155.2 L410 157.0 L420 158.8 L430 160.6 L440 162.4 L450 164.2 L455.6 165.2 L300 165.2 Z" fill="#ef7d3c" fill-opacity="0.85"/>
+<path d="M455.6 165.2 L700 165.2 L700 209.2 L690 207.4 L680 205.6 L670 203.8 L660 202.0 L650 200.2 L640 198.4 L630 196.6 L620 194.8 L610 193.0 L600 191.2 L590 189.4 L580 187.6 L570 185.8 L560 184.0 L550 182.2 L540 180.4 L530 178.6 L520 176.8 L510 175.0 L500 173.2 L490 171.4 L480 169.6 L470 167.8 L460 166.0 Z" fill="#4f95e0" fill-opacity="0.8"/>
+<path d="M172.7 114.3 L300 165.2 L700 165.2" fill="none" stroke="#dde6e9" stroke-width="3" stroke-linejoin="round"/>
+<path d="M300 162.7 H700" stroke="#77a854" stroke-width="5"/>
+<rect x="700" y="158.2" width="16" height="63.0" fill="#9aa1a8" stroke="#dde6e9" stroke-width="1.5"/>
+<path d="M700 170.2 H716" stroke="#6e757c" stroke-width="1"/>
+<path d="M700 182.2 H716" stroke="#6e757c" stroke-width="1"/>
+<path d="M700 194.2 H716" stroke="#6e757c" stroke-width="1"/>
+<path d="M700 206.2 H716" stroke="#6e757c" stroke-width="1"/>
+<rect x="238" y="69" width="152" height="40" rx="8" class="card"/>
+<text x="250" y="86" font-size="13" font-weight="700" fill="#ef7d3c">cut</text>
+<text x="250" y="102" font-size="12" class="muted">ground taken away</text>
+<path d="M314 109 V151" stroke="#ef7d3c" stroke-width="1.6"/>
+<rect x="502" y="227" width="152" height="40" rx="8" class="card"/>
+<text x="514" y="244" font-size="13" font-weight="700" fill="#4f95e0">fill</text>
+<text x="514" y="260" font-size="12" class="muted">ground brought in</text>
+<path d="M578 227 V183" stroke="#4f95e0" stroke-width="1.6"/>
+<path d="M304 139 V145 H696 V139" fill="none" stroke="#5f9a45" stroke-width="1.6"/>
+<text x="598" y="133" font-size="13" text-anchor="middle" font-weight="650" fill="#5f9a45">flat lawn: no steeper than 1 : 20</text>
+<path d="M734 158.2 V209.2 M728 158.2 H740 M728 209.2 H740" stroke="#dde6e9" stroke-width="1.4"/>
+<path d="M734 184 H750 V243" fill="none" stroke="#dde6e9" stroke-width="1.2"/>
+<rect x="730" y="243" width="196" height="58" rx="8" class="card"/>
+<text x="742" y="262" font-size="13" font-weight="700">the wall’s height</text>
+<text x="742" y="278" font-size="12" class="muted">from its toe to its top, which</text>
+<text x="742" y="293" font-size="12" class="muted">stands 0.1 m above the lawn</text>
+<rect x="133" y="184" width="186" height="40" rx="8" class="card"/>
+<text x="145" y="201" font-size="13" font-weight="700" fill="#dde6e9">batter</text>
+<text x="145" y="217" font-size="12" class="muted">an edge with no wall: 1 : 2.5</text>
+<path d="M193 184 L236 142" stroke="#dde6e9" stroke-width="1.2"/>
+</g>
+<g font-size="13" font-weight="700">
+<text class="t-now" x="930" y="28" text-anchor="end" fill="#95a3a9">the ground as it is</text>
+<text class="t-scheme" x="930" y="28" text-anchor="end" fill="#43b9d6">with a wall scheme</text>
+</g>
+<g font-size="13">
+<rect x="20" y="334" width="920" height="36" rx="10" fill="#173540"/>
+<text x="36" y="357">For every scheme Domus works out the cut and fill, the area disturbed, each wall’s heights, and the flat lawn before and after.</text>
+</g>
+</svg>

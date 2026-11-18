@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The README, AGENTS.md and CONTRIBUTING.md are rewritten. The README tells the story of how a model comes about,
+  with diagrams and pictures of the made-up sites and a small 3D model to turn; AGENTS.md is an agent's step-by-step
+  manual, from setting a site up to the video walk (the first thing to reach for), fitting, adapting a site and the
+  public API; CONTRIBUTING.md is the contributor's guide.
+
 ## 2026.11.41
 
 - **For site projects:** a site's grid is a value of its own. `site.grid` in `domus.api` gives the site's grid and

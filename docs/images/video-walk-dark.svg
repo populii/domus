@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520" role="img" aria-labelledby="title desc">
+<title id="title">The video walk</title>
+<desc id="desc">Left: a plan of a lot with the suggested walking route, round the edge, to the trees and the steep bank, then round the house. Right: what happens to the video, in five steps from filming to a cloud in the model.</desc>
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; fill: #dde6e9; }
+.mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+.muted { fill: #95a3a9; }
+.title { font-weight: 650; }
+.card { fill: #141c20; stroke: #2a363c; stroke-width: 1.2; }
+
+.dot { fill: #173540; }
+.dotn { fill: #43b9d6; }
+.walker { offset-path: path("M68.0 58.0 L185.0 61.0 L267.5 64.0 L293.0 103.0 L267.5 64.0 L335.0 67.0 L338.0 235.0 L339.5 400.0 L230.0 403.0 L215.0 388.0 L230.0 403.0 L71.0 409.0 L69.5 235.0 L68.0 122.5 L98.0 100.0 L68.0 122.5 L68.0 154.0 L89.0 154.0 L296.0 154.0 L296.0 346.0 L89.0 346.0 L89.0 154.0"); offset-rotate: 0deg; offset-distance: 0%; }
+.draw { stroke-dasharray: 1000; stroke-dashoffset: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .walker { animation: walk 12s linear infinite; }
+  .draw { animation: draw 12s linear infinite; }
+  .pipe .ring { animation: glow 12s ease-in-out infinite; animation-delay: inherit; }
+  .pipe .dot { animation: dot 12s ease-in-out infinite; animation-delay: inherit; }
+  .pipe .dotn { animation: dotn 12s ease-in-out infinite; animation-delay: inherit; }
+}
+@keyframes walk { from { offset-distance: 0%; } 92% { offset-distance: 100%; } to { offset-distance: 100%; } }
+@keyframes draw { from { stroke-dashoffset: 1000; } 92% { stroke-dashoffset: 0; } to { stroke-dashoffset: 0; } }
+@keyframes glow { 0%, 20%, 100% { stroke: #2a363c; stroke-width: 1.2; } 5%, 15% { stroke: #43b9d6; stroke-width: 2.4; } }
+@keyframes dot { 0%, 20%, 100% { fill: #173540; } 5%, 15% { fill: #43b9d6; } }
+@keyframes dotn { 0%, 20%, 100% { fill: #43b9d6; } 5%, 15% { fill: #062027; } }
+
+</style>
+<rect x="20" y="16" width="372" height="476" rx="14" class="card"/>
+<defs>
+<clipPath id="lotclip">
+<path d="M50.0 40.0 L350.0 49.0 L356.0 430.0 L56.0 430.0 Z"/>
+</clipPath>
+</defs>
+<path d="M50.0 40.0 L350.0 49.0 L356.0 430.0 L56.0 430.0 Z" fill="#77a854" fill-opacity="0.35"/>
+<g clip-path="url(#lotclip)">
+<path d="M56.0 370.0 L354.5 374.5 L356.0 430.0 L56.0 430.0 Z" fill="#2c261d"/>
+<path d="M80.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M95.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M110.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M125.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M140.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M155.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M170.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M185.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M200.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M215.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M230.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M245.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M260.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M275.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M290.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M305.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M320.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M335.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+<path d="M350.0 373.0 l-14 54" stroke="#b89d76" stroke-width="1.2" opacity="0.7"/>
+</g>
+<path d="M125.0 190.0 L260.0 190.0 L260.0 310.0 L125.0 310.0 Z" fill="#7a8189"/>
+<path d="M125.0 190.0 L192.5 250.0 L260.0 190.0 M125.0 310.0 L192.5 250.0 L260.0 310.0" stroke="#95a3a9" stroke-width="1" fill="none"/>
+<circle cx="293.0" cy="103.0" r="39.0" fill="#4f9a43" fill-opacity="0.75"/>
+<circle cx="293.0" cy="103.0" r="3" fill="#b89d76"/>
+<circle cx="98.0" cy="100.0" r="33.0" fill="#4f9a43" fill-opacity="0.75"/>
+<circle cx="98.0" cy="100.0" r="3" fill="#b89d76"/>
+<path d="M50.0 40.0 L350.0 49.0 L356.0 430.0 L56.0 430.0 Z" fill="none" stroke="#e3b341" stroke-width="2.4"/>
+<path d="M68.0 58.0 L185.0 61.0 L267.5 64.0 L293.0 103.0 L267.5 64.0 L335.0 67.0 L338.0 235.0 L339.5 400.0 L230.0 403.0 L215.0 388.0 L230.0 403.0 L71.0 409.0 L69.5 235.0 L68.0 122.5 L98.0 100.0 L68.0 122.5 L68.0 154.0 L89.0 154.0 L296.0 154.0 L296.0 346.0 L89.0 346.0 L89.0 154.0" fill="none" stroke="#ff6b9a" stroke-width="2" stroke-dasharray="2 5" opacity="0.55" stroke-linecap="round"/>
+<path class="draw" d="M68.0 58.0 L185.0 61.0 L267.5 64.0 L293.0 103.0 L267.5 64.0 L335.0 67.0 L338.0 235.0 L339.5 400.0 L230.0 403.0 L215.0 388.0 L230.0 403.0 L71.0 409.0 L69.5 235.0 L68.0 122.5 L98.0 100.0 L68.0 122.5 L68.0 154.0 L89.0 154.0 L296.0 154.0 L296.0 346.0 L89.0 346.0 L89.0 154.0" pathLength="1000" fill="none" stroke="#ff6b9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="68.0" cy="58.0" r="10" fill="#141c20" stroke="#ff6b9a" stroke-width="2"/>
+<text x="68.0" y="62.5" font-size="12" font-weight="700" text-anchor="middle">1</text>
+<circle cx="293.0" cy="103.0" r="10" fill="#141c20" stroke="#ff6b9a" stroke-width="2"/>
+<text x="293.0" y="107.5" font-size="12" font-weight="700" text-anchor="middle">2</text>
+<circle cx="215.0" cy="388.0" r="10" fill="#141c20" stroke="#ff6b9a" stroke-width="2"/>
+<text x="215.0" y="392.5" font-size="12" font-weight="700" text-anchor="middle">3</text>
+<circle cx="98.0" cy="100.0" r="10" fill="#141c20" stroke="#ff6b9a" stroke-width="2"/>
+<text x="98.0" y="104.5" font-size="12" font-weight="700" text-anchor="middle">4</text>
+<circle cx="89.0" cy="154.0" r="10" fill="#141c20" stroke="#ff6b9a" stroke-width="2"/>
+<text x="89.0" y="158.5" font-size="12" font-weight="700" text-anchor="middle">5</text>
+<g class="walker">
+<circle r="7" fill="#43b9d6"/>
+<circle r="12" fill="none" stroke="#43b9d6" stroke-width="1.5" opacity="0.5"/>
+</g>
+<text x="192.5" y="255.0" font-size="12" text-anchor="middle" fill="#141c20" font-weight="600">house</text>
+<text x="200.0" y="418.0" font-size="12" text-anchor="middle" class="muted">steep bank</text>
+<text x="36" y="472" font-size="12.5" class="muted" text-anchor="start">Domus suggests the route: the lot's edge, a detour to</text>
+<text x="36" y="488" font-size="12.5" class="muted" text-anchor="start">each place the LiDAR sees worst, then round the house.</text>
+<g class="pipe" style="animation-delay:0.0s">
+<rect x="420" y="16" width="520" height="92" rx="12" class="card ring"/>
+<circle cx="450" cy="62.0" r="16" class="dot"/>
+<text x="450" y="67.0" font-size="14" font-weight="700" text-anchor="middle" class="dotn">1</text>
+<text x="480" y="44" font-size="16" class="title">Film it</text>
+<text x="926" y="44" font-size="12.5" class="mono muted" text-anchor="end">your phone</text>
+<text x="480" y="66" font-size="13" class="muted" text-anchor="start">Slowly, on one lens, turning gradually.</text>
+<text x="480" y="83" font-size="13" class="muted" text-anchor="start">Say what you're looking at as you go.</text>
+</g>
+<path d="M450 80.0 V140.0" stroke="#43b9d6" stroke-width="2" stroke-dasharray="3 4"/>
+<g class="pipe" style="animation-delay:2.4s">
+<rect x="420" y="112" width="520" height="92" rx="12" class="card ring"/>
+<circle cx="450" cy="158.0" r="16" class="dot"/>
+<text x="450" y="163.0" font-size="14" font-weight="700" text-anchor="middle" class="dotn">2</text>
+<text x="480" y="140" font-size="16" class="title">Frames</text>
+<text x="926" y="140" font-size="12.5" class="mono muted" text-anchor="end">domus video frames</text>
+<text x="480" y="162" font-size="13" class="muted" text-anchor="start">The sharpest frame in every sixth of</text>
+<text x="480" y="179" font-size="13" class="muted" text-anchor="start">a second, named by its time in the clip.</text>
+</g>
+<path d="M450 176.0 V236.0" stroke="#43b9d6" stroke-width="2" stroke-dasharray="3 4"/>
+<g class="pipe" style="animation-delay:4.8s">
+<rect x="420" y="208" width="520" height="92" rx="12" class="card ring"/>
+<circle cx="450" cy="254.0" r="16" class="dot"/>
+<text x="450" y="259.0" font-size="14" font-weight="700" text-anchor="middle" class="dotn">3</text>
+<text x="480" y="236" font-size="16" class="title">Reconstruct</text>
+<text x="926" y="236" font-size="12.5" class="mono muted" text-anchor="end">domus video reconstruct</text>
+<text x="480" y="258" font-size="13" class="muted" text-anchor="start">COLMAP finds where each frame was</text>
+<text x="480" y="275" font-size="13" class="muted" text-anchor="start">taken from, and a cloud of points.</text>
+</g>
+<path d="M450 272.0 V332.0" stroke="#43b9d6" stroke-width="2" stroke-dasharray="3 4"/>
+<g class="pipe" style="animation-delay:7.2s">
+<rect x="420" y="304" width="520" height="92" rx="12" class="card ring"/>
+<circle cx="450" cy="350.0" r="16" class="dot"/>
+<text x="450" y="355.0" font-size="14" font-weight="700" text-anchor="middle" class="dotn">4</text>
+<text x="480" y="332" font-size="16" class="title">Place</text>
+<text x="926" y="332" font-size="12.5" class="mono muted" text-anchor="end">domus video place</text>
+<text x="480" y="354" font-size="13" class="muted" text-anchor="start">Points you mark in frames, held to known</text>
+<text x="480" y="371" font-size="13" class="muted" text-anchor="start">places, put the cloud on the site's grid.</text>
+</g>
+<path d="M450 368.0 V428.0" stroke="#43b9d6" stroke-width="2" stroke-dasharray="3 4"/>
+<g class="pipe" style="animation-delay:9.6s">
+<rect x="420" y="400" width="520" height="92" rx="12" class="card ring"/>
+<circle cx="450" cy="446.0" r="16" class="dot"/>
+<text x="450" y="451.0" font-size="14" font-weight="700" text-anchor="middle" class="dotn">5</text>
+<text x="480" y="428" font-size="16" class="title">Into the model</text>
+<text x="926" y="428" font-size="12.5" class="mono muted" text-anchor="end">dense, export, build</text>
+<text x="480" y="450" font-size="13" class="muted" text-anchor="start">A denser cloud, in the viewer with</text>
+<text x="480" y="467" font-size="13" class="muted" text-anchor="start">everything else, to measure against.</text>
+</g>
+</svg>
