@@ -12,9 +12,10 @@ them to one point per 2 cm cell (the best supported), and writes
 data/video/points.npz: millimetre offsets from the model origin (int32 east, north, height),
 colours (uint8) and the index of the source reconstruction.
 
-The open questions under [[video.compare]] go to data/video/compare.npz the same way, one set per
-entry (`set` indexes `ids`): its clouds moved by `dz_m` and turned by `turn_deg` (counter-clockwise
-seen from above) about `pivot` (E, N), so the viewer can show two placements of one clip side by side.
+The placements among the site's observations (data/observations.json, docs/observations.md) go to
+data/video/compare.npz the same way, one set per placement (`set` indexes `ids`): its clouds moved by
+`dz_m` and turned by `turn_deg` (counter-clockwise seen from above) about `pivot` (E, N), so the
+viewer can show two placements of one clip side by side.
 """
 
 import numpy as np
@@ -54,7 +55,7 @@ def thin(pts, views, origin):
 
 
 def moved(xyz, entry):
-    """The points turned about the entry's pivot and moved up by its dz_m."""
+    """The points turned about the placement's pivot and moved up by its dz_m."""
     out = np.array(xyz, float)
     a = np.radians(entry.get("turn_deg", 0.0))
     if a:
@@ -66,8 +67,10 @@ def moved(xyz, entry):
 
 
 def export(site):
-    """The clouds in [video] clouds and the LiDAR scans, as data/video/points.npz, and [[video.compare]]'s sets as
-    data/video/compare.npz."""
+    """The clouds in [video] clouds and the LiDAR scans, as data/video/points.npz, and the placement observations'
+    sets as data/video/compare.npz."""
+    from ..project import observations
+
     cfg = site.settings()
     tags = [*cfg.get("video", {}).get("clouds", []), *sorted(p.stem for p in (site.path / "data" / "video").glob("*-scan.npz"))]
     origin = np.array([*cfg["model"]["origin"], 0.0][:3], float)   # a site may give no height: any origin does here
@@ -85,7 +88,7 @@ def export(site):
                         source=src[sel], tags=np.array(tags), origin=origin)
     print(f"wrote data/video/points.npz: {len(sel)} points from {len(tags)} reconstructions")
 
-    entries = cfg.get("video", {}).get("compare", [])
+    entries = [{"id": o["id"], **o["source"]} for o in observations.read(site) if o["kind"] == "placement"]
     if not entries:
         return
     mms, rgbs, sets = [], [], []

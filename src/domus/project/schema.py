@@ -186,7 +186,7 @@ SITE = Table("data/site.toml", {
         "points": Key("The point cloud from the videos", "Point cloud from the videos"),
         "dsm": Key("The surface model", "LiDAR surface (trees and roofs), 1 m"),
         "lidar": Key("What the LiDAR is called in other layers' names", "LiDAR"),
-        "readings": Key("Readings from the clips", "Readings from the clips"),
+        "readings": Key("The observations' labels (data/observations.json)", "Readings from the clips"),
         "features_source": Key("The site features' source", "data/site/features-*.geojson (each feature's source and basis)"),
         "bed_floor_source": Key("The beds' floors' source", "Outlines as the beds in data/site/trees.geojson"),
     }),
@@ -203,21 +203,6 @@ SITE = Table("data/site.toml", {
     "video": Table("Point clouds from domus video", {
         "clouds": Key("The placed clouds to show (data/video/<name>.npz)", []),
         "keep": Map("[E min, N min, E max, N max]: only this part of a cloud is trusted", Key("A box"), "cloud"),
-        "compare": Tables("Two placements of a clip, shown as clouds side by side", Table("A comparison", {
-            "id": Key("Its id", REQUIRED),
-            "name": Key("Its name", REQUIRED),
-            "clouds": Key("The clouds it moves", REQUIRED),
-            "pivot": Key("[E, N] it turns about", REQUIRED),
-            "dz_m": Key("How far it moves up", 0.0),
-            "turn_deg": Key("How far it turns, counter-clockwise", 0.0),
-        })),
-        "question_marks": Tables("A clip's reading of the house's levels, as a label", Table("A question mark", {
-            "id": Key("Its id", REQUIRED),
-            "text": Key("Its label", REQUIRED),
-            "picks": Key("The picks it reads", REQUIRED),
-            "drawn": Key("What it's drawn on"),
-            "lift_m": Key("How far above that it stands", 0.15),
-        })),
     }),
 })
 

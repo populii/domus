@@ -54,11 +54,11 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 | `options/` | The wall options: `scheme` works them out, `design` reads a site's for it, `sketch` turns a drawing into one, `solids` builds one as closed solids with Manifold (its ground, walls, steps, cut and fill), and `preview` works a sketch out as solids from what a built model gives the viewer, the reference the viewer's JavaScript copy is held to |
 | `build/` | The build, and its cache |
 | `export/` | A built model for other software: glTF, and IFC through the optional IfcOpenShell |
-| `checks/` | `domus prep check`'s rules, and the viewer's checklist and video walk (`enrich`) |
+| `checks/` | `domus prep check`'s rules, the observations read against the model (`observations`), and the viewer's checklist and video walk (`enrich`) |
 | `capture/` | Videos into placed clouds, and phone scans |
 | `prep/` | A site's documents and photos into its data |
 | `importers/` | Places into site folders: New Zealand's (`nz/`), anywhere's (`osm`) |
-| `project/` | The site folder: the Site each part is handed (its folder, output, settings, format and grid) and its rasters, its settings' schema, formats and upgrades, trusted extensions, the one route for changes to its data (`intents`, `changes`: recorded, undoable, and proposed for a person to accept), `domus new` and the demo |
+| `project/` | The site folder: the Site each part is handed (its folder, output, settings, format and grid) and its rasters, its settings' schema, formats and upgrades, trusted extensions, the one route for changes to its data (`intents`, `changes`: recorded, undoable, and proposed for a person to accept), its observations' file (`observations`), `domus new` and the demo |
 | `app/` | On top of it all, the app: the command line (`cli`, with the video and prep steps' arguments in `video` and `prep`), the server (`serve`) and the viewer (`viewer/`, a page and its libraries, and its sketch preview: `sketch-core.js`, a JavaScript copy of the build's rules for a sketch, run with Manifold in `sketch-worker.js`). Nothing else in Domus imports it |
 | top level | The public API (`api`, `testing`), `create`, `shots` and the templates |
 
@@ -115,14 +115,15 @@ usage printed by `--help`; and a warning wherever site code uses a name that's g
 site. Beside them came a newer three.js in the viewer, `domus export` to glTF and IFC, `domus shots`, and one route for
 every change to a site's data: from the viewer, an agent, a site tool or a check, each change is an intent, recorded
 with who, when and why and undoable, and a check's findings are proposals a person accepts or rejects
-([docs/changes.md](docs/changes.md)).
+([docs/changes.md](docs/changes.md)); and observations, readings from videos kept as data apart from the model, each
+set at every build against the element it checks by its id, and accepted into the model through that route
+([docs/observations.md](docs/observations.md)).
 
 What's next, each step proved the same way:
 
 | Work | What it brings |
 |---|---|
 | The old names | The modules' old names, crs's and raster's names from before and the calls without a site go, once the site code that uses them has moved to the new ones |
-| Observations | Readings from videos kept as data apart from the model, each set at every build against the element it checks by its id; accepting one changes the model through the change route |
 | A house kept as an IFC file | `[house] source = "ifc"`: the house drawn from its IFC and written only by IfcOpenShell |
 | Instant previews | One geometry library, Manifold, in the browser and the build, so an option shows as it's drawn while the numbers come from the server |
 

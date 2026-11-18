@@ -27,9 +27,12 @@ Checks:
 - blocks: block walls set out in whole units: each course of each straight stretch starts and ends with a whole
   block or half of one, the top course of a bay ends at a step down with a whole block, and the caps are whole.
   The sizes are each wall's own block's (`unit_m`).
+- observations: each of the site's observations (data/observations.json) as read now against what the model says of
+  the element it checks (domus.checks.observations): one further off than twice its uncertainty fails, and one
+  further than its uncertainty, or that lost its target or its reading, warns.
 
 A check skips what the site doesn't have, with a note saying so: the roof without a house or a surface model, plumb
-and clouds without placed videos, the option checks without wall options.
+and clouds without placed videos, the option checks without wall options, observations without any.
 
 Prints the findings and the notes, writes .domus/checks/check_model.json in the site (and with --plots, JPEGs in the
 same folder) and exits 1 if a check fails its tolerance.
@@ -732,7 +735,7 @@ def placed_tags(site):
                   and (video_dir(site) / p.name.replace("-georef.json", "-site.npz")).exists())
 
 
-CHECKS = ("sanity", "roof", "plumb", "clouds", "through", "fixes", "blocks")
+CHECKS = ("sanity", "roof", "plumb", "clouds", "through", "fixes", "blocks", "observations")
 
 
 def options_there(site):
@@ -775,6 +778,14 @@ def run(site, checks=CHECKS, tags=None, plots=False):
     for name, check in (("through", check_through), ("fixes", check_fixes), ("blocks", check_blocks)):
         if name in opts:
             fails[name] = check(site, findings)
+    if "observations" in checks:
+        from ..project import observations as observed
+        from . import observations
+
+        if observed.read(site):
+            fails["observations"] = observations.check(site, findings)
+        else:
+            skipped["observations"] = "the site has no observations (data/observations.json)"
     report = {"run": time.strftime("%Y-%m-%d %H:%M"), "failures": fails,
               "findings": [dict(zip(("check", "level", "object", "detail"), f)) for f in findings],
               "skipped": skipped}

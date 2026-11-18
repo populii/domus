@@ -731,6 +731,10 @@ def add_house(b):
         summary["house"] = {**hm.info, "fl_upper": hcfg["fl_upper"],
                             "fl_lower": round(hcfg.get("fl_lower", hcfg["fl_upper"]), 3),
                             "photo_textures": house_photos}
+        b.plinths = {}                  # each face's plinth as drawn, for the observations that check one
+        for f in hm.faces:
+            if "plinth_top" in f.spec:
+                b.plinths.setdefault(f.id, float(f.spec["plinth_top"]))
 
 
 def add_ifc(b):
@@ -991,35 +995,48 @@ def add_points(b):
                        "file": "points.json", "count": len(v)})
 
 
-def add_open_questions(b):
-    """Open questions (data/site.toml [[video.compare]], [[video.question_marks]]): two placements of a clip as clouds side by side (domus video export writes data/video/compare.npz), and the clips' readings of the house's levels as labels, hidden until switched on."""
-    cfg, frame, labels, layers = b.cfg, b.frame, b.labels, b.layers
-    entries = {e["id"]: e for e in cfg.get("video", {}).get("compare", [])}
+def add_observations(b):
+    """Observations (data/observations.json, docs/observations.md): each reading set against what the model says of the
+    element it checks, by its id, as labels coloured by how far apart they are against how sure the reading is, and
+    each placement of a reconstruction as a cloud beside the model (domus video export writes data/video/compare.npz),
+    hidden until switched on; their report in summary.json; and a line for each that lost its target or its reading."""
+    from ..checks import observations
+
+    found = observations.evaluate(b.site, ground=b.drawn_ground, plinths=getattr(b, "plinths", None))
+    if not found:
+        return
+    frame, labels, layers = b.frame, b.labels, b.layers
+    for o in found:
+        if o["state"] in ("lost target", "no reading"):
+            b.say(f"observation {o['id']}: {o['state']}: {o['why']}")
+    placed = {o["id"]: o for o in found if o["state"] == "placement"}
     cfile = b.site.path / "data" / "video" / "compare.npz"
-    if entries and cfile.exists():
+    if placed and cfile.exists():
         cp = np.load(cfile)
-        for k, cid in enumerate(str(i) for i in cp["ids"]):
-            if cid not in entries:
+        for k, oid in enumerate(str(i) for i in cp["ids"]):
+            if oid not in placed:
                 continue
             sel = cp["set"] == k
             q = np.round(frame.xyz(cp["origin"] + cp["mm"][sel] / 1000.0) / POINT_STEP).astype("<i2")
-            (b.site.output / f"compare-{cid}.json").write_text(json.dumps({
+            (b.site.output / f"observation-{oid}.json").write_text(json.dumps({
                 "count": int(sel.sum()), "step": POINT_STEP,
                 "positions": base64.b64encode(q.tobytes()).decode("ascii"),
                 "colours": base64.b64encode(cp["rgb"][sel].astype(np.uint8).tobytes()).decode("ascii")}), encoding="utf-8")
-            layers.append({"type": "points", "id": f"compare-{cid}", "group": "Open questions", "visible": False,
-                           "name": entries[cid]["name"], "file": f"compare-{cid}.json", "count": int(sel.sum())})
-    readings = []
-    for m in cfg.get("video", {}).get("question_marks", []):
-        with open(b.site.path / "data" / "video" / "picks" / m["picks"], newline="", encoding="utf-8") as fh:
-            row = next(x for x in csv.DictReader(fh) if x["id"] == m["id"])
-        e, n, h = (float(row[k]) for k in ("E", "N", "H"))
-        text = f"{m['text']}: {h:.2f}" + (f" (drawn: {m['drawn']})" if m.get("drawn") else "")
-        readings.append({"text": text, "kind": "mark", "at": r(frame.xyz([[e, n, h + m.get("lift_m", 0.15)]])[0], 2)})
-    if readings:
-        layers.append({"type": "labels", "id": "question-readings", "group": "Open questions", "visible": False,
-                       "name": labels.get("readings", "Readings from the clips"),
-                       "items": readings})
+            layers.append({"type": "points", "id": f"observation-{oid}", "group": "Observations", "visible": False,
+                           "name": placed[oid]["name"], "file": f"observation-{oid}.json", "count": int(sel.sum())})
+    items = []
+    for o in found:
+        if "at" not in o:
+            continue
+        e, n, h = o["at"]
+        tone = observations.TONES.get(o["state"])
+        items.append({"text": observations.label(o), "kind": "observation",
+                      "at": r(frame.xyz([[e, n, h + o.get("lift_m", observations.data.LIFT_M)]])[0], 2),
+                      **({"tone": tone} if tone else {})})
+    if items:
+        layers.append({"type": "labels", "id": "observations", "group": "Observations", "visible": False,
+                       "name": labels.get("readings", "Readings from the clips"), "items": items})
+    b.summary["observations"] = [observations.report(o) for o in found]
 
 
 def add_surface(b):
@@ -1181,7 +1198,7 @@ def main(site, fresh=False, say=print):
     add_vegetation(b)
     add_features(b)
     add_points(b)
-    add_open_questions(b)
+    add_observations(b)
     add_surface(b)
     add_site_layers(b)
     add_extensions(b)

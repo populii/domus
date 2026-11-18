@@ -429,8 +429,9 @@ domus video plot walk-colmap
 
 `export` keeps the points inside the model's extent and near the cameras, thins them to one a 2 cm cell, and writes
 `data/video/points.npz` with every phone scan's too. `plot` draws the clip in plan over the photo, with the camera's
-path, to `data/video/checks/walk-colmap-plan.jpg`. `[video.keep]` trusts only part of a cloud, and `[[video.compare]]`
-shows two placements of one clip side by side when you can't yet say which is right.
+path, to `data/video/checks/walk-colmap-plan.jpg`. `[video.keep]` trusts only part of a cloud, and a placement in
+`data/observations.json` shows another placement of a clip beside it when you can't yet say which is right
+([7.6](#76-observations-readings-that-check-the-model)).
 
 ### 6.7 Check it
 
@@ -578,8 +579,8 @@ These numbers come from fitting real sites, so treat them as a guide:
 
 Then look. Draw model outlines on frames (`domus prep overlay`) beside the model's view of the same camera and a 50%
 blend. Your eye finds what numbers miss. Two placements of the same ground should agree; if they don't, say which you
-trust and why. A single clip doesn't overrule a surveyed point. Keep unresolved disagreements visible with
-`[[video.compare]]` rather than picking one quietly.
+trust and why. A single clip doesn't overrule a surveyed point. Keep unresolved disagreements visible as
+observations ([7.6](#76-observations-readings-that-check-the-model)) rather than picking one quietly.
 
 ### 7.5 Fit the model to the evidence
 
@@ -601,6 +602,24 @@ Move the model only where placed evidence, measurement or documents support it.
 Each value records its `source`, its `basis` (the frames, marks or sheet it rests on) and a short `confidence`. When
 better evidence arrives, replace the value and rewrite its note. Rebuild and check after each change, and compare
 heights at fixed stations before and after (`domus prep profile`), so you know only what you meant to move has moved.
+
+### 7.6 Observations: readings that check the model
+
+A reading you trust enough to check the model by, such as a wall's top, a door sill or the plinth at a corner, goes in
+`data/observations.json` as an observation ([docs/observations.md](docs/observations.md)): what was read (a mark in a
+clip's picks), what it checks (a model element by its id: a wall's top or toe, a setting such as `house.fl_upper`, the
+house's plinth on a face, the ground under it, a vertex's place) and how sure it is (`uncertainty_m`). Nothing is
+copied: every build reads the mark from the clip's latest solved picks and the model's value from the model as it is,
+so solving a clip again or changing the model carries the observation with it.
+
+```sh
+domus prep check observations      # each one against the model: ok, near, off, or a lost target
+domus site propose w1-top          # propose setting its target to what was read
+```
+
+The viewer's **Observations** group shows a label at each reading, green within its uncertainty, amber within twice
+it, red beyond. Propose a change only where the reading is the better evidence, and say so to the person: they accept
+or reject it, and `domus site undo` puts an accepted one back.
 
 ## 8. Adapt the site to its own situation
 
@@ -811,6 +830,7 @@ for option in site.options():
 | `api.create`, `api.new`, `api.demo`; `site.fetch()`, `map_canopy()`, `fetch_marks()`, `fetch_title()`, `fetch_points()`, `scan()`, `shots()`, `upgrade()`, `trust()`, `shift()`, `edit()`, `regrade()` | What the commands do, for a tool: `domus create`, `new`, `demo`, `fetch`, `canopy`, `marks`, `title`, `points`, `scan`, `shots` and `site ...`. Each takes `say`, which gets the lines the command prints |
 | `site.video.place(tag)`, `site.prep.profile(points)` and the other steps | `domus video`'s and `domus prep`'s steps, for a tool: provisional, so they may change between releases ([docs/api.md](docs/api.md)) |
 | `site.edit(intent, why)`, `undo()`, `edits()`, `propose()`, `proposals()`, `accept()`, `reject()` | The one route for every change to the site's data, recorded and undoable, and the changes proposed for a person to decide on ([docs/changes.md](docs/changes.md)): provisional too |
+| `site.observations()`, `site.propose_observation(id)` | The observations, each read against the model, and a proposal to set one's target to what it read ([docs/observations.md](docs/observations.md)): provisional too |
 | `api.linz_query`, `api.clip`, `api.fit_affine`, `api.resample_line` | Helpers for LINZ layers, raster windows, image-to-ground fits and lines |
 
 A process can open several sites at once, and each keeps what Domus reads of it apart, so a tool can compare two. A
@@ -888,6 +908,7 @@ check roof plumb` runs just those.
 | `through` | An option's ground coming through a wall or a flight of steps. Behind a block wall's capping units, the soil over its deeper units, up to the cap's top, is how it's built |
 | `fixes` | Ground-fix points inside an option's wall, at or over its top |
 | `blocks` | Block walls not set out in whole units: cut pieces and cut caps |
+| `observations` | Each observation's reading against the model element it checks: off by more than twice its uncertainty fails |
 
 A check the site has nothing for is skipped with a reason, such as `plumb skipped the site has no placed videos`.
 

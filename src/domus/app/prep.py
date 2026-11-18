@@ -67,7 +67,8 @@ def add(steps, command):
 
     sub = step("check", _check, "Adversarial checks of a site's model against its own data, the LiDAR and the placed "
                "videos.")
-    sub.add_argument("checks", nargs="*", help="some of sanity, roof, plumb, clouds, through, fixes and blocks (default: all)")
+    sub.add_argument("checks", nargs="*", help="some of sanity, roof, plumb, clouds, through, fixes, blocks and observations "
+                     "(default: all)")
     sub.add_argument("--tags", nargs="*", help="placed reconstructions for plumb and clouds (default: all)")
     sub.add_argument("--plots", action="store_true")
 

@@ -20,6 +20,7 @@
     domus site regrade CLOUD SPEC [BACKUP] [--apply]          give ground fixes the levels a placed cloud shows
     domus site edits | undo EDIT                              the changes made to the site's data, and undo one
     domus site proposals | accept ID | reject ID --why ...    the changes proposed, to accept or reject
+    domus site propose OBSERVATION                            propose setting an observation's target to what it read
 
 Every command but `new` and `demo` works on the site project in the current folder, or the one
 named by --site or the DOMUS_SITE environment variable. The command line reads which, once, and hands
@@ -172,6 +173,10 @@ def parser():
     ac.add_argument("proposal", help="the proposal's number, as domus site proposals lists it")
     ac.add_argument("--who", help="who's accepting it (default: this computer's user)")
     ac.add_argument("--build", action="store_true", help="build the model afterwards, as domus build does")
+    po = command(actions, "propose", _propose, "Propose setting each observation's target to what it measured, for a "
+                 "person to accept or reject (docs/observations.md).", "propose setting an observation's target to what it read")
+    po.add_argument("observations", nargs="+", metavar="observation", help="an observation's id, as domus prep check "
+                    "observations lists it")
     rj = command(actions, "reject", _reject, "Reject a proposed change, saying why: the site's data stays as it is.",
                  "reject a proposed change, saying why")
     rj.add_argument("proposal", help="the proposal's number, as domus site proposals lists it")
@@ -366,6 +371,12 @@ def _accept(args, site, named):
     s.accept(args.proposal, args.who)
     if args.build:
         s.build()
+
+
+def _propose(args, site, named):
+    s = opened(site)
+    for observation in args.observations:
+        s.propose_observation(observation)
 
 
 def _reject(args, site, named):

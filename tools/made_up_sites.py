@@ -1,7 +1,7 @@
 """The made-up sites CI builds with a pull request's base and with its head, so a change to the build can be proved
 without anyone's real property.
 
-    uv run python tools/made_up_sites.py write OUT     # writes OUT/demo, OUT/richer, OUT/abroad, OUT/format1 to OUT/format3 and OUT/left
+    uv run python tools/made_up_sites.py write OUT     # writes OUT/demo, OUT/richer, OUT/abroad, OUT/format1 to OUT/format4 and OUT/left
     python tools/made_up_sites.py report DIR           # what moved between DIR/base-<site> and DIR/head-<site>
 
 The sites, all in the sea, so none is a real place:
@@ -27,6 +27,10 @@ The sites, all in the sea, so none is a real place:
   format3  The demo as a site in format 3 (Domus 2026.11.38 and before) with what format 4 changed: how sure a
            datum's offset and the upper floor's level are, in [datums.<datum>] and [house], which format 4 keeps
            under [local]. It stays as it is for good too.
+  format4  The demo as a site in format 4 (Domus 2026.11.51 and before) with what format 5 changed: a clip's
+           readings in [[video.question_marks]], one mark read off two clips' picks, and two placements of a clip in
+           [[video.compare]], one of them with its made-up cloud as `domus video export` writes it, all of which
+           format 5 keeps as observations. It stays as it is for good too.
   left     The demo with its options' frame run the other way, north along the lot's east boundary from its
            south-east corner, so the lot lies on the frame line's left ([frame] side = "left"). Its options are the
            demo's, with s counted from that end, so its walls and terraces stand where the demo's do.
@@ -51,7 +55,7 @@ import tomllib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SITES = ("demo", "richer", "abroad", "format1", "format2", "format3", "left")
+SITES = ("demo", "richer", "abroad", "format1", "format2", "format3", "format4", "left")
 TWIN_M = 0.0015         # how far the abroad site's model may be from the demo's: the same site on another grid
 IMAGE_MEAN, IMAGE_MAX = 0.5, 16      # and its pictures: the mean and largest difference in a colour, out of 255
 # The abroad site's grid: the British National Grid, in the Celtic Sea.
@@ -426,6 +430,71 @@ def make_format_3(root):
     settings.write_text(text, encoding="utf-8", newline="\n")
 
 
+FORMAT_4_READINGS = """
+[[video.question_marks]]
+id = "sill"
+text = "Door sill, the walk (made up)"
+picks = "walk-site.csv"
+drawn = "upper floor 43.39"          # made up
+lift_m = 0.2
+
+[[video.question_marks]]
+id = "sill"
+text = "Door sill, the yard clip (made up)"
+picks = "yard-site.csv"
+drawn = "upper floor 43.39"
+
+[[video.question_marks]]
+id = "w1-east"
+text = "The old wall's east end (made up)"
+picks = "walk-site.csv"
+
+[[video.compare]]
+id = "walk-up"
+name = "The walk, 0.3 m higher (made up)"
+clouds = ["walk-colmap-site"]
+pivot = {pivot}
+dz_m = 0.3
+
+[[video.compare]]
+id = "walk-turned"
+name = "The walk, turned a degree (made up)"
+clouds = ["walk-colmap-site"]
+pivot = {pivot}
+turn_deg = 1.0
+"""
+
+
+def make_format_4(root):
+    """The demo, said the way a format 4 site that keeps a clip's readings and placements in its settings says it: two
+    clips' picks (data/video/picks/<clip>-site.csv), three question marks reading them, and two comparisons, the first
+    with its cloud in data/video/compare.npz as `domus video export` writes it."""
+    import numpy as np
+
+    from domus.project import demo
+
+    x0, y0 = demo.X0, demo.Y0
+    settings = root / "data" / "site.toml"
+    text = re.sub(r"^format = .*$", "format = 4", settings.read_text(encoding="utf-8"), count=1, flags=re.MULTILINE)
+    settings.write_text(text + FORMAT_4_READINGS.format(pivot=json.dumps([x0 + 11, y0 + 22])), encoding="utf-8",
+                        newline="\n")
+    picks = root / "data" / "video" / "picks"
+    picks.mkdir(parents=True)
+    head = "id,E,N,H,model,used,marks,reproj_max_px,angle_deg,dropped,desc\n"
+    for name, rows in (("walk", [("sill", x0 + 10.5, y0 + 15.02, 43.452), ("w1-east", x0 + 19.98, y0 + 22.01, 42.118)]),
+                       ("yard", [("sill", x0 + 10.48, y0 + 15.01, 43.41)])):
+        (picks / f"{name}-site.csv").write_text(head + "".join(f"{i},{e},{n},{h},{name}-colmap,2,2,0.8,12.0,,made up\n"
+                                                               for i, e, n, h in rows), encoding="utf-8", newline="")
+    # The first comparison's cloud: a patch of the lawn 0.3 m up, in 2 cm steps from the model's origin, as `domus video
+    # export` writes the sets of data/video/compare.npz.
+    e, n = np.meshgrid(np.arange(x0 + 8, x0 + 14, 0.25), np.arange(y0 + 23, y0 + 28, 0.25))
+    xyz = np.column_stack([e.ravel(), n.ravel(), demo.ground(e.ravel(), n.ravel()) + 0.3])
+    origin = np.array([*json.loads(re.search(r"^origin = (.*)$", text, re.MULTILINE)[1])[:2], 0.0])
+    np.savez_compressed(root / "data" / "video" / "compare.npz", mm=np.round((xyz - origin) * 1000).astype(np.int32),
+                        rgb=np.tile(np.array([[96, 128, 70]], np.uint8), (len(xyz), 1)), set=np.zeros(len(xyz), np.uint8),
+                        ids=np.array(["walk-up"]), origin=origin)
+
+
 def make_left(root):
     """The demo with its options' frame run the other way along the same boundary, from where it ran towards to where
     it started, so the lot is on the frame line's left; o is as it was, and the options' s is counted from that end, so
@@ -464,6 +533,7 @@ def write(out):
     make_format_1(out / "format1")
     make_format_2(out / "format2")
     make_format_3(out / "format3")
+    make_format_4(out / "format4")
     make_left(out / "left")
     print(f"Wrote {', '.join(SITES)} to {out}")
 

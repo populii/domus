@@ -17,6 +17,9 @@
   --on-ground: #2e2b25;  /* labels drawn over the terrain (same in both themes) */
   --drain: #9b2f2c;
   --measure: #e0480c;    /* measurement lines, points and labels in the model */
+  --obs-ok: #1d7a3a;     /* an observation within its uncertainty of the model, within twice it, and further */
+  --obs-near: #9a5b00;
+  --obs-off: #b42318;
   --ground: #8a7254;     /* the ground in profile charts */
   --chrome: color-mix(in srgb, var(--panel) 90%, transparent);  /* toolbars over the model */
   --font-display: Bahnschrift, "DIN Alternate", "Barlow Condensed", "Arial Narrow", sans-serif;
@@ -28,6 +31,7 @@
     --paper: #0f1518; --panel: #141c20; --ink: #dde6e9; --muted: #95a3a9; --rule: #2a363c;
     --accent: #43b9d6; --accent-ink: #062027; --warn: #f0a650; --warn-bg: #3a2a16; --sky: #0b1114;
     --measure: #ff8a45; --ground: #b89d76;
+    --obs-ok: #6fd08e; --obs-near: #f0a650; --obs-off: #ff8a80;
     color-scheme: dark;
   }
 }
@@ -35,6 +39,7 @@
   --paper: #0f1518; --panel: #141c20; --ink: #dde6e9; --muted: #95a3a9; --rule: #2a363c;
   --accent: #43b9d6; --accent-ink: #062027; --warn: #f0a650; --warn-bg: #3a2a16; --sky: #0b1114;
   --measure: #ff8a45; --ground: #b89d76;
+  --obs-ok: #6fd08e; --obs-near: #f0a650; --obs-off: #ff8a80;
   color-scheme: dark;
 }
 [hidden] { display: none !important; }
@@ -226,6 +231,10 @@ details > summary { cursor: pointer; font-size: 13px; color: var(--accent); marg
 }
 .lbl.contour { background: none; border: 0; color: var(--on-ground); font-size: 10px; padding: 0; }
 .lbl.sewer { color: var(--drain); }
+.lbl.obs.ok { color: var(--obs-ok); border-color: var(--obs-ok); }
+.lbl.obs.near { color: var(--obs-near); border-color: var(--obs-near); }
+.lbl.obs.off { color: var(--obs-off); border-color: var(--obs-off); font-weight: 600; }
+.lbl.obs.lost { color: var(--muted); border-style: dashed; }
 .lbl.measure { color: var(--measure); border-color: var(--measure); font-weight: 500; }
 .lbl.measure.live { border-style: dashed; }
 
@@ -1014,7 +1023,8 @@ for (const layer of model.layers) {
     if (layer.labels) for (const l of layer.labels) obj.add(label(l.text, l.at, "contour"));
   } else if (layer.type === "labels") {
     obj = new THREE.Group();
-    for (const it of layer.items) obj.add(label(it.text, it.at, it.kind === "sewer" ? "sewer" : ""));
+    // An observation's label is coloured by its tone: ok, near, off (against how sure it is) or lost (its target).
+    for (const it of layer.items) obj.add(label(it.text, it.at, it.kind === "sewer" ? "sewer" : it.tone ? `obs ${it.tone}` : ""));
   } else if (layer.type === "points") {
     // JSON: positions as base64 little-endian int16 in `step` metres (viewer x, y, z), colours as base64 bytes.
     obj = new THREE.Group();

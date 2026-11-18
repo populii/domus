@@ -10,7 +10,7 @@ import pytest
 
 from domus import api
 from domus.errors import DomusError
-from domus.project import changes, intents
+from domus.project import changes, formats, intents
 
 MOVE_W1 = {"kind": "move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5, -0.25]}
 
@@ -188,7 +188,8 @@ def test_a_setting_keeps_its_comment_and_comes_back_byte_for_byte(demo):
 def test_a_site_in_an_older_format_changes_its_layers_not_its_settings(demo):
     s = api.open_site(demo)
     toml = demo / "data" / "site.toml"
-    toml.write_text(toml.read_text(encoding="utf-8").replace("format = 4", "format = 3"), encoding="utf-8", newline="\n")
+    older = toml.read_text(encoding="utf-8").replace(f"format = {formats.FORMAT}", f"format = {formats.FORMAT - 1}")
+    toml.write_text(older, encoding="utf-8", newline="\n")
     with pytest.raises(DomusError, match="domus site upgrade writes it up to date first"):
         s.edit({"kind": "setting", "key": "house.fl_upper", "value": 45.0}, "From the plans.", say=quiet)
     assert s.edit(MOVE_W1, "Measured.", say=quiet)["id"] == "0001"

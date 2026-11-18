@@ -58,7 +58,7 @@ Everything is on the site's own grid (`[crs] epsg` in `data/site.toml`), with he
 | `site.build(fresh=False)` | Builds the model, as `domus build` does, and gives the folder it's in. `fresh` draws everything again, taking nothing from the last build |
 | `site.output` | The folder the model is built into |
 | `site.export(path, format=None, option=None)` | Writes the built model for other software, as `domus export` does, and gives the file's path: glTF (`"glb"`, a binary `.glb`) or IFC4 (`"ifc"`, which needs IfcOpenShell, the `ifc` extra), by default the one the path's suffix says. `option`, a wall option's id, shows that option in place of what it replaces, as the viewer does; without it, the site as it is. It reads the model as last built ([export.md](export.md)) |
-| `site.check(checks=None, tags=None, plots=False)` | Runs the adversarial checks, as `domus prep check` does (sanity, roof, plumb, clouds, and for the wall options through, fixes and blocks), and gives their report: `failures` by check, `findings`, and `skipped`, why a check the site has nothing for was skipped. It writes it to `.domus/checks/check_model.json` |
+| `site.check(checks=None, tags=None, plots=False)` | Runs the adversarial checks, as `domus prep check` does (sanity, roof, plumb, clouds, for the wall options through, fixes and blocks, and observations), and gives their report: `failures` by check, `findings`, and `skipped`, why a check the site has nothing for was skipped. It writes it to `.domus/checks/check_model.json` |
 | `site.shots(spec, timeout=None)` | Takes pictures of the built model as the viewer draws it, as `domus shots` does, from `spec`, a JSON file ([shots.md](shots.md)), within `timeout` seconds (ten minutes unless given), and gives each picture's path and what the viewer showed. It needs the `shots` extra |
 
 ## Changing a site
@@ -134,8 +134,10 @@ documented, but they may change from one release to the next without a deprecati
 | `site.proposals(state=None)` | The proposals, oldest first, or those in `state` (`open`, `accepted` or `rejected`), as `domus site proposals` lists them |
 | `site.accept(proposal, who=None)` | Accepts a proposal by its id, as `domus site accept` does: its intents applied as an edit whose basis is the proposal. Gives the edit's record |
 | `site.reject(proposal, why, who=None)` | Rejects a proposal by its id, recording why, as `domus site reject` does. Gives the proposal |
+| `site.observations()` | The site's observations ([observations.md](observations.md)), each as read now: `measured` from its source, `expected` from the model by its target's id, the `difference` and its `state` |
+| `site.propose_observation(observation)` | Proposes setting an observation's target to what it read, as `domus site propose` does. Gives the proposal |
 
-`edit`, `undo`, `propose`, `accept` and `reject` take `say`, as the commands' calls do.
+`edit`, `undo`, `propose`, `propose_observation`, `accept` and `reject` take `say`, as the commands' calls do.
 
 ## Helpers
 

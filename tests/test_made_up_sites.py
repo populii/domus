@@ -180,3 +180,15 @@ def test_the_report_holds_the_abroad_site_to_the_demo(tmp_path, capsys):
     assert made_up_sites.report(tmp_path) == 1
     out = capsys.readouterr().out
     assert "| abroad | failed | ok | builds now |" in out and "doesn't build the demo's model" in out
+
+
+def test_the_format_4_site_keeps_its_readings_where_format_4_did(sites):
+    s, demo = settings(sites / "format4"), settings(sites / "demo")
+    assert s["domus"]["format"] == 4
+    assert [(m["id"], m["picks"]) for m in s["video"]["question_marks"]] == [
+        ("sill", "walk-site.csv"), ("sill", "yard-site.csv"), ("w1-east", "walk-site.csv")]
+    assert [c["id"] for c in s["video"]["compare"]] == ["walk-up", "walk-turned"]
+    assert {k: v for k, v in s.items() if k not in ("domus", "video")} == {k: v for k, v in demo.items() if k != "domus"}
+    picks = sites / "format4" / "data" / "video" / "picks"
+    assert sorted(p.name for p in picks.iterdir()) == ["walk-site.csv", "yard-site.csv"]
+    assert (sites / "format4" / "data" / "video" / "compare.npz").exists()

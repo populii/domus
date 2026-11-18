@@ -517,7 +517,8 @@ def describe(intent):
             return f"{layer}: {fid}'s {len(z)} vertices' heights set"
         return f"{layer}: {fid}'s " + (f"vertex {intent['vertex']}" if "vertex" in intent else "height") + f" at {z}"
     if kind == "props":
-        parts = [f"{k} = {str(v)[:60]!r}" for k, v in intent.get("set", {}).items()]
+        parts = [f"{k} = {v[:60]!r}" if isinstance(v, str) else f"{k} = {json.dumps(v)[:60]}"
+                 for k, v in intent.get("set", {}).items()]
         parts += [f"{k} dropped" for k in intent.get("drop", [])]
         return f"{layer}: {fid}: {', '.join(parts)}"
     if kind == "delete":

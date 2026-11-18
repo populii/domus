@@ -225,7 +225,8 @@ it change. On the demo, both schemes run into a made-up easement, and scheme B's
 with an 18 cm step.
 
 It checks the model itself too: things floating or buried, spikes and holes in the ground, a roof that doesn't fit the
-LiDAR, clouds that are tilted or off the ground. A check that fails is a question to answer, not a box to tick.
+LiDAR, clouds that are tilted or off the ground, and readings off your videos that the model doesn't agree with. A check
+that fails is a question to answer, not a box to tick.
 
 ## What you can do with it
 
@@ -455,6 +456,8 @@ Being honest about the rough edges:
 | [docs/export.md](docs/export.md) | The model as glTF or IFC, for other software |
 | [docs/site-format.md](docs/site-format.md) | Every file and setting in a site folder |
 | [docs/model-format.md](docs/model-format.md) | What a build writes, for the viewer and your own tools |
+| [docs/changes.md](docs/changes.md) | Every change to a site's data, recorded and undoable, and the changes proposed for you to accept |
+| [docs/observations.md](docs/observations.md) | Readings from the videos, set against the model at every build |
 | [docs/api.md](docs/api.md) | The public API for site tools and tests |
 | [docs/self-hosting.md](docs/self-hosting.md) | Docker, Unraid, many sites, upgrades and logins |
 | [AGENTS.md](AGENTS.md) | The guide for AI agents building a model or changing Domus |

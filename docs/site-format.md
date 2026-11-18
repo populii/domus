@@ -13,6 +13,7 @@ data/survey/control.csv   survey marks (optional)
 data/georef/<sheet>.json  georeferenced scanned plans, for [[drapes]] (optional)
 data/features/, data/walls/, data/house/   textures (optional; plain colours without them)
 data/layers/*.json        the site's own layers, drawn by its tools (optional; docs/model-format.md)
+data/observations.json    readings from videos, each checking an element of the model by its id (optional; docs/observations.md)
 options/_site.toml        what wall options share
 options/*.toml            one per option
 viewer/data/              the built model (set DOMUS_OUTPUT to move it; docs/model-format.md)
@@ -31,7 +32,10 @@ settings through its schema (`domus.project.schema`), which these tables are wri
 reads as its default, and a key Domus doesn't know gets a warning naming the nearest one it does. Keep anything
 only your own tools read under `[local]`. So do notes on how sure a datum's offset and `[house] fl_upper` are:
 `[local.datums.<datum>] uncertainty_m` and `[local.house] fl_upper_uncertainty_m`. A site in format 3 or before that
-gives them in `[datums.<datum>]` and `[house]` reads with them there, and `domus site upgrade` moves them.
+gives them in `[datums.<datum>]` and `[house]` reads with them there, and `domus site upgrade` moves them. A clip's
+readings and two placements of a clip side by side are observations, in `data/observations.json`
+([observations.md](observations.md)): a site in format 4 or before that gives them as `[[video.question_marks]]` and
+`[[video.compare]]` reads with them there, and `domus site upgrade` moves them into that file.
 
 <!-- settings: start (tools/settings_doc.py writes this part) -->
 ### data/site.toml
@@ -143,7 +147,7 @@ gives them in `[datums.<datum>]` and `[house]` reads with them there, and `domus
 | `labels.points` | `"Point cloud from the videos"` | The point cloud from the videos |
 | `labels.dsm` | `"LiDAR surface (trees and roofs), 1 m"` | The surface model |
 | `labels.lidar` | `"LiDAR"` | What the LiDAR is called in other layers' names |
-| `labels.readings` | `"Readings from the clips"` | Readings from the clips |
+| `labels.readings` | `"Readings from the clips"` | The observations' labels (data/observations.json) |
 | `labels.features_source` | `"data/site/features-*.geojson (each feature's source and basis)"` | The site features' source |
 | `labels.bed_floor_source` | `"Outlines as the beds in data/site/trees.geojson"` | The beds' floors' source |
 | `[views.<view>]` | | Extra view buttons: "Name" = { pos = [x, y, z], target = [x, y, z] } in viewer metres (x east, y up, z south of the origin) |
@@ -155,19 +159,6 @@ gives them in `[datums.<datum>]` and `[house]` reads with them there, and `domus
 | `[video]` | | Point clouds from domus video |
 | `video.clouds` | `[]` | The placed clouds to show (data/video/<name>.npz) |
 | `video.keep.<cloud>` |  | [E min, N min, E max, N max]: only this part of a cloud is trusted |
-| `[[video.compare]]` | | Two placements of a clip, shown as clouds side by side |
-| `video.compare[].id` | required | Its id |
-| `video.compare[].name` | required | Its name |
-| `video.compare[].clouds` | required | The clouds it moves |
-| `video.compare[].pivot` | required | [E, N] it turns about |
-| `video.compare[].dz_m` | `0.0` | How far it moves up |
-| `video.compare[].turn_deg` | `0.0` | How far it turns, counter-clockwise |
-| `[[video.question_marks]]` | | A clip's reading of the house's levels, as a label |
-| `video.question_marks[].id` | required | Its id |
-| `video.question_marks[].text` | required | Its label |
-| `video.question_marks[].picks` | required | The picks it reads |
-| `video.question_marks[].drawn` |  | What it's drawn on |
-| `video.question_marks[].lift_m` | `0.15` | How far above that it stands |
 
 ### options/_site.toml
 

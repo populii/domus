@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** observations: readings from videos kept as data apart from the model, in
+  `data/observations.json` ([docs/observations.md](docs/observations.md)). Each says what was read (a mark in a
+  clip's picks, or a placement of a reconstruction), what it checks (a model element by its id: a wall's top or toe
+  at a vertex, a setting such as `house.fl_upper`, the house's plinth on a face, the ground under it, a vertex's
+  place) and how sure it is (`uncertainty_m`). Nothing is copied: every build reads the mark from the clip's latest
+  solved picks and the model's value from the model as it is, shows the difference in the viewer's **Observations**
+  group, green within the uncertainty, amber within twice it and red beyond, reports each in `summary.json`
+  (`observations`), and says which observation lost its target or its reading. `domus prep check observations` lists
+  them, warning for one near and failing for one off; `domus site propose ID` proposes setting the target to what was
+  read, for a person to accept through the change route. In `domus.api`, `site.observations()` and
+  `site.propose_observation()`, provisional.
+- **For site projects:** site format 5. `[[video.question_marks]]` and `[[video.compare]]` are observations: a site
+  in format 4 or before reads them as before, as observations in memory (a question mark is a level with no target
+  yet, its drawn level in its note; a comparison a placement), and `domus site upgrade` writes them into
+  `data/observations.json`. They leave the settings' schema, and `domus video export` writes the placements' clouds to
+  `data/video/compare.npz` as it wrote the comparisons'. The viewer's **Open questions** group is **Observations**,
+  and a question mark's label reads `name: level (note)` until it's given a target. `tools/made_up_sites.py` has a
+  `format4` site with both, which CI builds with the base and the head.
+
 ## 2026.11.51
 
 - **For site projects:** every change to a site's data goes one way ([docs/changes.md](docs/changes.md)). It's said

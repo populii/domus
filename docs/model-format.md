@@ -20,7 +20,7 @@ Positions are in viewer metres: x east of the site's origin, y up from its heigh
 | `extent` | `[E min, N min, E max, N max]`: the area modelled, on the site's grid |
 | `textures` | The ground's drapes: `{key: {label, file, width, height}}`; the first is shown first |
 | `layers` | What's drawn, in order (below) |
-| `summary` | The walls (`walls`), the wall options and how each comes out (`options`, each with its materials list, `materials`: [docs/options.md](options.md#what-an-option-takes-its-materials-list); `options_site`), and what each layer kind found |
+| `summary` | The walls (`walls`), the wall options and how each comes out (`options`, each with its materials list, `materials`: [docs/options.md](options.md#what-an-option-takes-its-materials-list); `options_site`), the observations, each read against the model (`observations`: [docs/observations.md](observations.md)), and what each layer kind found |
 | `lot` | `{area_m2}` of the main lot |
 | `views` | The site's own view buttons: `{name: {pos, target}}` in viewer metres |
 | `snap` | Lines and points the drawing tools snap to |
@@ -36,7 +36,7 @@ heading in the panel), `colour`, `visible` (false: off until switched on) and `i
 |---|---|
 | `mesh` | `positions` (x, y, z in threes), `indices` (triangles, in threes); `uv` with `texture` (a file) and `repeat`, `opacity`, `role` and `option` (below), `tint`, `mask`; on an option's wall of a named block whose units are deeper than its capping units, `soil_over`, the triangles of the body's top behind the cap, which the soil covers as the wall is built, and `soil_over_m`, how far it comes up over them (to the cap's top) |
 | `lines` | `segments`: each segment's two ends, six numbers; `labels`: `{text, at}` along them |
-| `labels` | `items`: `{text, at, kind}`, `at` in viewer metres |
+| `labels` | `items`: `{text, at, kind}`, `at` in viewer metres; an observation's (`kind` `observation`) has a `tone`, `ok`, `near`, `off` or `lost`, which colours it ([observations.md](observations.md)) |
 | `points` | `file`: a JSON of `positions` (base64 little-endian int16, in `step` metres) and `colours` (base64 bytes); `size` |
 | `vegetation` | `plants` (each one's name and info) and what draws them: `cards`, `limbs` or `drape` |
 | `pipes` | A drain or service, drawn at its depth, with its levels |

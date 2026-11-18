@@ -4,10 +4,12 @@
 
 Domus reads an older site as it is, migrating it in memory, so a site never has to be upgraded to be used. Upgrading
 is for editing it: its files then say what the model is built from, in this Domus's terms. The files that change keep
-their comments, are copied to .domus/upgrade/ first, and are checked to say just what the site said in memory.
+their comments, are copied to .domus/upgrade/ first, and are checked to say just what the site said in memory. A
+step can write a file of its own, as format 5's writes data/observations.json.
 """
 
 import datetime
+import json
 import shutil
 import tomllib
 from pathlib import Path
@@ -15,11 +17,25 @@ from pathlib import Path
 import tomlkit
 
 from ..errors import DomusError
-from . import formats
+from . import formats, observations
 
 
 def option_files(root):
     return sorted(p for p in (root / "options").glob("*.toml") if not p.name.startswith("_"))
+
+
+def observations_file(root, settings, fmt):
+    """data/observations.json as format 5 says it, from the site in `root` in format `fmt` (`settings`, data/site.toml
+    as read, a dict): its own observations, if it has the file, then those format 4's settings say."""
+    path = root.joinpath(*observations.FILE)
+    held = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"observations": []}
+    found = held.get("observations", []) + (observations.from_settings(settings) if fmt < 5 else [])
+    ids = [o.get("id") for o in found if isinstance(o, dict)]
+    twice = sorted({i for i in ids if ids.count(i) > 1})
+    if twice:
+        raise DomusError(f"data/observations.json and data/site.toml both have an observation {twice[0]}: give one "
+                         "another id before upgrading")
+    return path, {**held, "observations": found}
 
 
 def plan(root):
@@ -51,6 +67,15 @@ def plan(root):
         notes += [f"data/site.toml: {n}" for n in formats.site_2(site)]
     if fmt < 4:
         notes += [f"data/site.toml: {n}" for n in formats.site_3(site)]
+    texts = {}
+    if fmt < 5:
+        path, held = observations_file(root, site.unwrap(), fmt)
+        moved = len(observations.from_settings(site.unwrap()))
+        notes += [f"data/site.toml: {n}" for n in formats.site_4(site)]
+        if moved:
+            texts[path] = json.dumps(held, indent=1) + "\n"
+            notes.append(f"data/observations.json: {moved} observations from data/site.toml, "
+                         f"{len(held['observations'])} in all (docs/observations.md)")
     if "domus" in site:
         site["domus"]["format"] = formats.FORMAT
     else:
@@ -59,7 +84,7 @@ def plan(root):
         site["domus"].add("format", formats.FORMAT)
         site["domus"]["format"].comment("this site folder's format: `domus site upgrade` moves an older one on")
     notes.append(f"data/site.toml: [domus] format = {formats.FORMAT}")
-    return fmt, {path: tomlkit.dumps(doc) for path, doc in docs.items()}, notes
+    return fmt, {**{path: tomlkit.dumps(doc) for path, doc in docs.items()}, **texts}, notes
 
 
 def verify(root, fmt, writes):
@@ -68,6 +93,11 @@ def verify(root, fmt, writes):
     site_path, options_site_path = root / "data" / "site.toml", root / "options" / "_site.toml"
     frame = formats.options_site(old(options_site_path), fmt).get("frame") if options_site_path.exists() else None
     for path, text in writes.items():
+        if path == root.joinpath(*observations.FILE):
+            if json.loads(text) != observations_file(root, old(site_path), fmt)[1]:
+                raise DomusError("Upgrading would write data/observations.json other than what was read, so nothing was "
+                                 "written. This is a fault in Domus: please report it.")
+            continue
         if path == site_path:
             expected = formats.site(old(path))
         elif path == options_site_path:
@@ -99,8 +129,9 @@ def upgrade(root, dry_run=False, say=print):
     stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d-%H%M%S")
     backup = root / ".domus" / "upgrade" / f"format-{fmt}-{stamp}"
     for path in writes:
-        (backup / path.relative_to(root)).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, backup / path.relative_to(root))
+        if path.exists():               # a file a step writes for the first time has nothing to keep
+            (backup / path.relative_to(root)).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, backup / path.relative_to(root))
     for path, text in writes.items():
         path.write_text(text, encoding="utf-8", newline="")
     say(f"Written. The files as they were are in {backup}.")

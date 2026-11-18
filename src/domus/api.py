@@ -217,7 +217,7 @@ class Site:
 
     def check(self, checks=None, tags=None, plots=False):
         """Runs the adversarial checks, as domus prep check does: `checks` names some of sanity, roof, plumb, clouds,
-        through, fixes and blocks (all of them unless given), `tags` the placed reconstructions for plumb and clouds, and `plots` also writes
+        through, fixes, blocks and observations (all of them unless given), `tags` the placed reconstructions for plumb and clouds, and `plots` also writes
         JPEGs. Returns the report it writes to .domus/checks/check_model.json in the site: `failures`, how many each
         check failed, `findings`, each a dict of check, level, object and detail, and `skipped`, why each check the
         site has nothing for was skipped."""
@@ -392,6 +392,22 @@ class Site:
         from .project import intents as kinds
 
         return changes.propose(self._project, kinds.read(intents), why, source, say)
+
+    def observations(self):
+        """The site's observations (data/observations.json, docs/observations.md), each as read now: what it measured
+        from its source (`measured`, and `at`, where), what the model says of its target (`expected`), the
+        `difference`, and its `state` (ok, near or off against its `uncertainty_m`; compared, when it gives none;
+        reading, with no target; lost target; no reading; placement). Provisional (docs/api.md)."""
+        from .checks import observations
+
+        return observations.evaluate(self._project)
+
+    def propose_observation(self, observation, say=print):
+        """Proposes setting an observation's target to what it measured, as domus site propose does, for a person to
+        accept or reject. Gives the proposal. Provisional (docs/api.md)."""
+        from .checks import observations
+
+        return observations.propose(self._project, observation, say)
 
     def proposals(self, state=None):
         """The proposed changes, oldest first: each with `id`, `made`, `source`, `why`, `intents`, `summary` and its

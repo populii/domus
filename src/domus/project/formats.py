@@ -23,6 +23,12 @@ Format 4:
 - How sure a datum's offset and the upper floor's level are, `[datums.<datum>] uncertainty_m` and `[house]
   fl_upper_uncertainty_m`, aren't Domus's settings: Domus never read them. A site keeps them as its own notes, under
   the same names in `[local]`: `[local.datums.<datum>] uncertainty_m` and `[local.house] fl_upper_uncertainty_m`.
+
+Format 5:
+- `[[video.question_marks]]`, a clip's readings of the house's levels shown as labels, and `[[video.compare]]`, two
+  placements of a clip side by side, are observations, in data/observations.json (domus.project.observations): a
+  question mark is a level with no target yet, its drawn level kept in its note, and a comparison a placement. They
+  leave data/site.toml, and a [video] table they leave empty goes with them.
 """
 
 import copy
@@ -32,7 +38,7 @@ import re
 from .. import __version__
 from ..errors import DomusError
 
-FORMAT = 4
+FORMAT = 5
 COMPASS = {"north": (0.0, 1.0), "east": (1.0, 0.0), "south": (0.0, -1.0), "west": (-1.0, 0.0)}
 # What format 2 and before took for a site that didn't say: the LINZ data's own grid, height datum and credit line.
 NZTM, NZ_VERTICAL = 2193, "NZVD2016"
@@ -204,6 +210,24 @@ def site_3(site):
     return notes
 
 
+def site_4(site):
+    """data/site.toml, format 4 to 5: [[video.question_marks]] and [[video.compare]] leave the settings, as
+    observations (domus.project.observations.from_settings reads them, before this step), and a [video] table they
+    leave empty goes with them."""
+    video = site.get("video")
+    if not isinstance(video, dict):
+        return []
+    notes = []
+    for key, what in (("question_marks", "levels"), ("compare", "placements")):
+        if key in video:
+            n = len(video[key]) if isinstance(video[key], list) else 0
+            del video[key]
+            notes.append(f"[[video.{key}]]: {n} moved to data/observations.json, as observations ({what})")
+    if notes and not len(video):
+        del site["video"]
+    return notes
+
+
 # Reading in memory: each file at this Domus's format, from the format the site is in.
 
 def site(raw):
@@ -216,6 +240,8 @@ def site(raw):
         site_2(out)
     if format_of(raw) < 4:
         site_3(out)
+    if format_of(raw) < 5:
+        site_4(out)
     out.setdefault("domus", {})["format"] = FORMAT
     return out
 
