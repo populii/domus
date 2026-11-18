@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.42
 
 - **For site projects:** every part of Domus is handed the site it works on, where it read the current one, so
   nothing can mix one site up with another in a process that holds several. The command line and the server read
