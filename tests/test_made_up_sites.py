@@ -39,6 +39,11 @@ def test_the_richer_site_has_what_the_demo_lacks(sites):
     assert [t["kind"] for t in paved["terraces"]] == ["paving", "lawn"]
     blocks = tomllib.loads((root / "options" / "d-block-tiers.toml").read_text(encoding="utf-8"))["walls"]
     assert all(w["depth_m"] > w["thickness_m"] and w["trench_m"] > w["depth_m"] for w in blocks)
+    fixes = layer(root, "ground-fixes")["features"]
+    assert [f["geometry"]["type"] for f in fixes] == ["Polygon", "LineString", "MultiPoint"]
+    assert len(fixes[2]["geometry"]["coordinates"]) == 64 and all(f["properties"]["source"] == "made up" for f in fixes)
+    assert [f["properties"]["id"] for f in layer(root, "features-demo")["features"] if f["properties"].get("kind") == "pad"] == \
+        ["path-south"]
 
 
 def test_the_richer_site_paints_in_the_drive_under_its_trees(sites, at_site):

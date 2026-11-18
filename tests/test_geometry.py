@@ -1,5 +1,6 @@
 """Coordinates, the options' frame and the wall levels."""
 
+import itertools
 import json
 
 import numpy as np
@@ -180,6 +181,89 @@ def test_a_grid_cell_is_cut_along_its_corners_closer_in_height():
     assert (cut_cells(with_off, cell, h) == with_off).all()
 
 
+def lattice_fixes(tmp_path, e0, n0):
+    """A made-up 6 x 5 m fix area with a regular pattern of points 0.5 m apart, as a cloud's low points taken cell by
+    cell would be, on a made-up ground that isn't flat: (areas, points), as read_fixes gives them, and each point's
+    place in the pattern (column, row)."""
+    from domus.model import tin
+
+    cols, rows = np.meshgrid(np.arange(12), np.arange(10))
+    cols, rows = cols.ravel(), rows.ravel()
+    x, y = 10.25 + 0.5 * cols, 20.25 + 0.5 * rows
+    z = 41.0 + 0.1 * (y - 20) + 0.06 * np.sin(1.3 * cols) * np.cos(0.9 * rows)
+    area = [[e0 + 10, n0 + 20], [e0 + 16, n0 + 20], [e0 + 16, n0 + 25], [e0 + 10, n0 + 25], [e0 + 10, n0 + 20]]
+    layer = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"id": "fix-area"}, "geometry": {"type": "Polygon", "coordinates": [area]}},
+        {"type": "Feature", "properties": {"id": "fix-levels"}, "geometry": {
+            "type": "MultiPoint", "coordinates": [[e0 + a, n0 + b, c] for a, b, c in zip(x, y, z)]}}]}
+    path = tmp_path / "ground-fixes.geojson"
+    path.write_text(json.dumps(layer), encoding="utf-8")
+    return (*tin.read_fixes(path), np.column_stack([cols, rows]))
+
+
+def cut_along_closer(faces, first, place, heights):
+    """Whether each cell of the pattern (its points `first` onwards in the triangles' numbering, at `place`) that the
+    triangles hold as two is cut along its diagonal whose ends are closer in height, or where both are as close, the
+    one from the point given first: (cells held, cells cut so)."""
+    edges = {frozenset(e) for f in np.asarray(faces).tolist() for e in itertools.combinations(f, 2)}
+    at = {tuple(p): first + k for k, p in enumerate(place.tolist())}
+    held = right = 0
+    for (c, r), p00 in at.items():
+        p10, p01, p11 = at.get((c + 1, r)), at.get((c, r + 1)), at.get((c + 1, r + 1))
+        if None in (p10, p01, p11):
+            continue
+        rising, falling = frozenset((p00, p11)), frozenset((p10, p01))
+        if (rising in edges) == (falling in edges):
+            continue
+        held += 1
+        gap = {d: abs(heights[min(d)] - heights[max(d)]) for d in (rising, falling)}
+        closer = (min((rising, falling), key=min) if abs(gap[rising] - gap[falling]) <= 1e-9
+                  else min((rising, falling), key=gap.get))
+        right += (rising if rising in edges else falling) == closer
+    return held, right
+
+
+def test_a_regular_pattern_of_ground_fixes_is_cut_by_height_wherever_it_lies(tmp_path):
+    from domus.model import tin
+
+    # Each cell of a regular pattern of fix points has its four corners on one circle, so Delaunay could cut it either
+    # way and the arithmetic's rounding would choose. Every cell is cut along its corners closer in height, and so the
+    # ground is the same whether the pattern lies on whole metres of the grid or between them.
+    class Wavy:
+        def __init__(self, e0, n0):
+            self.e0, self.n0 = e0, n0
+
+        def sample(self, e, n):
+            return 40.0 + 0.1 * (np.asarray(n, float) - self.n0) + 0.3 * np.sin((np.asarray(e, float) - self.e0) / 3.0)
+
+    x, y = (a.ravel() for a in np.meshgrid(np.arange(10.05, 16.0, 0.1), np.arange(20.05, 25.0, 0.1)))
+    heights = []
+    for e0, n0 in ((1500000.0, 5500000.0), (1500000.37, 5500000.81)):
+        areas, fixes, place = lattice_fixes(tmp_path, e0, n0)
+        ground = tin.Ground(Wavy(e0, n0), areas, fixes)
+        t = ground.triangles
+        held, right = cut_along_closer(t.faces, len(t.vertices) - len(fixes), place, t.vertices[:, 2])
+        assert held == 11 * 9 and right == held
+        heights.append(ground.sample(e0 + x, n0 + y))
+    assert np.abs(heights[0] - heights[1]).max() < 1e-6
+
+
+def test_the_drawn_ground_cuts_a_regular_pattern_of_fixes_by_height(tmp_path):
+    from domus.model import tin
+
+    # The ground as the build draws it holds the fix points as they're given, cut where four lie on one circle as
+    # Ground cuts them: along the pair closer in height.
+    class Slope:
+        def sample(self, e, n):
+            return 40.0 + 0.1 * (np.asarray(n, float) - 5500000.0)
+
+    e0, n0 = 1500000.0, 5500000.0
+    areas, fixes, place = lattice_fixes(tmp_path, e0, n0)
+    m = tin.build((e0 + 8, n0 + 18, e0 + 18, n0 + 27), 2.0, tin.Ground(Slope(), areas, fixes), (e0, n0))
+    held, right = cut_along_closer(m.faces, len(m.vertices) - len(fixes), place, m.vertices[:, 2])
+    assert held > 50 and right == held
+
+
 def test_the_ground_is_triangulated_from_what_it_is_given():
     from domus.model import tin
 
@@ -235,10 +319,10 @@ def test_ground_fixes_far_along_a_grid_keep_every_point(tmp_path):
         areas, fixes = tin.read_fixes(path)
         ground = tin.Ground(Wavy(e0, n0), areas, fixes)
         assert np.abs(ground.sample(fixes[:, 0], fixes[:, 1]) - fixes[:, 2]).max() < 0.001
-        tri = ground.interp.tri
-        left = np.setdiff1d(np.arange(len(tri.points)), tri.simplices)
-        assert len(left) == 1 and (tri.points == tri.points[left[0]]).all(axis=1).sum() == 2      # the place given twice
-        made.append({frozenset(s) for s in tri.simplices.tolist()})
+        xy, faces = ground.triangles.vertices[:, :2], ground.triangles.faces
+        left = np.setdiff1d(np.arange(len(xy)), faces)
+        assert len(left) == 1 and (xy == xy[left[0]]).all(axis=1).sum() == 2      # the place given twice
+        made.append({frozenset(s) for s in faces.tolist()})
     assert made[0] == made[1]
 
 
@@ -247,15 +331,15 @@ def test_a_pad_far_along_a_grid_is_drawn_through_all_its_points():
     from domus.model import features
 
     # A made-up L-shaped pad, draped on the ground, at the demo's coordinates: every point it's drawn through is a
-    # corner of its triangles, and they cover it.
+    # corner of its triangles, and they cover it, with none that has no area along its straight edges.
     e0, n0 = 1500000.0, 5500000.0
     ring = [[e0 + e, n0 + n] for e, n in ((2.13, 3.07), (9.71, 3.9), (9.4, 6.62), (5.2, 6.1), (4.7, 10.3), (1.8, 9.95), (2.13, 3.07))]
     pad = {"type": "Feature", "properties": {"id": "pad-a", "kind": "pad"}, "geometry": {"type": "Polygon", "coordinates": [ring]}}
     m = features.pad(pad, lambda e, n: 40.0 + 0.1 * (np.asarray(n, float) - n0))["concrete"]
     assert len(np.unique(m.faces)) == len(m.vertices)
     v = m.vertices[m.faces]
-    assert 0.5 * np.abs(cross2(v[:, 1, :2] - v[:, 0, :2], v[:, 2, :2] - v[:, 0, :2])).sum() == pytest.approx(
-        Polygon(ring).area, abs=0.01)
+    area = 0.5 * np.abs(cross2(v[:, 1, :2] - v[:, 0, :2], v[:, 2, :2] - v[:, 0, :2]))
+    assert area.sum() == pytest.approx(Polygon(ring).area, abs=0.01) and area.min() > 1e-6
 
 
 def test_a_surface_is_read_in_its_own_triangles():

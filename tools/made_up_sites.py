@@ -148,9 +148,39 @@ polygon_so = [[7.0, 2.0], [7.0, 20.0], [14.0, 20.0], [14.0, 2.0]]
 """
 
 
+def ground_fixes_and_a_path(root):
+    """A ground fix where the options' lawns go, a 4 m square north of the old wall with a measured line across it and
+    a regular pattern of levels 0.5 m apart, as a placed cloud's low points cell by cell would be, a little below the
+    LiDAR's; and a concrete path, an L whose sides aren't square to the grid, along the house's south wall."""
+    import numpy as np
+
+    from domus.project import demo
+
+    x0, y0 = demo.X0, demo.Y0
+    site = root / "data" / "site"
+    cols, rows = (a.ravel() for a in np.meshgrid(np.arange(8), np.arange(8)))
+    x, y = x0 + 9.25 + 0.5 * cols, y0 + 23.25 + 0.5 * rows
+    z = np.round(demo.ground(x, y) - 0.15 + 0.04 * np.sin(1.7 * cols) * np.cos(1.1 * rows), 2)
+    ends = [(9.3, 23.4), (12.7, 26.6)]
+    line = [[x0 + e, y0 + n, round(float(demo.ground(x0 + e, y0 + n)) - 0.12, 2)] for e, n in ends]
+    fixes = {"type": "FeatureCollection", "features": [
+        feat("Polygon", box(x0 + 9, y0 + 23, x0 + 13, y0 + 27), id="lawn-ground", name="Lawn (made up)",
+             source="made up", confidence="made up"),
+        feat("LineString", line, id="lawn-tape", source="made up", basis="a tape and level, made up", confidence="made up"),
+        feat("MultiPoint", [[float(a), float(b), float(c)] for a, b, c in zip(x, y, z)], id="lawn-levels", source="made up",
+             basis="a placed cloud's low points, cell by cell, made up", confidence="made up"),
+    ]}
+    write_json(site / "ground-fixes.geojson", fixes)
+    path = [[x0 + e, y0 + n] for e, n in ((6.0, 2.4), (7.5, 2.6), (7.3, 4.1), (12.6, 4.3), (12.5, 5.5), (5.9, 5.4), (6.0, 2.4))]
+    features = read_json(site / "features-demo.geojson")
+    features["features"].append(feat("Polygon", [path], id="path-south", kind="pad", name="Path (made up)", source="made up"))
+    write_json(site / "features-demo.geojson", features)
+
+
 def enrich(root):
     """The demo, with house parts, drain levels, a drain at an assumed depth, a lot that isn't listed first, trees
-    over the drive beside it, an option with a paved terrace, and its option B in walls of a named block that say how they're built."""
+    over the drive beside it, ground fixes and a path, an option with a paved terrace, and its option B in walls of a
+    named block that say how they're built."""
     from domus.project import demo
 
     x0, y0 = demo.X0, demo.Y0
@@ -196,6 +226,7 @@ def enrich(root):
                                         '\n[services.notes.drain]\ntext = "Invert {lo} to {hi}, made up ({span})."\n'
                                         'confidence = "made up"\n')
     trees_over_the_drive(root)
+    ground_fixes_and_a_path(root)
     level = lambda s: round(float(demo.ground(x0 + 11, y0 + 30 - s)), 1)        # as the demo's own options take them
     # Option A's lawn, at s 11, part of it paved.
     (root / "options" / "c-paved-terrace.toml").write_text(PAVED_TERRACE.format(level=level(11) + 0.1), encoding="utf-8",

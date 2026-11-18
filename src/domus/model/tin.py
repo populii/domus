@@ -18,13 +18,14 @@ import itertools
 
 import numpy as np
 import shapely
-from scipy.interpolate import LinearNDInterpolator
 from scipy.spatial import Delaunay
 from shapely.ops import unary_union
 
 from ..geo import geojson
-from ..geo.mesh import Mesh, Surface, cross2, offset_behind, resample_line
+from ..geo.mesh import Mesh, Surface, cross2, delaunay_by_height, offset_behind, resample_line
 from .walls import body_depth, wall_levels
+
+TIE_M = 1e-5        # four points this near one circle lie on it exactly, but for rounding: a grid cell's, a regular pattern's
 
 
 def grid(extent, step):
@@ -51,15 +52,15 @@ class Ground:
 
     `areas` are polygons (Nx2) inside which the DEM is not used; `points` (Mx3) are the
     fix lines (resampled) and points. Inside the areas the ground is the triangulation of
-    those points and the DEM grid points around the areas, made about `origin`: the
-    south-west corner of the areas' bounds, in whole metres.
+    those points and the DEM grid points around the areas, `triangles`, made about `origin`:
+    the south-west corner of the areas' bounds, in whole metres.
     """
 
     def __init__(self, dem, areas=(), points=(), step=0.5):
         self.dem = dem
         self.points = np.asarray(points, float).reshape(-1, 3)
         self.region = unary_union([shapely.Polygon(a) for a in areas]) if len(areas) else None
-        self.interp = self.origin = None
+        self.triangles = self.origin = None
         if self.region is not None:
             E, N = grid(self.region.buffer(3.0).bounds, step)
             H = dem.sample(E, N)
@@ -68,9 +69,14 @@ class Ground:
             # Triangulated about the areas' corner, to the micrometre, as build() is about the model's origin: in whole
             # grid coordinates (millions of metres) the arithmetic can't place points a few tenths of a metre apart
             # among the triangles, and leaves some out of all of them. The corner is the areas' own, in whole metres,
-            # so it moves with them: the same fixes moved along the grid by whole metres give the same triangles.
+            # so it moves with them: the same fixes moved along the grid by whole metres give the same triangles. Where
+            # four points lie on one circle (TIE_M), as a grid cell's corners do and a regular pattern of fix points'
+            # can, Delaunay could cut them either way, so they're cut along the pair closer in height, as the build cuts
+            # its grid's cells, and not as the arithmetic's rounding falls.
             self.origin = np.floor(np.asarray(self.region.bounds[:2], float))
-            self.interp = LinearNDInterpolator(np.round(pts[:, :2] - self.origin, 6), pts[:, 2])
+            xy = np.round(pts[:, :2] - self.origin, 6)
+            self.triangles = Mesh(np.column_stack([xy, pts[:, 2]]), delaunay_by_height(xy, pts[:, 2], near_m=TIE_M))
+            self._surface = Surface(self.triangles.vertices, self.triangles.faces)
 
     def inside(self, e, n):
         if self.region is None:
@@ -83,7 +89,7 @@ class Ground:
         h = np.array(self.dem.sample(e, n), float)
         fix = self.inside(e, n)
         if fix.any():
-            h[fix] = self.interp(e[fix] - self.origin[0], n[fix] - self.origin[1])
+            h[fix] = self._surface.z(e[fix] - self.origin[0], n[fix] - self.origin[1])
         return h
 
 
@@ -251,8 +257,13 @@ def build(extent, step, ground, origin, walls=(), surface=None, edges=()):
     # Triangulated about the site's origin, to the micrometre: in whole grid coordinates (hundreds of kilometres) the
     # arithmetic cannot tell apart points a few centimetres from each other, as the two rows along an edge are, and
     # from the origin the same site on any grid gives the same triangles.
-    tri = Delaunay(np.round(pts[:, :2] - np.asarray(origin[:2], float), 6))
-    faces = cut_cells(tri.simplices, cell, pts[:, 2])
+    xy = np.round(pts[:, :2] - np.asarray(origin[:2], float), 6)
+    faces = cut_cells(Delaunay(xy).simplices, cell, pts[:, 2])
+    if len(fix):
+        # Four corners on one circle (TIE_M) with a fix point among them, as a regular pattern of fix points' can be,
+        # are cut along the pair closer in height too, as Ground cuts them; the fix points come last.
+        faces = delaunay_by_height(xy, pts[:, 2], near_m=TIE_M, among=np.arange(len(pts) - len(fix), len(pts)),
+                                   triangles=faces)
     # Drop sliver triangles along the hull.
     a, b, c = (pts[faces[:, k], :2] for k in range(3))
     area = 0.5 * np.abs(cross2(b - a, c - a))

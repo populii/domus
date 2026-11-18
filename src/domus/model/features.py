@@ -489,7 +489,12 @@ def pad(f, ground, step=0.25):
     # Triangulated about the pad's corner, to the micrometre: in whole grid coordinates the arithmetic can't place
     # points a few tenths of a metre apart among the triangles, and leaves some out of all of them (as tin.Ground's).
     tri = Delaunay(np.round(pts - np.floor([e0, n0]), 6))
-    keep = [s for s in tri.simplices if poly.buffer(1e-6).contains(Point(pts[s].mean(axis=0)))]
+    # Points in a line along a straight edge can give triangles with no area there, which draw nothing: they're
+    # dropped as tin.build drops its slivers.
+    a, b, c = (pts[tri.simplices[:, k]] for k in range(3))
+    flat = 0.5 * np.abs(mesh.cross2(b - a, c - a)) <= 1e-6
+    keep = [s for s, no_area in zip(tri.simplices, flat)
+            if not no_area and poly.buffer(1e-6).contains(Point(pts[s].mean(axis=0)))]
     thick = p.get("thickness_m", 0.0)
     z = np.full(len(pts), p["top_m"]) if "top_m" in p else ground(pts[:, 0], pts[:, 1]) + (thick or 0.03)
     faces = np.array(keep, int)

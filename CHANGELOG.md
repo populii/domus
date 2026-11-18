@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** a site with ground fixes may see its ground inside them change once more, a little. Where
+  four points lie on one circle, to within 10 micrometres, as the ground model's grid cells do and a regular
+  pattern of fix points' can (a placed cloud's low points taken cell by cell, say), Delaunay can cut them either
+  way, and the arithmetic's rounding chose. Now they're cut along the pair closer in height, as the build already
+  cut its own grid's cells: in the fixed ground, and where four with a fix point among them meet in the ground the
+  build draws. Measured points that only come near one circle are left as Delaunay cuts them. A site without
+  ground fixes builds as before.
+- Paths, pads and paving drop the triangles with no area that points in a line along their straight edges gave, as
+  the ground drops its slivers. They drew nothing.
+- `tools/made_up_sites.py`'s richer site has ground fixes where the options' lawns go, a measured line and a regular
+  pattern of levels, and a concrete path, so CI's made-up sites show what a change does to them.
+
 ## 2026.11.58
 
 - **For site projects:** an option's cut and fill are measured as solids (`domus.options.solids`), the shapes of the
