@@ -99,18 +99,23 @@ Domus's modules read the current site (`domus.project.site`), and each site keep
 
 ## Where it's heading
 
-The agreed plan takes Domus there in phases, each proved by identical builds of made-up and real sites before the
-next starts:
+The layout above came in seven phases, 0 to 6, each proved by identical builds of made-up and real sites before the
+next began: this layout and its made-up sites in CI, the public API, the settings schema and site formats, sites
+anywhere, the model as pure functions with builds that redo only what changed and trusted site extensions, the general
+tools that grew in real sites, and the package in folders. Beside them came a newer three.js in the viewer, `domus
+export` to glTF and IFC, and `domus shots`.
 
-| Phase | What it brings |
+What's next, each step proved the same way:
+
+| Work | What it brings |
 |---|---|
-| 0 | This layout: `site/`, these docs, made-up sites built and compared in CI, and small fixes such as UTF-8 reads and gzip |
-| 1 | A public API for site tools and tests (`domus.api`, `domus.testing`), raising errors instead of exiting |
-| 2 | A settings schema, site formats read and upgraded in memory, and import rules checked in CI |
-| 3 | Any location: rasters read on their own grid, sites on a metre grid, and sources for New Zealand, anywhere (OpenStreetMap) and your own files |
-| 4 | The model as pure functions, builds that redo only what changed, and site extensions that run only where they're trusted |
-| 5 | General tools that grew in real sites, moved into common |
-| 6 | The package tidied into subpackages |
+| The site handed to each part | Every part that reads a site is given it; the command line and the server read the environment once. `domus.geo.crs` keeps only the grid maths and reads no site; a site's folder, output, settings and format live on its Site |
+| The `app` folder | The command line, the server and the viewer in `domus/app/`, which nothing else in Domus imports |
+| One route into Domus | Every command is a call into `domus.api`: the command line reads arguments and prints, and the server's endpoints call the same functions |
+| The old module names | They warn, then go before the repository is public |
+| One route for every change | A change to a site's data, from the viewer, an agent, a site tool or a check, goes one way: recorded with who, when and why, and undoable. A check's findings come as proposals a person accepts |
+| Observations | Readings from videos kept as data apart from the model, each set at every build against the element it checks by its id; accepting one changes the model through that route |
+| A house kept as an IFC file | `[house] source = "ifc"`: the house drawn from its IFC and written only by IfcOpenShell |
+| Instant previews | One geometry library, Manifold, in the browser and the build, so an option shows as it's drawn while the numbers come from the server |
 
-Beside the phases: a newer three.js in the viewer, a house that can keep an IFC master changed through one edit
-path, and shared geometry between the viewer and the build.
+The repository goes public after all of these.
