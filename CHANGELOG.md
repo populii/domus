@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **For site projects:** a terrace that gives its own level at each corner now has that level along its edges too,
+  straight from one corner to the next. A point on an edge, such as a batter's foot, that read as just outside the
+  terrace's triangles took the nearest corner's level instead. On a site's grid that was an eighth to a third of the
+  points on an edge, so a batter from it jumped by the difference: tens of millimetres where the corners differ by a
+  few centimetres. Options with such terraces measure a little differently where those batters reach: their cut,
+  fill and the ground's heights.
 - **For site projects:** a wall can say how it's built, below and behind its face, as its maker's guide does, for
   one wall of an option or for every wall in `[defaults]` of `options/_site.toml`: its body's depth (`depth_m`, where
   `thickness_m` stays what its set-out and its corners take); its capping units' depth and how far they stand out

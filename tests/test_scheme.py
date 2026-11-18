@@ -55,6 +55,20 @@ def test_an_option_is_worked_out_on_what_it_is_given():
     assert 0.85 < wall["height_max_m"] < 1.0 and wall["flags"] == []
 
 
+def test_a_terraces_own_levels_run_straight_along_its_edges():
+    """A terrace with its own level at each corner is linear between them, on its edges too: a point on an edge (a
+    batter's foot, say) takes the level between the edge's corners, wherever rounding puts it, on a grid whose
+    coordinates are as large as a real site's."""
+    e0, n0 = 1_500_000.0, 5_500_000.0
+    corners = [[e0 + 4, n0 + 20, 42.30], [e0 + 14, n0 + 20, 42.45], [e0 + 14.2, n0 + 17, 42.40], [e0 + 4, n0 + 17, 42.20]]
+    t = scheme.Terrace({"id": "T", "polygon": corners}, {"batter": 2.0}, None)
+    s = np.linspace(0.0, 1.0, 4001)
+    for a, b in zip(corners, corners[1:] + corners[:1], strict=True):
+        a, b = np.asarray(a), np.asarray(b)
+        pts = a[:2] + s[:, None] * (b[:2] - a[:2])
+        assert np.allclose(t.z(pts[:, 0], pts[:, 1]), a[2] + s * (b[2] - a[2]), rtol=0.0, atol=1e-9)
+
+
 def wall_and_lawn(thickness, **built):
     """A lawn at 41 m on the slope, from o 2 to past the regrade area's far side, held along o 2 by a wall `thickness`
     deep (and built as `built` says) that runs on past both its sides, so no batter reaches the ground in front of it."""

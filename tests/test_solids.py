@@ -2,10 +2,12 @@
 the soil it cuts and fills, built from its own shapes with Manifold, stand where the point rule (domus.options.scheme)
 puts the ground and measure what it measures."""
 
+import itertools
 import json
 
 import numpy as np
 import pytest
+import shapely
 from shapely.geometry import Polygon
 
 from domus.model import walls as walls_mod
@@ -48,6 +50,9 @@ def option(name, project, ctx):
         return {"walls": [{"id": "W", "line_so": [[8.0, 2.0], [8.0, 20.0]]}],
                 "terraces": [{"id": "T", "level": low + 0.6, "at_so": [11.0, 11.0], "batter": float(name.rsplit("-", 1)[1]),
                               "polygon_so": [[8, 2], [8, 20], [14, 20], [14, 2]]}]}
+    if name == "own-levels":    # a lawn with its own level at each corner, its batters steep, held by a wall on one side
+        return {"walls": [wall], "terraces": [{"id": "T", "batter": 1.0, "polygon_so": [
+            [10, 4, low + 0.6], [14.1, 4.3, low + 0.66], [14.3, 17.7, low + 0.78], [10, 18, low + 0.7]]}]}
     if name == "built":         # a wall of named blocks that says how it's built: in a trench, with soil over its drainage
         return {"walls": [{**wall, "material": "segmental", "unit_m": [0.457, 0.2], "cap_m": 0.1, "thickness_m": 0.2285,
                            "depth_m": 0.3, "embed_m": 0.1, "embed_per_m": 0.125, "bedding_m": 0.03, "base_m": 0.15,
@@ -92,9 +97,27 @@ def like_the_point_rule(d, walls, s, existing_walls):
 
 
 @pytest.mark.parametrize("name", ["a-one-wall", "b-two-tiers", "steps", "sloping-foot", "paving-and-steep",
-                                  "keeps-the-old-wall", "sketch", "steep-batter-0.5", "steep-batter-1.0", "built"])
+                                  "keeps-the-old-wall", "sketch", "steep-batter-0.5", "steep-batter-1.0", "own-levels", "built"])
 def test_an_options_solids_stand_where_the_point_rule_puts_the_ground_and_measure_what_it_does(name, project, ctx):
     like_the_point_rule(*worked_out(name, project, ctx), ctx.existing_walls)
+
+
+def test_beside_a_terrace_with_its_own_levels_its_batters_take_the_level_along_its_edge(project, ctx):
+    """Just outside a terrace with its own level at each corner, all along it, the solids and the point rule put the
+    ground in the same place: each batter starts from the terrace's level along its edge."""
+    d, _, s = worked_out("own-levels", project, ctx)
+    ring = np.asarray(d.terraces[0].poly.exterior.coords)[:, :2]
+    pts = []
+    for a, b in itertools.pairwise(ring):
+        along = (b - a) / np.hypot(*(b - a))
+        out = np.array([along[1], -along[0]])                  # to the right of the ring, which shapely runs clockwise
+        out = out if not d.terraces[0].poly.contains(shapely.Point(*((a + b) / 2 + 0.05 * out))) else -out
+        u = np.arange(0.005, np.hypot(*(b - a)), 0.01)
+        pts += [a + u[:, None] * along + k * out for k in (0.03, 0.1)]
+    e, n = np.vstack(pts).T
+    keep = shapely.contains_xy(d.garden, e, n) & ~shapely.contains_xy(d.terraces[0].poly, e, n)
+    gap = np.abs(s.height(e[keep], n[keep]) - d.sample(e[keep], n[keep]))
+    assert keep.sum() > 1000 and np.isfinite(gap).all() and gap.max() < 0.002
 
 
 BENDS = [(2, 22), (8, 22), (9, 21.2), (9.6, 21.7), (10.1, 22.6), (11, 22.2), (13, 22), (20, 22)]

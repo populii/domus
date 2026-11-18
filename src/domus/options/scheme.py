@@ -138,8 +138,33 @@ class Terrace:
         z = self._lin(e, n)
         bad = ~np.isfinite(z)
         if bad.any():
-            z[bad] = self._near(e[bad], n[bad])
+            z[bad] = self._carried(e[bad], n[bad])
         return z
+
+    def _carried(self, e, n):
+        """The level at points (e, n) that the interpolator reads as outside its triangles. Rounding puts a point on
+        an edge of them (a batter's foot, say) on either side of it, the more often the larger the grid's
+        coordinates, so a point within a micrometre of a triangle takes that triangle's level, carried on to it.
+        Only a point further out takes the nearest corner's."""
+        tri = self._lin.tri
+        corners = tri.points[tri.simplices]                                    # (triangles, 3 corners, 2)
+        ends = np.roll(corners, -1, axis=1)
+        p = np.column_stack([e, n])
+        rel = p[:, None, None, :] - corners[None]                              # (points, triangles, 3, 2)
+        side = ends - corners
+        u = np.clip((rel * side[None]).sum(-1) / (side * side).sum(-1)[None], 0.0, 1.0)
+        off = rel - u[..., None] * side[None]
+        gap = np.sqrt((off * off).sum(-1)).min(axis=2)                         # each point's distance from each triangle
+        best = gap.argmin(axis=1)
+        out = self._near(e, n)
+        near = gap[np.arange(len(p)), best] < 1e-6
+        if near.any():
+            t = tri.transform[best[near]]                                      # each to its triangle's corners' weights
+            w = np.einsum("ijk,ik->ij", t[:, :2], p[near] - t[:, 2])
+            w = np.column_stack([w, 1.0 - w.sum(axis=1)])
+            levels = np.asarray(self._lin.values, float).ravel()[tri.simplices[best[near]]]
+            out[near] = (levels * w).sum(axis=1)
+        return out
 
     def slope(self):
         if self.plane is not None:
