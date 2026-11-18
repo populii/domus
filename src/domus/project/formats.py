@@ -18,6 +18,11 @@ Format 2:
 Format 3:
 - `[crs] epsg`, `[crs] vertical` and `[site] attribution` have no New Zealand defaults. A site in format 2 or before
   that leaves them out gets what it always had, written down: NZTM2000 (EPSG:2193), NZVD2016 and LINZ's credit line.
+
+Format 4:
+- How sure a datum's offset and the upper floor's level are, `[datums.<datum>] uncertainty_m` and `[house]
+  fl_upper_uncertainty_m`, aren't Domus's settings: Domus never read them. A site keeps them as its own notes, under
+  the same names in `[local]`: `[local.datums.<datum>] uncertainty_m` and `[local.house] fl_upper_uncertainty_m`.
 """
 
 import copy
@@ -27,7 +32,7 @@ import re
 from .. import __version__
 from ..errors import DomusError
 
-FORMAT = 3
+FORMAT = 4
 COMPASS = {"north": (0.0, 1.0), "east": (1.0, 0.0), "south": (0.0, -1.0), "west": (-1.0, 0.0)}
 # What format 2 and before took for a site that didn't say: the LINZ data's own grid, height datum and credit line.
 NZTM, NZ_VERTICAL = 2193, "NZVD2016"
@@ -159,6 +164,46 @@ def site_2(site):
     return notes
 
 
+def _local(site, path):
+    """The table [local.<path>] of `site`, made where it isn't there; None if something there already isn't a table."""
+    table = site
+    for key in ("local", *path):
+        if key not in table:
+            table[key] = {}
+        table = table[key]
+        if not isinstance(table, dict):
+            return None
+    return table
+
+
+def site_3(site):
+    """data/site.toml, format 3 to 4: how sure a datum's offset and the upper floor's level are, which Domus never
+    read, become the site's own notes under [local], by the same names. One already there is kept, and one with
+    something other than a table where it would go stays where it was."""
+    datums = site.get("datums")
+    moves = [(("datums", name), "uncertainty_m") for name, datum in (datums.items() if isinstance(datums, dict) else ())
+             if isinstance(datum, dict) and "uncertainty_m" in datum]
+    if isinstance(site.get("house"), dict) and "fl_upper_uncertainty_m" in site["house"]:
+        moves.append((("house",), "fl_upper_uncertainty_m"))
+    notes = []
+    for path, key in moves:
+        old, new = f"[{'.'.join(path)}] {key}", f"[local.{'.'.join(path)}] {key}"
+        there = _local(site, path)
+        if there is None:
+            notes.append(f"{old} left where it was: [local] has something other than a table where it would go")
+            continue
+        here = site
+        for p in path:
+            here = here[p]
+        value = here.pop(key)
+        if key in there:
+            notes.append(f"{old} dropped: {new} was there already, and is kept")
+        else:
+            there[key] = value
+            notes.append(f"{old} is now {new}: the site's own note, which Domus never read")
+    return notes
+
+
 # Reading in memory: each file at this Domus's format, from the format the site is in.
 
 def site(raw):
@@ -169,6 +214,8 @@ def site(raw):
         site_1(out)
     if format_of(raw) < 3:
         site_2(out)
+    if format_of(raw) < 4:
+        site_3(out)
     out.setdefault("domus", {})["format"] = FORMAT
     return out
 

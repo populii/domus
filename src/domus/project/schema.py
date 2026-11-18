@@ -99,7 +99,6 @@ SITE = Table("data/site.toml", {
                   "points in it", Table("A datum", {
                       "label": Key("Its name", REQUIRED),
                       "offset_m": Key("Its level less the model's height", REQUIRED),
-                      "uncertainty_m": Key("How sure the offset is, in metres: for the record"),
                   }), "datum"),
     "survey": Table("Survey marks in data/survey/control.csv", {
         "datum": Key("The datum of their levels, one of [datums]"),
@@ -107,7 +106,6 @@ SITE = Table("data/site.toml", {
     }),
     "house": Table("The house, with house.geojson", {
         "fl_upper": Key("The floor level openings and parts are measured from", REQUIRED),
-        "fl_upper_uncertainty_m": Key("How sure fl_upper is, in metres: for the record"),
         "fl_lower": Key("A lower floor's level: fl_upper, unless given", COMPUTED),
         "roof_pitch_deg": Key("The roof's pitch, in degrees", REQUIRED),
         "roof_plane_at_wall": Key("The roof plane's height over the outline (its lowest point, for a skillion or gable)", REQUIRED),

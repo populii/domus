@@ -55,6 +55,15 @@ def test_the_format_2_site_leaves_new_zealand_to_be_assumed(sites):
     assert {k: v for k, v in s.items() if k not in ("domus", "crs", "site")} == {k: v for k, v in demo.items() if k not in ("domus", "crs", "site")}
 
 
+def test_the_format_3_site_says_how_sure_its_levels_are_where_format_3_did(sites):
+    s, demo = settings(sites / "format3"), settings(sites / "demo")
+    assert s["domus"]["format"] == 3 and "local" not in s
+    assert s["house"]["fl_upper_uncertainty_m"] == 0.02 and s["datums"]["plans"]["uncertainty_m"] == 0.05
+    assert {k: v for k, v in s["house"].items() if k != "fl_upper_uncertainty_m"} == demo["house"]
+    assert {k: v for k, v in s.items() if k not in ("domus", "datums", "house")} == \
+        {k: v for k, v in demo.items() if k not in ("domus", "datums", "house")}
+
+
 def test_it_wont_write_over_a_folder_with_something_in_it(tmp_path):
     (tmp_path / "keep.txt").write_text("mine", encoding="utf-8")
     with pytest.raises(SystemExit, match="isn't empty"):

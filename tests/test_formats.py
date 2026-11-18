@@ -117,6 +117,64 @@ def test_a_format_2_site_keeps_what_it_took_from_new_zealand(old_site, tmp_path,
     assert new["crs"]["epsg"] == 2193 and new["site"]["attribution"] == LINZ_CREDIT and new == formats.site(raw)
 
 
+def test_a_format_3_site_reads_clean_with_how_sure_its_levels_are_under_local(old_site, at_site, capsys):
+    """[datums.<datum>] uncertainty_m and [house] fl_upper_uncertainty_m aren't Domus's settings since format 4: a
+    format 3 site that gives them reads with them under [local], with no warning, in the tests' strict settings."""
+    from domus import crs
+    from domus.project import schema
+
+    three = old_site.parent / "format3"
+    raw = read(three / "data" / "site.toml")
+    assert formats.format_of(raw) == 3
+    assert raw["datums"]["plans"]["uncertainty_m"] == 0.05 and raw["house"]["fl_upper_uncertainty_m"] == 0.02
+    assert len(schema.unknown(raw, schema.SITE)) == 2                       # as it says them, Domus doesn't know them
+    site = formats.site(raw)
+    assert site["local"] == {"datums": {"plans": {"uncertainty_m": 0.05}}, "house": {"fl_upper_uncertainty_m": 0.02}}
+    assert "uncertainty_m" not in site["datums"]["plans"] and "fl_upper_uncertainty_m" not in site["house"]
+    assert schema.unknown(site, schema.SITE) == []
+    at_site(three)
+    capsys.readouterr()
+    s = crs.settings()
+    assert "Warning" not in capsys.readouterr().err
+    assert s["local"]["house"]["fl_upper_uncertainty_m"] == 0.02 and s["local"]["datums"]["plans"]["uncertainty_m"] == 0.05
+    assert crs.datums() == [{"key": "plans", "label": "The plans' own datum (made up)", "offset_m": 57.3}]
+
+
+def test_upgrading_a_format_3_site_moves_them_under_local(old_site, tmp_path, capsys):
+    import shutil
+
+    copy = tmp_path / "three"
+    shutil.copytree(old_site.parent / "format3", copy, ignore=shutil.ignore_patterns("viewer", ".domus"))
+    before = (copy / "data" / "site.toml").read_text(encoding="utf-8")
+    assert upgrade.upgrade(copy) == 0
+    printed = capsys.readouterr().out
+    assert "[house] fl_upper_uncertainty_m is now [local.house] fl_upper_uncertainty_m" in printed
+    assert "[datums.plans] uncertainty_m is now [local.datums.plans] uncertainty_m" in printed
+    text = (copy / "data" / "site.toml").read_text(encoding="utf-8")
+    new = tomllib.loads(text)
+    assert new == formats.site(tomllib.loads(before)) and formats.format_of(new) == formats.FORMAT
+    assert new["local"]["datums"]["plans"]["uncertainty_m"] == 0.05 and new["local"]["house"]["fl_upper_uncertainty_m"] == 0.02
+    assert "uncertainty_m" not in new["datums"]["plans"] and "fl_upper_uncertainty_m" not in new["house"]
+    assert "[local.house]\nfl_upper_uncertainty_m = 0.02          # made up\n" in text        # with its comment
+    assert "uncertainty_m = 0.05          # made up too\n" in text.split("[local.datums.plans]\n")[1]
+    kept = list((copy / ".domus" / "upgrade").glob("format-3-*/data/site.toml"))
+    assert len(kept) == 1 and kept[0].read_text(encoding="utf-8") == before
+
+
+def test_moving_them_under_local_keeps_what_local_has():
+    """One the site has under [local] already is kept, and one with something other than a table where it would go
+    stays where it was."""
+    site = {"datums": {"a": {"offset_m": 1.0, "uncertainty_m": 0.1}, "b": {"offset_m": 2.0, "uncertainty_m": 0.2}},
+            "house": {"fl_upper": 9.0, "fl_upper_uncertainty_m": 0.3},
+            "local": {"datums": {"a": {"uncertainty_m": 0.05}, "b": "mine"}, "note": "kept"}}
+    notes = formats.site_3(site)
+    assert site == {"datums": {"a": {"offset_m": 1.0}, "b": {"offset_m": 2.0, "uncertainty_m": 0.2}}, "house": {"fl_upper": 9.0},
+                    "local": {"datums": {"a": {"uncertainty_m": 0.05}, "b": "mine"}, "note": "kept",
+                              "house": {"fl_upper_uncertainty_m": 0.3}}}
+    assert any("[datums.a] uncertainty_m dropped" in n for n in notes) and any("[datums.b] uncertainty_m left" in n for n in notes)
+    assert formats.site_3({"datums": {"a": {"offset_m": 1.0}}, "house": {"fl_upper": 9.0}}) == []
+
+
 def test_a_format_3_site_names_its_grid(site, monkeypatch):
     from domus import crs
 

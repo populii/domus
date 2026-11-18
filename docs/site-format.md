@@ -27,7 +27,9 @@ viewer/data/              the built model (set DOMUS_OUTPUT to move it; docs/mod
 `[model] extent`, `terrain_step_m` and `origin`; everything else has a default or can be left out. Domus reads
 settings through its schema (`domus.project.schema`), which these tables are written from: a key a site leaves out
 reads as its default, and a key Domus doesn't know gets a warning naming the nearest one it does. Keep anything
-only your own tools read under `[local]`.
+only your own tools read under `[local]`. So do notes on how sure a datum's offset and `[house] fl_upper` are:
+`[local.datums.<datum>] uncertainty_m` and `[local.house] fl_upper_uncertainty_m`. A site in format 3 or before that
+gives them in `[datums.<datum>]` and `[house]` reads with them there, and `domus site upgrade` moves them.
 
 <!-- settings: start (tools/settings_doc.py writes this part) -->
 ### data/site.toml
@@ -75,13 +77,11 @@ only your own tools read under `[local]`.
 | `[datums.<datum>]` | | Another height datum your plans use, where their level = model height + offset; the viewer reads points in it |
 | `datums.<datum>.label` | required | Its name |
 | `datums.<datum>.offset_m` | required | Its level less the model's height |
-| `datums.<datum>.uncertainty_m` |  | How sure the offset is, in metres: for the record |
 | `[survey]` | | Survey marks in data/survey/control.csv |
 | `survey.datum` |  | The datum of their levels, one of [datums] |
 | `survey.level_column` | `"level"` | The column of their levels |
 | `[house]` | | The house, with house.geojson |
 | `house.fl_upper` | required | The floor level openings and parts are measured from |
-| `house.fl_upper_uncertainty_m` |  | How sure fl_upper is, in metres: for the record |
 | `house.fl_lower` | worked out | A lower floor's level: fl_upper, unless given |
 | `house.roof_pitch_deg` | required | The roof's pitch, in degrees |
 | `house.roof_plane_at_wall` | required | The roof plane's height over the outline (its lowest point, for a skillion or gable) |

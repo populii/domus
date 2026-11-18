@@ -1,7 +1,7 @@
 """The made-up sites CI builds with a pull request's base and with its head, so a change to the build can be proved
 without anyone's real property.
 
-    uv run python tools/made_up_sites.py write OUT     # writes OUT/demo, OUT/richer, OUT/abroad, OUT/format1 and OUT/format2
+    uv run python tools/made_up_sites.py write OUT     # writes OUT/demo, OUT/richer, OUT/abroad and OUT/format1 to OUT/format3
     python tools/made_up_sites.py report DIR           # what moved between DIR/base-<site> and DIR/head-<site>
 
 The sites, all in the sea, so none is a real place:
@@ -20,6 +20,9 @@ The sites, all in the sea, so none is a real place:
            it is for good: each later format adds a site of its own.
   format2  The demo as a site in format 2 (Domus 2026.11.29 and before) with what format 3 changed: no [crs] and no
            credit line, which format 2 took from New Zealand. It stays as it is for good too.
+  format3  The demo as a site in format 3 (Domus 2026.11.38 and before) with what format 4 changed: how sure a
+           datum's offset and the upper floor's level are, in [datums.<datum>] and [house], which format 4 keeps
+           under [local]. It stays as it is for good too.
 
 `report` reads what CI leaves in DIR for each side (base and head) and site: the copy it built (`<side>-<site>/`,
 with the model in `viewer/data/`), the build's output (`<side>-<site>.log`) and whether it built
@@ -41,7 +44,7 @@ import tomllib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SITES = ("demo", "richer", "abroad", "format1", "format2")
+SITES = ("demo", "richer", "abroad", "format1", "format2", "format3")
 TWIN_M = 0.0015         # how far the abroad site's model may be from the demo's: the same site on another grid
 IMAGE_MEAN, IMAGE_MAX = 0.5, 16      # and its pictures: the mean and largest difference in a colour, out of 255
 # The abroad site's grid: the British National Grid, in the Celtic Sea.
@@ -246,6 +249,17 @@ def make_format_2(root):
     settings.write_text(text, encoding="utf-8", newline="\n")
 
 
+def make_format_3(root):
+    """The demo, said the way a format 3 site that records how sure its levels are says it: in [datums.<datum>] and
+    [house], each with a comment that has to move with it."""
+    settings = root / "data" / "site.toml"
+    text = re.sub(r"^format = .*$", "format = 3", settings.read_text(encoding="utf-8"), count=1, flags=re.MULTILINE)
+    text = text.replace("[house]\n", "[house]\nfl_upper_uncertainty_m = 0.02          # made up\n", 1)
+    text += ('\n[datums.plans]\nlabel = "The plans\' own datum (made up)"\noffset_m = 57.3\n'
+             "uncertainty_m = 0.05          # made up too\n")
+    settings.write_text(text, encoding="utf-8", newline="\n")
+
+
 def write(out):
     from domus import demo
 
@@ -258,6 +272,7 @@ def write(out):
     move_abroad(out / "abroad")
     make_format_1(out / "format1")
     make_format_2(out / "format2")
+    make_format_3(out / "format3")
     print(f"Wrote {', '.join(SITES)} to {out}")
 
 

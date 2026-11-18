@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **For site projects:** how sure a datum's offset and the upper floor's level are, `[datums.<datum>] uncertainty_m`
+  and `[house] fl_upper_uncertainty_m`, aren't Domus settings any more: nothing in Domus read them. A site keeps them
+  as its own notes under `[local]`, by the same names: `[local.datums.<datum>] uncertainty_m` and `[local.house]
+  fl_upper_uncertainty_m`. Sites are in format 4 now. One in format 3 or before that gives them reads with them there,
+  with no warning, and `domus site upgrade` moves them there in its file, comments and all. A site's tool that read
+  them from `[datums]` or `[house]` reads them from `[local]` now.
 - `domus prep check through` leaves out a wall's or a flight's top where it lies inside another of the option's walls
   or flights, under that one's top, as where a wall's end tucks into a thicker wall at a corner. Nothing shows there,
   but the option's ground inside the thicker wall, which rises from its face to the ground it holds, was reported as
