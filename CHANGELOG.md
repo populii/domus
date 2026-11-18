@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** a flight of steps whose side lies within 10 mm of a wall's face beside it runs out to the
+  face, as one drawn by hand between two walls' cheeks is meant to: its treads and risers reach the face, and the
+  option's ground isn't drawn in the gap, where the ground the wall holds could stand over the treads. The flight
+  is that much wider in the table and the materials list.
+
 ## 2026.11.61
 
 - **For site projects:** walls and steps are drawn as closed solids, an option's and the existing walls: each

@@ -341,3 +341,39 @@ def test_a_thick_wall_in_bays_bending_at_its_step_shows_no_bottom_for_its_top(ki
                             {"id": "upper", "kind": "lawn", "level": low + 0.6, "at_so": [12.0, 10.0], "polygon_so": [[10, 2], [14, 2], [14, 18], [10, 18]]}])
     _, _, findings = through(s, opt)
     assert findings == []
+
+
+@pytest.mark.parametrize("gap", [0.005, 0.02])
+def test_a_flight_a_hair_short_of_a_walls_face_runs_out_to_it(gap, site, project, tmp_path, at_site):
+    """Steps up from a lower lawn to an upper one, between two walls' cheeks that hold the upper lawn beside them: one
+    cheek's face on the flight's side, the other's `gap` past it. 5 mm off, the flight runs out to that face, its
+    treads and risers reach it, and the upper lawn isn't drawn in the gap, over the treads, but the ramp under them
+    is; its other side stays on the other cheek's face. 20 mm off, past CHEEK_M, the flight is left as drawn."""
+    s = at_site(site, output=tmp_path)
+    low = round(ground_at(project, 8.0, 10.0), 2)
+    up = round(low + 0.68, 2)
+    opt = made_up("cheek", walls=[{"id": "W", "material": "block", "line_so": [[10.0, 6.0], [10.0, 18.0]]},
+                                  {"id": "C", "material": "block", "line_so": [[10.0, 5.5 + gap], [11.2, 5.5 + gap]],
+                                   "retained_side": "right", "top": up + 0.1},
+                                  {"id": "D", "material": "block", "line_so": [[10.0, 4.5], [11.2, 4.5]], "retained_side": "left",
+                                   "top": up + 0.1}],
+                  terraces=[{"id": "lower", "kind": "lawn", "level": low, "at_so": [8.0, 10.0], "polygon_so": [[6, 4], [10, 4], [10, 18], [6, 18]]},
+                            {"id": "upper", "kind": "lawn", "level": up, "at_so": [12.0, 10.0], "polygon_so": [[10, 4], [14, 4], [14, 18], [10, 18]]}],
+                  stairs=[{"id": "S", "line_so": [[9.4, 5.0], [11.0, 5.0]], "width_m": 1.0, "foot": low, "head": up, "risers": 4}])
+    st = design.evaluate(s, opt, keep_solids=True)["design"].stairs[0]
+    fr = design.frame(project)
+    o = fr.so(np.asarray(st.poly.exterior.coords)[:, :2])[:, 1]
+    meets = gap <= 0.01                                          # scheme.CHEEK_M
+    assert o.min() == pytest.approx(4.5, abs=1e-9) and o.max() == pytest.approx(5.5 + gap if meets else 5.5, abs=1e-9)
+    assert st.width == pytest.approx(1.0 + gap if meets else 1.0, abs=1e-9)
+    layers, frame, findings = through(s, opt)
+    if not meets:
+        return
+    assert findings == []
+    steps = next(x for x in layers if x["id"] == "option-cheek-steps-S")
+    q = np.asarray(steps["positions"], float).reshape(-1, 3)
+    assert fr.so(np.column_stack([q[:, 0] + frame.e0, frame.n0 - q[:, 2]]))[:, 1].max() == pytest.approx(5.5 + gap, abs=0.001)
+    ground = Surface(*drawn_ground(layers, "cheek", frame))
+    en = fr.en(np.column_stack([np.linspace(10.05, 10.95, 10), np.full(10, 5.5 + gap / 2)]))     # mid-way across the gap
+    h = ground.z(en[:, 0], en[:, 1])
+    assert np.abs(h - st.under(en[:, 0], en[:, 1])).max() < 0.002 and (h < up - 0.03).all()

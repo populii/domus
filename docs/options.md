@@ -98,6 +98,11 @@ follow. The ground under it is a ramp between them. Leave a gap in a wall where 
 use two flights with a small terrace between them for a turn. Without `[[stairs]]`, `steps = 1` still just
 counts a flight for the table.
 
+A flight between two walls' cheeks, or beside one, is drawn by hand, and its sides can stop a few millimetres short
+of the walls' faces. Where a side lies within 10 mm of a wall's face beside it, the flight runs out to the face: its
+treads and risers reach it, it's that much wider in the table and the materials list, and no ground is drawn in the
+gap. That's the option's walls and the walls it keeps; a side further off is left as it's drawn.
+
 On ground that slopes across its foot (`foot` with two levels), a flight keeps level treads and a straight foot
 line, and every tread runs the full width. Its lowest tread is level with the ground at the high end of the foot
 line: its riser is nothing there and the whole of the ground's rise at the low end. The risers above it are equal,

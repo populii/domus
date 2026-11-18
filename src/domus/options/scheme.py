@@ -29,6 +29,7 @@ A pure part of the model: it reads no site. domus.design reads a site's options/
 house, walls, services and easements, and passes them in (a Context).
 """
 
+import itertools
 import math
 
 import numpy as np
@@ -256,6 +257,8 @@ MATERIAL_KEYS = ("pins_per_unit", "pins_per_box", "core_void_m3", "pipe_m", "out
                  "post_spacing_m")
 
 STAIR_RISER_M = 0.17         # the riser a flight aims for
+CHEEK_M = 0.01               # a flight's side this near a wall's face beside it runs out to the face (Stair.meet)
+CHEEK_ALONG_M = 0.05         # a wall's face is beside a flight where it runs along at least this much of it
 # How a flight is drawn, by its material: its colour, and for some a picture with the metres one copy covers.
 # A flight of `sleepers` is two timber sleepers to a tread, and the picture is one sleeper seen along its length.
 STEP_LOOKS = {"concrete": ("#b9b6ae", None), "sleepers": ("#6f5a45", ("steps-sleepers.jpg", (2.4, 0.22)))}
@@ -295,6 +298,36 @@ class Stair:
         self.given = [foot, cfg.get("head")]
         self.risers = cfg.get("risers")
         self.properties = cfg
+
+    def meet(self, faces):
+        """Where a side of the flight lies within CHEEK_M of a wall's face beside it (`faces`: the walls' face lines,
+        each points on the site's grid), the flight runs out to the face: its treads and risers reach it, and no ground
+        is drawn in between, as a hand-drawn flight between two walls' cheeks is meant to. A face is beside the flight
+        where it runs along at least CHEEK_ALONG_M of it, all of that within CHEEK_M of the side, in or out; the side
+        moves out to where the face is farthest from it there, and on into the wall where it's nearer. Call it before
+        `settle`."""
+        left = np.array([-self.along[1], self.along[0]])
+        out = {1: 0.0, -1: 0.0}             # how far each side moves out: the left, as you face along the line, and the right
+        for line in faces:
+            pts = np.asarray(line, float)[:, :2]
+            for p, q in itertools.pairwise(pts):
+                t = np.array([(p - self.a) @ self.along, (q - self.a) @ self.along])        # along the flight
+                o = np.array([(p - self.a) @ left, (q - self.a) @ left])                    # across it, to the left
+                lo, hi = max(float(t.min()), 0.0), min(float(t.max()), self.length)
+                if hi - lo < CHEEK_ALONG_M:
+                    continue
+                k = np.argsort(t)
+                across = np.interp([lo, hi], t[k], o[k])        # where the face is across the flight there
+                for way in (1, -1):
+                    gap = way * across - self.width / 2
+                    if np.all(np.abs(gap) <= CHEEK_M):
+                        out[way] = max(out[way], float(gap.max()))
+        if out[1] > 0 or out[-1] > 0:
+            self.width += out[1] + out[-1]
+            shift = left * (out[1] - out[-1]) / 2
+            self.a, self.b = self.a + shift, self.b + shift
+            across = left * self.width / 2
+            self.poly = Polygon([self.a - across, self.b - across, self.b + across, self.a + across])
 
     def settle(self, sample):
         """Take the levels not given from the ground 0.3 m beyond each end (`sample`), put the lower end first, and
@@ -435,6 +468,9 @@ class Design:
                 self.gone.append((plan, line, chain, toe))
         self.garden = unary_union([garden, *(g[0] for g in self.gone)]) if self.gone else garden
         self.stairs = [Stair(s, frame) for s in opt.get("stairs", [])]
+        kept = [w for w in existing_walls if w["id"] in self.keep_existing]
+        for st in self.stairs:      # a flight a hair short of a wall's face beside it runs out to the face
+            st.meet([w["line"] for w in [*self.walls, *kept]])
         self._garden_prepared = False
         # Terrace edges along a wall or a flight of steps are held by it; the rest are free and get a batter.
         self.free = [t.poly.exterior for t in self.terraces]
