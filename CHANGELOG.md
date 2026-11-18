@@ -8,6 +8,31 @@
   could differ. Where their heights are more than 5 mm apart, the build warns and `domus prep check sanity`
   reports it, naming both features and the two heights, so you can make them agree or take one out. Where they
   agree, nothing is said. A step in one line's heights, two of its vertices at one place, is taken the same way.
+- **For site projects:** with `[house] source = "ifc"`, the house's IFC is the house's one source. Every part of Domus
+  that reads the house reads it there: the build (the house's layers, its numbers in `summary.json`, the walk route
+  and what the viewer snaps to), the wall options' regrade area, house margin and checks, `domus prep check`, the
+  observations' plinths and floor levels, placing videos, the overlays, the house's textures and the canopy's map.
+  None reads `house.geojson`, or `[house]`'s settings of the house's shape, while the file is the source; `[house]`'s
+  settings of how the house looks are still read. The file holds the whole of the house's description for it: each
+  feature of `house.geojson` as written, with the element drawn from it; each opening as an `IfcDoor` or `IfcWindow`,
+  a part of its wall face; retaining walls, and any feature that draws nothing, as elements with no body; and
+  `[house]`'s shape settings on the building. It's read through where each element stands now: the walls' outline
+  from where its wall faces stand, so a face moved out takes its neighbours' ends with it, the floor levels from the
+  storeys, the roof's numbers with the roof, and every part, opening and plinth moved, turned and raised with its
+  element ([docs/site-format.md](docs/site-format.md#the-house-as-an-ifc-file) says what doesn't follow yet). A file
+  an earlier Domus wrote has no description: `domus house ifc --force` writes it again. A site without the setting
+  reads `house.geojson` and `[house]` as before.
+- **For site projects:** `domus house ifc` records `house.geojson`'s SHA-256, and that of `[house]`'s settings of the
+  house's shape, in its edit's record (`drawn_from`). While the IFC is the house's source, a build whose
+  `house.geojson` or `[house]` has changed since warns that the build doesn't read them: edit the house through the
+  IFC (`domus site edit`), or write the IFC again (`domus house ifc --force`).
+- **For site projects:** an element added to the house's IFC (`ifc-add`) is a `block` of the house, its outline,
+  `base` and `top` read with the rest, so the wall options keep off it; and an observation whose target is the house
+  isn't proposed while the IFC is its source, but says to change it there.
+- **For site projects:** in `domus.api`, `site.house()` (provisional) gives the house as `[house] source` says to
+  read it: its `source`, `features` (`house.geojson`'s), `settings` (`[house]`) and `walls`, and `site.house_walls()`
+  reads it ([docs/api.md](docs/api.md)). In Domus, `domus.model.house_source` is the one accessor every part reads the
+  house through.
 
 ## 2026.11.63
 

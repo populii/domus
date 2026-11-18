@@ -26,8 +26,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy.spatial.transform import Rotation
 
-from ..geo import geojson
-from ..model import house, terrain
+from ..model import house_source, terrain
 from . import config
 
 
@@ -140,12 +139,9 @@ def wall_textures(site, check=None):
 
 
 def faces_by_group(site):
-    cfg = site.settings()
-    hc = cfg["house"]
-    fc = geojson.read(site.path / "data" / "site" / "house.geojson")["features"]
+    """The house's faces (as the house's source gives the house: domus.model.house_source), by their group."""
     g = terrain.ground(site)
-    hm = house.build(fc, hc["fl_upper"], hc["roof_pitch_deg"], hc["roof_plane_at_wall"],
-                     hc["eaves_overhang_m"], lambda e, n: g.sample(np.atleast_1d(e), np.atleast_1d(n)), **house.roof_options(hc))
+    hm = house_source.house(site).model(lambda e, n: g.sample(np.atleast_1d(e), np.atleast_1d(n)))
     groups = {}
     for f in hm.faces:
         groups.setdefault(f.spec.get("group", f.id), []).append(f)

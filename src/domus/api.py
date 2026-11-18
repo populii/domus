@@ -137,14 +137,23 @@ class Site:
             raise DomusError(f"{self.path} has no boundary yet: data/site/boundary.geojson")
         return shapely.force_2d(shape(geojson.main_lot(boundary, self.settings())["geometry"]))
 
+    def house(self):
+        """The house, as `[house] source` says to read it (provisional): its `source` ("drawn": house.geojson and
+        [house]; "ifc": data/house.ifc), `features` (house.geojson's, as that source gives them: the walls, their
+        openings and the house's parts), `settings` ([house], its shape as that source gives it) and `walls` (the
+        house-walls feature, or None). Every part of Domus that reads the house reads it this way."""
+        from .model import house_source
+
+        return house_source.house(self._project)
+
     def house_walls(self):
-        """The house's walls, a shapely Polygon in plan (the "house-walls" feature in house.geojson), or None if the
+        """The house's walls, a shapely Polygon in plan (the "house-walls" feature, as house() gives it), or None if the
         site has no house."""
         import shapely
         from shapely.geometry import shape
 
-        walls = [f for f in self.layer("house") if f["properties"].get("id") == "house-walls"]
-        return shapely.force_2d(shape(walls[0]["geometry"])) if walls else None
+        walls = self.house().walls
+        return shapely.force_2d(shape(walls["geometry"])) if walls is not None else None
 
     def ground(self):
         """The ground, as a function: ground(e, n) gives the heights at points on the site's grid, an array the shape of

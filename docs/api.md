@@ -49,7 +49,7 @@ Everything is on the site's own grid (`[crs] epsg` in `data/site.toml`), with he
 | `site.settings()` | `data/site.toml` as a dict, a copy |
 | `site.grid` | The site's grid and heights: `epsg`, `label`, `vertical`, `origin` (`[model] origin`) and `datums`, its other height datums (each with `key`, `label` and `offset_m`). `grid.to_nztm(e, n)`, `grid.from_nztm(x, y)` and `grid.to_lonlat(e, n)` turn points between the site's grid, NZTM2000 and longitude and latitude; `grid.to_model_height(level, datum)` and `grid.from_model_height(h, datum)` turn heights between the model's datum and another |
 | `site.lot()` | The lot as a shapely Polygon in plan: `boundary.geojson`'s feature that `[boundary] main` names, else its first |
-| `site.house_walls()` | The house's walls (`house-walls` in `house.geojson`) as a shapely Polygon in plan, or None |
+| `site.house_walls()` | The house's walls (`house-walls`, as `site.house()` gives them: from `house.geojson`, or from the house's IFC file where `[house] source = "ifc"`) as a shapely Polygon in plan, or None |
 | `site.layer(name)` | The features of `data/site/<name>.geojson`, such as `"trees"`: a list of GeoJSON features, empty if there's no such layer |
 | `site.ground()` | The ground as a function: `ground(e, n)` gives heights, the shape of `e` and `n`, NaN where there's no ground. It's the ground as the build draws it, the one the wall options are designed on and the drains are drawn below: the LiDAR's bare ground with `ground-fixes.geojson` applied and the existing walls' faces and tops cut in, over the model's extent, and the LiDAR with the fixes beyond it |
 | `site.options()` | The wall options in `options/`, each a dict with `id`, `name`, `short`, `description`, `walls`, `terraces`, `stairs` and `path` |
@@ -147,6 +147,7 @@ change from one release to the next without a deprecation until it's declared st
 
 | | What it does |
 |---|---|
+| `site.house()` | The house, as `[house] source` says to read it, as every part of Domus reads it: its `source` (`"drawn"`, from `house.geojson` and `[house]`, or `"ifc"`, from `data/house.ifc`), `features` (`house.geojson`'s, as that source gives them: the walls, their openings and the house's parts), `settings` (`[house]`, its shape as that source gives it) and `walls` (the `house-walls` feature, or None). Its `features` are the caller's own to change |
 | `site.write_house_ifc(force=False, why=None, who=None)` | Writes the house as `house.geojson` and `[house]` draw it today to `data/house.ifc`, as `domus house ifc` does, and gives the file's path. It needs IfcOpenShell (the `ifc` extra). It's an edit on the change route, recorded with `why` (a reason of its own unless given) and `who`, the file as it was kept, so `site.undo()` puts it back; a file that's there already is written again only with `force`. It takes `say` |
 
 Its elements are changed the one way every change goes, with `site.edit()` and intents such as `{"kind": "ifc-move",

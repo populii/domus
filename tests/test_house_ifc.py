@@ -100,7 +100,7 @@ def test_the_house_is_written_as_ifc_and_read_back(made):
     from domus.model import house_ifc, house_texture
 
     assert made.file == made.root / "data" / "house.ifc"
-    assert "   data/house.ifc: the house as house.geojson and [house] draw it, 18 elements on 1 storey" in made.said
+    assert "   data/house.ifc: the house as house.geojson and [house] draw it, 20 elements on 1 storey" in made.said
     first = made.site.edits()[0]          # an edit on the change route, as every change to the site's data is
     assert first["kind"] == "ifc-write" and first["files"][0]["before"] is None and first["files"][0]["path"] == "data/house.ifc"
     assert first["inverse"] == [{"kind": "ifc-restore", "sha": None}]
@@ -121,12 +121,17 @@ def test_the_house_is_written_as_ifc_and_read_back(made):
                      "porch-steps": ("IfcStair", "STRAIGHT_RUN_STAIR"), "deck": ("IfcSlab", None),
                      "deck-balustrade": ("IfcRailing", "BALUSTRADE"), "chimney": ("IfcChimney", None),
                      "tank": ("IfcTank", "STORAGE"), "bay": ("IfcBuildingElementProxy", "BAY"), "bay-0": ("IfcWall", None),
-                     "bay-1": ("IfcWall", None), "bay-2": ("IfcWall", None), "garden-wall": ("IfcWall", None)}
+                     "bay-1": ("IfcWall", None), "bay-2": ("IfcWall", None), "garden-wall": ("IfcWall", None),
+                     "door": ("IfcDoor", "DOOR"), "window": ("IfcWindow", "WINDOW")}
     import ifcopenshell.util.element as ue
 
     assert ue.get_aggregate(by_ref["porch-west"]) == by_ref["porch"] and ue.get_container(by_ref["chimney"]) == storey
-    assert psets(by_ref["north"]) | {"id": None} == {"id": None, "ref": "north", "layer": "walls", "part": "face",
-                                                     "feature": "house-walls", "face": "north", "source": "made up"}
+    assert ue.get_aggregate(by_ref["door"]) == by_ref["north"] and by_ref["door"].Representation is None
+    north = psets(by_ref["north"])
+    assert {k: v for k, v in north.items() if k not in ("id", "placed")} == {
+        "ref": "north", "layer": "walls", "part": "face", "feature": "house-walls", "face": "north", "source": "made up",
+        "edge": 0}
+    assert len(json.loads(north["placed"])) == 4             # where it stood as written: the house's description
     assert psets(by_ref["deck"])["layer"] == "deck" and psets(by_ref["garden-wall"])["layer"] == "outdoor"
     # Each piece in its colour, as a style named for it; and the same GlobalId as its Domus id gives.
     chimney = by_ref["chimney"].Representation.Representations[0].Items[0]
@@ -139,7 +144,8 @@ def test_the_house_is_written_as_ifc_and_read_back(made):
     assert by_ref["tank"].GlobalId == ifcopenshell.guid.compress(uuid.uuid5(house_ifc.NAMESPACE, "element:tank").hex)
     # Read back: the elements in the file's order, each in its layer, on the site's grid.
     found = {e.ref: e for e in house_ifc.read(made.site._project)}
-    assert set(found) == set(by_ref) and found["deck"].layer == "deck" and found["bay-1"].face == "bay-1"
+    assert set(found) == {r for r, e in by_ref.items() if e.Representation is not None}         # the openings draw nothing
+    assert found["deck"].layer == "deck" and found["bay-1"].face == "bay-1"
     lowest = np.vstack([p[1] for p in found["roof"].pieces])[:, 2].min()
     roof = np.reshape(next(x for x in m["layers"] if x["id"] == "house-roof")["positions"], (-1, 3))
     assert lowest == pytest.approx(roof[:, 1].min() + m["origin"][2], abs=0.001)       # the viewer's y is up
@@ -286,9 +292,10 @@ def test_the_export_copies_the_ifc_houses_elements_as_they_are(made, tmp_path):
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     for gid in ids:
-        a = np.asarray(ifcopenshell.geom.create_shape(settings, house.by_guid(gid)).geometry.verts)
-        b = np.asarray(ifcopenshell.geom.create_shape(settings, f.by_guid(gid)).geometry.verts)
-        assert np.abs(a - b).max() < 1e-6
+        if house.by_guid(gid).Representation is not None:          # an opening, or a retaining wall, has no body
+            a = np.asarray(ifcopenshell.geom.create_shape(settings, house.by_guid(gid)).geometry.verts)
+            b = np.asarray(ifcopenshell.geom.create_shape(settings, f.by_guid(gid)).geometry.verts)
+            assert np.abs(a - b).max() < 1e-6
         assert psets(f.by_guid(gid)) | {"id": 0} == psets(house.by_guid(gid)) | {"id": 0}
 
 

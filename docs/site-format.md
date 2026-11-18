@@ -293,12 +293,12 @@ The layers are `bay`, `porch`, `steps`, `outdoor` (blocks, walls and balustrades
 
 `domus house ifc` (`site.write_house_ifc()`, which needs the `ifc` extra) writes the house as `house.geojson` and
 `[house]` draw it today to `data/house.ifc`, an IFC4 file written with IfcOpenShell. With `[house] source = "ifc"` in
-`data/site.toml`, the build draws the house's layers from that file instead, so the file is the house's master: what
-a designer's software or IfcOpenShell changes in it is what the model shows. Without the setting the file changes
-nothing. Writing it is an edit on the change route ([changes.md](changes.md#the-houses-ifc)), recorded with who,
-when and why, the file as it was kept, and undone with `domus site undo`; `--force` writes it again over one that's
-there. Its elements change through that route too: moved, turned, a storey raised, attributes and property values
-set, elements added and deleted, each undoable.
+`data/site.toml`, that file is the house's one source: the build draws the house from it, and every part of Domus that
+reads the house reads it there, so what a designer's software or IfcOpenShell changes in it is what the model shows.
+Without the setting the file changes nothing. Writing it is an edit on the change route
+([changes.md](changes.md#the-houses-ifc)), recorded with who, when and why, the file as it was kept, and undone with
+`domus site undo`; `--force` writes it again over one that's there. Its elements change through that route too:
+moved, turned, a storey raised, attributes and property values set, elements added and deleted, each undoable.
 
 The file holds one site, georeferenced as `domus export` does it (an IfcMapConversion from the model's origin to the
 site's grid), a building on it, and a storey at each of the house's floor levels: `fl_upper`, and `fl_lower` where
@@ -312,6 +312,8 @@ it's another level. Each element stands on the highest storey whose floor is at 
 | `steps`, `block`, `wall`, `balustrade` | `IfcStair` (`STRAIGHT_RUN_STAIR`), `IfcSlab`, `IfcWall`, `IfcRailing` (`BALUSTRADE`) |
 | `chimney`, `tank` | `IfcChimney`, `IfcTank` (`STORAGE`) |
 | `bay`, `porch` | `IfcBuildingElementProxy` (`BAY`, `PORCH`), with its wall faces as `IfcWall`s that are its parts |
+| Each opening (a feature with a `kind`) | `IfcDoor` or `IfcWindow`, with no body of its own (the face's picture draws it): a part of the wall face it's on, placed at its left end at its sill, with its `OverallWidth` and `OverallHeight` |
+| `retaining-walls`, and any other feature that draws nothing | An element with no body: an `IfcWall` (`RETAININGWALL`), or of its part's class |
 
 Each element's body is its triangles as the house draws them, each piece an `IfcTriangulatedFaceSet` in a surface
 style named for its colour (its palette key, or its hex) and shaded in it. Its property set, `Domus`, holds its id
@@ -321,14 +323,49 @@ drawn in (`layer`), what it is (`part`), the feature of `house.geojson` it comes
 are the project's, the site's, the building's and the storeys', and every relationship's comes from what it relates,
 so writing the house again gives the same ids throughout.
 
-Drawn from the file, each element goes in the house layer its `layer` names, or, without one, the layer its IFC class
-says (`IfcWall` the walls, `IfcCovering` the eaves, `IfcStair` the steps, `IfcSlab` and `IfcRailing` the outdoor
-parts, a proxy's `BAY` or `PORCH` its own); IfcOpenShell triangulates it in the model's coordinates, and the file's
-own map conversion puts it on the site's grid. Each piece takes its style's colour. A wall that still carries the id
-of a face `house.geojson` draws (`face`) keeps that face's picture, its photo where one covers it (`data/house/`) and
-its drawn boards and windows elsewhere, laid on it by the wall's own coordinates, so the picture moves with the wall;
-any other wall takes its colour. The roof's tiles lie as the drawn roof's do, by `[house]`'s form, in the roof's own
-coordinates. A missing file, or one IfcOpenShell
-can't read, stops the build and says how to make it. `house.geojson` and `[house]` still give the house's outline
-and its numbers to everything else: the wall options' regrade area and checks, the walk route, placing videos and the
-house's numbers in `summary.json`, which also names the file (`source`).
+The file holds the whole of the house's description too, each piece with the element it belongs to, so nothing is read
+from `house.geojson`, or from `[house]`'s settings of the house's shape, while the file is the source:
+
+- On every element, in `Domus`: where it stood when the file was written (`placed`: east, north, height, and the angle
+  of its x axis from east in radians) and, for a feature of `house.geojson`, that feature as written (`feature_json`)
+  and its place in the file (`index`). On a wall face of `house-walls`, the side of the outline it is (`edge`) and its
+  `plinth_top`, where one is given.
+- On the building, in `Domus`: the walls, `house-walls`, as written (`walls`, and `walls_index`), and `[house]`'s
+  settings of the house's shape as `data/site.toml` gave them (`house`): `fl_upper`, `fl_lower`, `roof_pitch_deg`,
+  `roof_plane_at_wall`, `eaves_overhang_m`, `roof_form`, `roof_azimuth_deg`, `roof_ridge_offset_m` and
+  `roof_at_wall_above_fl`.
+
+Read from the file, the house is that description as its elements stand now. Each feature moves and turns with its
+element: its positions, its heights on the datum (`sill`, `head`, `floor`, `roof_at_wall`, `roof_at_edge`, `base`,
+`top`, `stack_top`, `pot_top` and `cowl_top`) and a flight's `back_line`; the sides a porch's walls or a flight's open
+sides are on (`walls`, `open_sides`) turn with it, to the nearest compass direction; and its heights over the floor
+(`*_above_fl`, `top_below_fl_m`) go with it against `fl_upper`. The walls' outline takes each side from where its wall
+face stands and each corner from where its two sides' lines meet, so a face moved out takes its neighbours' ends with
+it; the faces' ids and plinths go with the faces, and the soffit with the eaves. The floor levels are the storeys',
+`roof_plane_at_wall` and `roof_at_wall_above_fl` rise with the roof, and a skillion's or a gable's `roof_azimuth_deg`
+turns with it. An element added through the route (`ifc-add`) is a `block` of the house: its outline, `base` and
+`top`. `[house]`'s other settings, how the house looks, are still `[house]`'s.
+
+So the build draws the house's layers from the file: each element in the house layer its `layer` names, or, without
+one, the layer its IFC class says (`IfcWall` the walls, `IfcCovering` the eaves, `IfcStair` the steps, `IfcSlab` and
+`IfcRailing` the outdoor parts, a proxy's `BAY` or `PORCH` its own); IfcOpenShell triangulates it in the model's
+coordinates, and the file's own map conversion puts it on the site's grid. Each piece takes its style's colour. A wall
+that still carries the id of one of the house's faces (`face`) keeps that face's picture, its photo where one covers it
+(`data/house/`) and its drawn boards and windows elsewhere, laid on it by the wall's own coordinates, so the picture
+moves with the wall; any other wall takes its colour. The roof's tiles lie as the drawn roof's do, by the house's roof
+form, in the roof's own coordinates. Everything else that reads the house reads it from the file too: the house's
+numbers in `summary.json` (which names the file, `source`), the walk route and what the viewer snaps to, the wall
+options' regrade area, house margin and checks, `domus prep check`, the observations' plinths and floor levels,
+placing videos (the walls and the eaves' height), the overlays, the house's textures and the canopy's map.
+
+What the description doesn't follow: an element's body changed in other software (it follows the element's placement,
+not its triangles); a wall face deleted (the outline keeps that side where it was written); a feature's height over
+the ground (`height_m`, `sink_m`) when its element is raised; a hipped roof turned, or the roof moved in plan (its shape
+follows the walls); and an element other software adds, which is drawn but isn't one of the house's parts. A file
+written before Domus kept the description in it, or by other software, stops the build and says to write it again
+(`domus house ifc --force`), as a missing file, or one IfcOpenShell can't read, says how to make it.
+
+`domus house ifc` records `house.geojson`'s SHA-256 and that of `[house]`'s settings of the house's shape in its
+edit's record. While the file is the house's source, a build whose `house.geojson` or `[house]` no longer matches that
+record warns that the build doesn't read it: edit the house through the IFC (`domus site edit`), or write the IFC
+again (`domus house ifc --force`).

@@ -30,7 +30,7 @@ from PIL import Image, ImageDraw
 
 from ..errors import DomusError
 from ..geo import geojson
-from ..model import terrain
+from ..model import house_source, terrain
 from .fitting import Placed
 
 GROUPS = ("house", "walls", "features", "ground", "boundary", "plants")
@@ -96,8 +96,9 @@ class Scene:
         self.g = terrain.ground(site)
         layers = site.path / "data" / "site"
         self.layer = lambda name: geojson.read_optional(layers / name)
-        self.house = {f["properties"].get("id"): f for f in self.layer("house.geojson")}
-        self.fl = site.settings().get("house", {}).get("fl_upper")
+        the_house = house_source.house(site)        # house.geojson and [house], or the house's IFC
+        self.house = {f["properties"].get("id"): f for f in the_house.features}
+        self.fl = the_house.settings.get("fl_upper")
         self.option_walls = []
         if option:
             from .. import options

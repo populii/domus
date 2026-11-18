@@ -54,7 +54,7 @@ from shapely.geometry import LineString, Polygon
 from ..capture.georef_sfm import consensus_up, frame_path, frame_ups, tilt_of
 from ..capture.sfm_georef import load
 from ..geo import geojson, mesh
-from ..model import canopy, features, house, terrain, vegetation, walls
+from ..model import canopy, features, house, house_source, terrain, vegetation, walls
 from ..project import rasters
 
 
@@ -91,15 +91,14 @@ class Model:
         wall_feats = geojson.read_optional(site.path / "data" / "site" / "walls-existing.geojson")
         self.walls = [walls.from_feature(f) for f in wall_feats]
         self.tin = terrain.build(self.extent, cfg["model"]["terrain_step_m"], self.walls, site=site)
-        hfc = geojson.read_optional(site.path / "data" / "site" / "house.geojson")
+        the_house = house_source.house(site)        # house.geojson and [house], or the house's IFC
+        hfc, self.house_cfg = the_house.features, the_house.settings
         self.hf = {f["properties"]["id"]: f for f in hfc}
         self.parts = lambda *kinds: [f for f in hfc if f["properties"].get("part") in kinds]
         self.has_house = "house-walls" in self.hf
         self.hm, self.ring, self.house_poly = None, None, Polygon()
         if self.has_house:
-            h = cfg["house"]
-            self.hm = house.build(hfc, h["fl_upper"], h["roof_pitch_deg"], h["roof_plane_at_wall"],
-                                  h["eaves_overhang_m"], self.ground, **house.roof_options(h))
+            self.hm = the_house.model(self.ground)
             self.ring = np.asarray(self.hf["house-walls"]["geometry"]["coordinates"][0], float)[:-1, :2]
             self.house_poly = Polygon(self.ring)
         self.site_features = features.read_all(site.path)
@@ -246,7 +245,7 @@ def roof_failure(form, best, deviation):
 
 
 def check_roof(m, findings, plots):
-    h = m.cfg["house"]
+    h = m.house_cfg
     fr = house.HouseFrame(m.ring)
     walls_l = Polygon(fr.local(m.ring))
     eaves_l = walls_l.buffer(h["eaves_overhang_m"], join_style=2)

@@ -25,6 +25,7 @@ def feature(gtype, coords, **props):
 def test_the_model_lists_what_to_snap_to_in_viewer_metres(tmp_path, at_site):
     site = tmp_path / "data" / "site"
     site.mkdir(parents=True)
+    (tmp_path / "data" / "site.toml").write_text("", encoding="utf-8")       # a site project: its house is read by its source
     (site / "boundary.geojson").write_text(fc(feature("Polygon", [[[100.0, 200.0], [110.0, 200.0], [110.0, 210.0], [100.0, 200.0]]], id="lot", name="Lot")), encoding="utf-8")
     (site / "house.geojson").write_text(fc(feature("Polygon", [[[102.0, 202.0], [104.0, 202.0], [104.0, 204.0], [102.0, 202.0]]], id="house-walls"),
                                            feature("LineString", [[102.0, 202.0], [103.0, 202.0]], id="door-1", kind="door")), encoding="utf-8")
@@ -40,6 +41,7 @@ def test_the_model_lists_what_to_snap_to_in_viewer_metres(tmp_path, at_site):
 def test_a_site_with_only_a_boundary_is_fine(tmp_path, at_site):
     site = tmp_path / "data" / "site"
     site.mkdir(parents=True)
+    (tmp_path / "data" / "site.toml").write_text("", encoding="utf-8")
     (site / "boundary.geojson").write_text(fc(feature("Polygon", [[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]], id="lot")), encoding="utf-8")
     s = build.snap_targets(at_site(tmp_path), (0.0, 0.0, 0.0))
     assert len(s["lines"]) == 1 and s["points"] == []

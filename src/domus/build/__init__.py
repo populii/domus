@@ -29,7 +29,7 @@ from ..errors import DomusError
 from ..geo import geojson, mesh
 from ..geo.georef import invert_affine
 from ..importers.nz import title
-from ..model import canopy, features, house, house_ifc, house_texture, terrain, vegetation, walls
+from ..model import canopy, features, house, house_ifc, house_source, house_texture, terrain, vegetation, walls
 from ..options import design, scheme, sketch, solids
 from ..project import rasters
 from . import cache as buildcache
@@ -693,12 +693,15 @@ def add_boundaries(b):
 
 
 def add_house(b):
-    """House: walls, roof and the parts in data/site/house.geojson, textured through an atlas (house_texture) and a repeating roof-tile image."""
-    cfg, frame, ground, layers, summary = b.cfg, b.frame, b.ground, b.layers, b.summary
-    hfc = geojson.read_optional(b.site.path / "data" / "site" / "house.geojson")
-    hcfg = cfg.get("house", {})
-    if house_ifc.source(b.site) == "ifc":
-        add_ifc_house(b, hfc, hcfg)
+    """House: walls, roof and the parts the house has (domus.model.house_source: house.geojson and [house], or its IFC
+    file), textured through an atlas (house_texture) and a repeating roof-tile image."""
+    frame, ground, layers, summary = b.frame, b.ground, b.layers, b.summary
+    h = house_source.house(b.site)
+    hfc, hcfg = h.features, h.settings
+    if h.source == "ifc":
+        for line in house_source.drift(b.site):
+            b.say(line)
+        add_ifc_house(b, h)
     elif hfc:
         hm = house.build(hfc, hcfg["fl_upper"], hcfg["roof_pitch_deg"], hcfg["roof_plane_at_wall"],
                          hcfg["eaves_overhang_m"], ground, **house.roof_options(hcfg))
@@ -778,20 +781,18 @@ def tile_uv(local, faces, shaped=None):
     return uv
 
 
-def add_ifc_house(b, hfc, hcfg):
+def add_ifc_house(b, h):
     """The house drawn from its IFC file ([house] source = "ifc", domus.model.house_ifc): the layers the drawn house
     makes, from the file's elements as IfcOpenShell triangulates them, each in the layer its Domus property set names
-    (else its IFC class's) and in its own colours. A wall that still carries the id of a face house.geojson draws
-    keeps that face's picture (its photo where one covers it, else its drawn boards and windows), laid on it by the
-    wall's own coordinates, so the picture moves with the wall; every other piece is its colour, and the roof's tiles
-    lie as the drawn roof's do (tile_uv), in the roof's own coordinates. The house's numbers in summary.json are the
-    drawn house's, and say the file."""
+    (else its IFC class's) and in its own colours. A wall that still carries the id of a face of the house (`h`, as
+    the file describes it, house_source) keeps that face's picture (its photo where one covers it, else its drawn boards
+    and windows), laid on it by the wall's own coordinates, so the picture moves with the wall; every other piece is
+    its colour, and the roof's tiles lie as the drawn roof's do (tile_uv), in the roof's own coordinates. The house's
+    numbers in summary.json are the house's as the file describes it, and say the file."""
     frame, layers, summary = b.frame, b.layers, b.summary
+    hfc, hcfg = h.features, h.settings
     elements = house_ifc.read(b.site, b.say)
-    hm = None
-    if any(f["properties"].get("id") == "house-walls" for f in hfc):
-        hm = house.build(hfc, hcfg["fl_upper"], hcfg["roof_pitch_deg"], hcfg["roof_plane_at_wall"],
-                         hcfg["eaves_overhang_m"], b.ground, **house.roof_options(hcfg))
+    hm = h.model(b.ground) if h.walls is not None else None
     looks = house_texture.Looks(hcfg, b.site.path / "data" / "house")
     shaped = None                       # a skillion's or a gable's planes, which lay its tiles as the drawn roof's
     if hm is not None and hcfg.get("roof_form", "hip") != "hip":
@@ -863,6 +864,10 @@ def add_ifc_house(b, hfc, hcfg):
     summary["house"] = {**(hm.info if hm else {}), "fl_upper": hcfg["fl_upper"],
                         "fl_lower": round(hcfg.get("fl_lower", hcfg["fl_upper"]), 3),
                         "photo_textures": atlas.photos, "source": house_ifc.FILE}
+    b.plinths = {}                  # each face's plinth as drawn, for the observations that check one
+    for f in hm.faces if hm else ():
+        if "plinth_top" in f.spec:
+            b.plinths.setdefault(f.id, float(f.spec["plinth_top"]))
 
 
 def add_ifc(b):
@@ -1286,8 +1291,8 @@ def add_enrich(b):
     bnd = geojson.read(b.site.path / "data" / "site" / "boundary.geojson")["features"]
     main_id = cfg.get("boundary", {}).get("main", bnd[0]["properties"]["id"])
     lot = next(f for f in bnd if f["properties"]["id"] == main_id)["geometry"]["coordinates"][0]
-    hfc = {f["properties"]["id"]: f for f in geojson.read_optional(b.site.path / "data" / "site" / "house.geojson")}
-    house_ring = hfc["house-walls"]["geometry"]["coordinates"][0] if "house-walls" in hfc else None
+    walls_f = house_source.house(b.site).walls
+    house_ring = walls_f["geometry"]["coordinates"][0] if walls_f is not None else None
     surface = rasters.dsm(b.site) if rasters.path(b.site, "dsm").exists() else None
     route = enrich.walk_route(lot, house_ring, ground, surface)
     if route:
@@ -1367,7 +1372,9 @@ def snap_targets(site, origin):
                 lines.append({"label": label(f) if callable(label) else label, "pts": [pt(c) for c in ring]})
 
     add("boundary.geojson", "Boundary")
-    add("house.geojson", "House", lambda f: f["properties"].get("id") == "house-walls")
+    walls_f = house_source.house(site).walls
+    for ring in walls_f["geometry"]["coordinates"] if walls_f is not None else ():
+        lines.append({"label": "House", "pts": [pt(c) for c in ring]})
     add("walls-existing.geojson", lambda f: f["properties"].get("name", "Wall"))
     for f in geojson.read_optional(site.path / "data" / "site" / "features-survey-marks.geojson") or []:
         if f["geometry"]["type"] == "Point":

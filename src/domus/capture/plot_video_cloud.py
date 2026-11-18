@@ -12,6 +12,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from ..geo import geojson
+from ..model import house_source
 from ..project import rasters
 
 MARGIN_M = 5.0     # shown beyond the boundary on each side
@@ -48,8 +49,9 @@ def plot(site, tags, out=""):
         for (x, y, _), c in zip(xyz[inside], rgb[inside]):
             dr.point(p(x, y), fill=tuple(int(v) for v in c))
     dr.line([p(*q[:2]) for q in ring], fill=(255, 220, 0), width=2)
-    house = geojson.read(site.path / "data" / "site" / "house.geojson")["features"][0]["geometry"]["coordinates"][0]
-    dr.line([p(*q[:2]) for q in house], fill=(230, 30, 30), width=2)
+    walls = house_source.house(site).walls
+    for q in [walls["geometry"]["coordinates"][0]] if walls is not None else []:
+        dr.line([p(*c[:2]) for c in q], fill=(230, 30, 30), width=2)
     for k, tag in enumerate(tags):
         cams = np.load(site.path / "data" / "video" / f"{tag}-site.npz")["cameras"]
         colour = PATH_COLOURS[k % len(PATH_COLOURS)]

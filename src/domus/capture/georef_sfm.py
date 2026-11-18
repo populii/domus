@@ -43,7 +43,7 @@ weighs it down in combining the frames (plumb_consensus) and the hold then loose
 direction the frames fix best, leaving that tilt to the other control. The tilt of the start
 and of the result against the frames' vertical go into the -georef.json.
 Refinement: an iterative closest-surface fit of all reconstructed points to the house walls
-(vertical planes from data/site/house.geojson) and the ground, re-labelling points to the
+(vertical planes, from the house's source: domus.model.house_source) and the ground, re-labelling points to the
 nearest surface each round; control is held (a single anchor exactly in plan and the other
 points by their stated uncertainty, sigma_m, 3 cm unless given; unknown coordinates are free),
 and the cameras' median height above the ground is kept between 1 and 2 m. The ground is the
@@ -71,8 +71,7 @@ from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 
 from ..errors import DomusError
-from ..geo import geojson
-from ..model import terrain
+from ..model import house_source, terrain
 from ..project import rasters
 from . import sfm
 from .sfm_georef import apply, fit_similarity, horn_initial, load, triangulate_pixels
@@ -87,8 +86,13 @@ def frames_dir(site):
 
 
 def house_planes(site):
-    ring = np.asarray(geojson.read(site.path / "data" / "site" / "house.geojson")["features"][0]
-                      ["geometry"]["coordinates"][0])[:-1]
+    """The house's walls as planes, each (a corner, the unit vector along the wall, its length), from the house's
+    walls as its source gives them (domus.model.house_source); a side under a metre long is left out."""
+    walls = house_source.house(site).walls
+    if walls is None:
+        raise DomusError("Placing a video fits it to the house's walls, and this site has no house: house-walls in "
+                         "data/site/house.geojson, or its IFC file")
+    ring = np.asarray(walls["geometry"]["coordinates"][0])[:-1]
     planes = []
     for a, b in zip(ring, np.roll(ring, -1, axis=0)):
         d = b - a
@@ -554,7 +558,7 @@ def place(site, tag, via=None):
     reconstruction it's linked to, by that one's placement; the module's docstring says how. Writes
     data/video/<tag>-georef.json and <tag>-site.npz, and gives what the -georef.json holds."""
     rec = load(video_dir(site) / f"{tag}-sfm.npz")
-    house = site.settings()["house"]
+    house = house_source.house(site).settings
     eaves = eaves_height(house)
     planes = house_planes(site)
     dem = rasters.dem(site)

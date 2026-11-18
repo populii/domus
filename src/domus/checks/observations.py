@@ -29,6 +29,7 @@ import numpy as np
 
 from ..errors import DomusError
 from ..geo import geojson
+from ..model import house_source
 from ..project import observations as data
 
 TONES = {"ok": "ok", "near": "near", "off": "off", "lost target": "lost"}
@@ -52,7 +53,11 @@ class _Model:
     def layer(self, name):
         if name not in self.layers:
             path = self.site.path / "data" / "site" / f"{name}.geojson"
-            self.layers[name] = geojson.read_optional(path) if path.exists() else None
+            the_house = house_source.house(self.site) if name == "house" else None
+            if the_house is not None and the_house.source == "ifc":       # the house as its IFC describes it
+                self.layers[name] = the_house.features
+            else:
+                self.layers[name] = geojson.read_optional(path) if path.exists() else None
         return self.layers[name]
 
     def ground(self, e, n):
@@ -104,17 +109,15 @@ class _Model:
 
 
 def house_plinths(site):
-    """The plinth's top on each face of the house (house-walls in house.geojson), as the build draws the house: a
-    face's `plinth_top`, else the lowest ground along it."""
-    from ..model import house, terrain
+    """The plinth's top on each face of the house (its walls, house-walls, as the house's source gives them), as the
+    build draws the house: a face's `plinth_top`, else the lowest ground along it."""
+    from ..model import terrain
 
-    hfc = geojson.read_optional(site.path / "data" / "site" / "house.geojson")
-    if not any(f["properties"].get("id") == "house-walls" for f in hfc):
+    the_house = house_source.house(site)
+    if the_house.walls is None:
         return {}
-    hcfg = site.settings().get("house", {})
     dem = terrain.ground(site)
-    hm = house.build(hfc, hcfg["fl_upper"], hcfg["roof_pitch_deg"], hcfg["roof_plane_at_wall"], hcfg["eaves_overhang_m"],
-                     lambda e, n: dem.sample(np.atleast_1d(e), np.atleast_1d(n)), **house.roof_options(hcfg))
+    hm = the_house.model(lambda e, n: dem.sample(np.atleast_1d(e), np.atleast_1d(n)))
     out = {}
     for f in hm.faces:
         if "plinth_top" in f.spec:
@@ -202,7 +205,7 @@ def expected(m, o, at):
     t = o["target"]
     if "setting" in t:
         for key in (t["setting"], WORKED_OUT.get(t["setting"])):      # one left out is worked out as the model does
-            here = m.site.settings()
+            here = {"house": house_source.house(m.site).settings} if (key or "").startswith("house.") else m.site.settings()
             for part in (key or "").split("."):
                 here = dict.get(here, part) if isinstance(here, dict) else None
             if isinstance(here, (int, float)) and not isinstance(here, bool):
@@ -342,6 +345,10 @@ def intents_for(site, r):
         raise DomusError(f"Observation {o_id} has no target to set: give it one (docs/observations.md)")
     if r["state"] in ("no reading", "lost target"):
         raise DomusError(f"Observation {o_id} can't be proposed: {r['why']}")
+    on_house = t.get("layer") == "house" or str(t.get("setting", "")).removeprefix("house.") in house_source.SHAPE
+    if on_house and house_source.house(site).source == "ifc":
+        raise DomusError(f"Observation {o_id}'s target is the house, which its IFC file keeps ([house] source = \"ifc\"): "
+                         "change it there, with an ifc- intent (domus site edit, docs/changes.md)")
     basis = f"Read off {r['source']['picks']} ({r['source']['mark']}), observation {o_id}."
     e, n, h = (round(x, 3) for x in r["at"])
     if r["kind"] == "point":

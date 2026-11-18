@@ -4,8 +4,9 @@ as lines.
     domus prep ifc
 
 An IFC usually carries no usable georeferencing, so it is fitted in plan to the house's outside wall line (the
-house-walls feature in data/site/house.geojson): the union of the IFC's walls, its outer ring, matched to the outline
-by a 2D rigid fit (ICP from the best of four quarter turns). Heights are the model's plus `datum_dz`.
+house's walls, house-walls, as domus.model.house_source gives them): the union of the IFC's walls, its outer ring,
+matched to the outline by a 2D rigid fit (ICP from the best of four quarter turns). Heights are the model's plus
+`datum_dz`.
 
 "ifc" in data/prep.json says what to read: `source`, `out` (written as <out>.npz, one mesh per viewer layer, and
 <out>.geojson, the lines and the fit), `datum_dz`, `walls_layer`, `drain_layer`, `drain_part`, `retaining_layer`, and
@@ -25,7 +26,9 @@ from scipy.spatial import cKDTree
 from shapely.geometry import LineString, MultiPolygon, Polygon
 from shapely.ops import unary_union
 
+from ..errors import DomusError
 from ..geo import geojson
+from ..model import house_source
 from . import config
 
 
@@ -128,8 +131,11 @@ def place(site):
     sha = hashlib.sha256(src.read_bytes()).hexdigest()
     f = ifcopenshell.open(str(src))
     prods = products(f)
-    house = {g["properties"]["id"]: g for g in geojson.read(site.path / "data" / "site" / "house.geojson")["features"]}
-    ring = np.asarray(house["house-walls"]["geometry"]["coordinates"][0], float)[:, :2]
+    walls = house_source.house(site).walls
+    if walls is None:
+        raise DomusError("domus prep ifc fits the designer's IFC to the house's outline, and this site has no house: "
+                         "house-walls in data/site/house.geojson, or its IFC file")
+    ring = np.asarray(walls["geometry"]["coordinates"][0], float)[:, :2]
     R, t, med, p90 = fit_to_outline(prods, ring, cfg.get("walls_layer", "Walls"))
     rot = float(np.degrees(np.arctan2(R[1, 0], R[0, 0])))
     print(f"fit: rotation {rot:.4f} deg, shift {t.round(3)}; the outline's misfit median {med:.3f} m, 90% {p90:.3f} m")

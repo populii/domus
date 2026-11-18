@@ -55,10 +55,12 @@ def aerial_ndvi(site, E, N, step=STEP):
 
 
 def house_mask(site, E, N, buffer=1.0):
-    """Cells under the site's house (its walls, bay windows and porches from data/site/house.geojson), widened by
-    `buffer`: the eaves (0.35 m) and the half-diagonal of a 1 m LiDAR cell that takes the roof's
-    height where it overlaps the eaves."""
-    feats = geojson.read_optional(site.path / "data" / "site" / "house.geojson")
+    """Cells under the site's house (its walls, bay windows and porches, as the house's source gives them:
+    domus.model.house_source), widened by `buffer`: the eaves (0.35 m) and the half-diagonal of a 1 m LiDAR cell that
+    takes the roof's height where it overlaps the eaves."""
+    from . import house_source
+
+    feats = house_source.house(site).features
     polys = [Polygon(f["geometry"]["coordinates"][0]) for f in feats
              if f["geometry"]["type"] == "Polygon" and (f["properties"]["id"] == "house-walls"
                                                          or f["properties"].get("part") in ("bay", "porch"))]

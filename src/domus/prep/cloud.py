@@ -33,7 +33,7 @@ from PIL import Image, ImageDraw
 
 from ..errors import DomusError
 from ..geo import geojson
-from ..model import terrain
+from ..model import house_source, terrain
 from ..project import rasters
 
 
@@ -174,9 +174,9 @@ def plan(site, xyz, rgb, corners, out, px=0.02, mode="top", above=None, lines=Fa
                 draw(f["geometry"]["coordinates"][0], (255, 40, 40))
         for f in geojson.read_optional(layers / "walls-existing.geojson"):
             draw(f["geometry"]["coordinates"], (255, 230, 0))
-        for f in geojson.read_optional(layers / "house.geojson"):
-            if f["properties"].get("id") == "house-walls":
-                draw(f["geometry"]["coordinates"][0], (255, 255, 255))
+        walls = house_source.house(site).walls
+        if walls is not None:
+            draw(walls["geometry"]["coordinates"][0], (255, 255, 255))
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     im.save(out)
     return im.size, int(keep.sum())

@@ -657,8 +657,11 @@ site has one of most. `[house]` sets the floor levels, the roof (`roof_pitch_deg
 `board_m`; `domus prep boards` reads the boards' spacing off a wall's photo).
 
 `domus house ifc` writes the house as it's drawn to `data/house.ifc`, an IFC4 file a designer's software opens, each
-wall face and part an element typed by what it is. With `[house] source = "ifc"` the build draws the house from that
-file, which is then the house's master ([docs/site-format.md](docs/site-format.md#the-house-as-an-ifc-file)).
+wall face and part an element typed by what it is. With `[house] source = "ifc"` that file is the house's one source:
+the build and everything else that reads the house read it there, not `house.geojson` or `[house]`'s shape settings,
+and a build warns when those have changed since the file was written
+([docs/site-format.md](docs/site-format.md#the-house-as-an-ifc-file)). Change the house through the file's route then
+(`domus site edit` with `ifc-` intents).
 
 ### 8.3 Ground the LiDAR gets wrong
 
@@ -824,7 +827,7 @@ for option in site.options():
 |---|---|
 | `site.settings()`, `site.title` | `data/site.toml` as a dict (a copy), and the site's name |
 | `site.grid` | The site's grid and heights: `epsg`, `label`, `vertical`, `origin`, `datums`, and `to_nztm`, `from_nztm`, `to_lonlat`, `to_model_height` and `from_model_height` to turn points and levels between them |
-| `site.lot()`, `site.house_walls()` | The lot and the house's walls as shapely polygons in plan |
+| `site.lot()`, `site.house_walls()`, `site.house()` | The lot and the house's walls as shapely polygons in plan, and the house as its source gives it (`house.geojson` and `[house]`, or its IFC file) |
 | `site.layer(name)` | The features of `data/site/<name>.geojson`, or none |
 | `site.ground()` | The ground as the build draws it, as `ground(e, n)`: the LiDAR with the fixes and the existing walls' faces and tops |
 | `site.options()`, `site.frame()` | The wall options, and their frame: `frame.en(so)` and `frame.so(en)` |
@@ -957,6 +960,9 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md) f
   common.
 - **The public API's promise.** Anything `domus.api` and `domus.testing` offer changes only after a deprecation in an
   earlier release and a "For site projects" note in the changelog. Site tools and agents use the API, not internals.
+- **The house through its accessor.** Code that reads the house reads it with `domus.model.house_source.house(site)`
+  (`site.house()` in the API), never `house.geojson` or `[house]` directly: with `[house] source = "ifc"` the house's
+  IFC file is its source.
 - **Settings through the schema.** Declare a new setting with its default and help in the schema, then run
   `uv run python tools/settings_doc.py` to rewrite the tables in docs/site-format.md. The tests fail on a setting the
   code reads that the schema doesn't declare, or reads with another default.

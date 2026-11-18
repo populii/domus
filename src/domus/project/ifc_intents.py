@@ -402,6 +402,16 @@ def add(f, intent, site, back, say):
     ifcopenshell.api.style.assign_representation_styles(f, shape_representation=rep, styles=[style])
     props = {"ref": new, "layer": intent.get("layer") or house_ifc.layer_of(element, {}), "part": "added",
              **({"source": intent["source"]} if intent.get("source") else {})}
+    # Its description, as the house's own elements carry theirs (house_ifc.described): a block of the house's, its
+    # outline, base and top on the site's grid, so what reads the house reads it too.
+    grid = to_grid(f) @ placed(element)
+    corners = [(grid @ [u, v, 0.0, 1.0])[:2].tolist() for u, v in outline]
+    feature = {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[*corners, corners[0]]]},
+               "properties": {"id": new, "part": "block", "name": intent.get("name", new), "base": float(grid[2, 3]),
+                              "top": float(grid[2, 3]) + float(height), "colour": key, "layer": props["layer"],
+                              **({"source": intent["source"]} if intent.get("source") else {})}}
+    props.update(placed=json.dumps([*map(float, grid[:3, 3]), math.atan2(grid[1, 0], grid[0, 0])]),
+                 feature_json=json.dumps(feature, separators=(",", ":")))
     pset = ifcopenshell.api.pset.add_pset(f, product=element, name="Domus")
     ifcopenshell.api.pset.edit_pset(f, pset=pset, properties={k: ifc.measure(f, k, v) for k, v in props.items()})
     say(f"   {FILE}: {new}: added, an {element.is_a()} on storey {storey.Name}")

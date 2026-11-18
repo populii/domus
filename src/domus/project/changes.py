@@ -155,6 +155,7 @@ class _File:
         self.rel, self.path, self.raw = rel, path, raw
         self.text = self.data = self.before = self.restore_sha = None
         self.restore = self.whole = False         # the house's IFC put back as it was, or written whole
+        self.drawn_from = None                    # what the house's IFC is written whole from: house_source.fingerprint
         self.named = set()
         self.intents = []
 
@@ -235,9 +236,10 @@ def _plan(site, intents, say):
             if i["kind"] == "ifc-restore":
                 f.restore, f.restore_sha = True, i["sha"]
             elif i["kind"] == "ifc-write":
-                from ..model import house_ifc
+                from ..model import house_ifc, house_source
 
                 f.whole, f.text = True, house_ifc.draft(site, say)
+                f.drawn_from = house_source.fingerprint(site)
             else:
                 f.named |= ifc_intents.apply(f.data, i, site, say)
             continue
@@ -480,7 +482,8 @@ def _apply(site, intents, why, who, *, kind=None, basis=None, undoes=None, backu
               "intents": intents, "summary": [kinds.describe(i) for i in intents],
               "files": [{"path": f.rel, "before": hashlib.sha256(f.raw).hexdigest() if f.raw is not None else None,
                          "after": _sha(f.path),
-                         "copy": _rel(site, kept[f.rel]) if f.rel in kept else None} for f in plans],
+                         "copy": _rel(site, kept[f.rel]) if f.rel in kept else None,
+                         **({"drawn_from": f.drawn_from} if f.drawn_from else {})} for f in plans],
               "inverse": inverse, "rebuild": rebuild}
     _write_json(folder / f"{stem}.json", record)
     say(f"Recorded as edit {record['id']} (.domus/edits/{stem}.json): domus site undo {seq} undoes it.")

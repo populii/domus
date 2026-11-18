@@ -17,7 +17,7 @@ from shapely.ops import unary_union
 
 from ..errors import DomusError
 from ..geo import geojson
-from ..model import terrain
+from ..model import house_source, terrain
 from ..project.site import cached
 from . import scheme, solids
 from .scheme import (  # noqa: F401 (the names site tools and tests use, as they were here)
@@ -74,9 +74,10 @@ def title(site):
 @cached
 def house_outline(site):
     """What the house takes of the ground: its walls and every part drawn as an area (porches, blocks such as
-    decks and landings) in data/site/house.geojson. A bay window hangs from the wall above the ground
-    (domus.model.house draws it from `bottom_above_fl` up), so the ground runs on under it and it is left out."""
-    feats = geojson.read_optional(site.path / "data" / "site" / "house.geojson")
+    decks and landings), as the house's source gives them (domus.model.house_source). A bay window hangs from the wall
+    above the ground (domus.model.house draws it from `bottom_above_fl` up), so the ground runs on under it and it is
+    left out."""
+    feats = house_source.house(site).features
     polys = [Polygon(np.asarray(f["geometry"]["coordinates"][0])[:, :2]) for f in feats
              if f["geometry"]["type"] == "Polygon" and f["properties"].get("part") != "bay"]
     return unary_union([p.buffer(0) for p in polys])
@@ -85,11 +86,11 @@ def house_outline(site):
 @cached
 def house_retaining_walls(site):
     """Walls that retain the ground against the house, such as round a lower floor dug into a slope
-    (part = "retaining-walls" in data/site/house.geojson), or None."""
+    (the house's parts with part = "retaining-walls"), or None."""
     from shapely.geometry import MultiLineString
 
     lines = []
-    for f in geojson.read_optional(site.path / "data" / "site" / "house.geojson"):
+    for f in house_source.house(site).features:
         if f["properties"].get("part") == "retaining-walls":
             g = f["geometry"]
             lines += [[c[:2] for c in part] for part in (g["coordinates"] if g["type"] == "MultiLineString" else [g["coordinates"]])]
@@ -98,7 +99,7 @@ def house_retaining_walls(site):
 
 def house_building(site):
     """The house itself (its walls and bay windows), for the checks on the ground beside its foundations."""
-    feats = geojson.read_optional(site.path / "data" / "site" / "house.geojson")
+    feats = house_source.house(site).features
     return unary_union([Polygon(np.asarray(f["geometry"]["coordinates"][0])[:, :2]) for f in feats
                         if f["properties"].get("id") == "house-walls" or f["properties"].get("part") == "bay"])
 

@@ -50,7 +50,7 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 | Part | What's in it |
 |---|---|
 | `geo/` | Grids and datums (`crs`: a site's `Grid`, made from its settings), rasters read on their own grids, GeoJSON, meshes, fits: none of it reads a site |
-| `model/` | The model's parts: the ground (`terrain` reads the site's, `tin` triangulates), the house and its looks, and the house kept as an IFC file (`house_ifc`, written and read with IfcOpenShell), walls, small features, plants (`canopy` reads the site's, `vegetation` draws), drains |
+| `model/` | The model's parts: the ground (`terrain` reads the site's, `tin` triangulates), the house and its looks, the house kept as an IFC file (`house_ifc`, written and read with IfcOpenShell), and the house as every part of Domus reads it (`house_source`: `house.geojson` and `[house]`, or that file), walls, small features, plants (`canopy` reads the site's, `vegetation` draws), drains |
 | `options/` | The wall options: `scheme` works them out, `design` reads a site's for it, `sketch` turns a drawing into one, `solids` builds one as closed solids with Manifold (its ground, walls, steps, cut and fill), which its soil is measured from and the build draws its ground from, and `preview` works a sketch out as solids from what a built model gives the viewer, the reference the viewer's JavaScript copy is held to |
 | `build/` | The build, and its cache |
 | `export/` | A built model for other software: glTF, and IFC through the optional IfcOpenShell |
