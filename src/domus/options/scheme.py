@@ -650,6 +650,7 @@ def evaluate(opt, site, existing=None, step=0.1):
                       "height_min_m": round(info["height_min_m"], 2), "height_max_m": round(info["height_max_m"], 2),
                       "retained_max_m": round(hmax, 2), "face_area_m2": round(info["face_area_m2"], 2),
                       "top_min": round(info["top_min"], 2), "top_max": round(info["top_max"], 2),
+                      "toe_min": round(info["toe_min"], 2), "toe_max": round(info["toe_max"], 2),
                       "line_so": [[round(float(a), 2), round(float(b), 2)] for a, b in so],
                       "flags": flags, "mesh": m, "def": w})
 

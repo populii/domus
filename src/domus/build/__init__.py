@@ -479,7 +479,7 @@ def option_layers(opt, res, frame, extent, cfg, existing_walls, lawns=(), existi
     # Walls.
     for w in res["walls"]:
         info = {k: w[k] for k in ("id", "name", "material", "length_m", "height_min_m", "height_max_m",
-                                  "retained_max_m", "face_area_m2", "top_min", "top_max")}
+                                  "retained_max_m", "face_area_m2", "top_min", "top_max", "toe_min", "toe_max")}
         info["checks"] = "; ".join(w["flags"]) or "none"
         out.append({**mesh_json(w["mesh"], frame, walls.MATERIAL_COLOURS.get(w["material"], "#999"),
                                 f"{w['id']} {w['name']} ({w['material']})"),

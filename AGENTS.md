@@ -324,7 +324,8 @@ Options compare how a scheme looks and what it does to the ground. Domus doesn't
 
 Report to the person:
 
-1. **Where the model is,** and how to open it.
+1. **Where the model is,** and how to open it. `domus export` writes it, or an option, as glTF or IFC for other software
+   ([docs/export.md](docs/export.md)).
 2. **What each part rests on,** with accuracy, and what's still estimated. A table by part works well.
 3. **What you checked** and the results, including failures you didn't fix.
 4. **What would improve it most next,** and what's needed from them.

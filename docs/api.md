@@ -10,6 +10,7 @@ site = api.open_site("site")
 print(site.title, round(site.lot().area), "m2")
 for option in site.options():
     print(option["name"], site.evaluate(option)["volumes"]["cut_m3"])
+site.export("site.glb")         # the built model for other software, glTF or IFC; option= an option's id shows it
 ```
 
 ## The promise
@@ -47,6 +48,7 @@ Everything is on the site's own grid (`[crs] epsg` in `data/site.toml`), with he
 | `site.evaluate(option)` | What an option comes to, as the viewer's comparison shows it: walls, cut and fill, flat lawn and checks. `option` is one of `options()`, or its id |
 | `site.build()` | Builds the model, as `domus build` does, and gives the folder it's in |
 | `site.output` | The folder the model is built into |
+| `site.export(path, format=None, option=None)` | Writes the built model for other software, as `domus export` does, and gives the file's path: glTF (`"glb"`, a binary `.glb`) or IFC4 (`"ifc"`, which needs IfcOpenShell, the `ifc` extra), by default the one the path's suffix says. `option`, a wall option's id, shows that option in place of what it replaces, as the viewer does; without it, the site as it is. It reads the model as last built ([export.md](export.md)) |
 | `site.check(checks=None, tags=None, plots=False)` | Runs the adversarial checks, as `domus prep check` does (sanity, roof, plumb, clouds, and for the wall options through, fixes and blocks), and gives their report: `failures` by check, `findings`, and `skipped`, why a check the site has nothing for was skipped. It writes it to `.domus/checks/check_model.json` |
 
 ## Helpers

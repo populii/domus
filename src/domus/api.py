@@ -10,6 +10,7 @@
     print(ground([e], [n]))                 # heights at points on the site's grid
     for option in site.options():
         print(option["name"], site.evaluate(option)["volumes"]["cut_m3"])
+    site.export("site.glb")                 # the built model for other software: glTF (.glb) or IFC (.ifc)
 
 **The promise.** What this module offers keeps working from one release to the next. Changing any of it takes a
 deprecation warning in an earlier release and a "For site projects" note in CHANGELOG.md. The rest of the `domus`
@@ -170,6 +171,17 @@ class Site:
         with self._use():
             build.main()
         return self.output
+
+    def export(self, path, format=None, option=None):
+        """Writes its built model for other software, as domus export does, and returns the file's path: glTF
+        (`format` "glb", a binary .glb, for Blender and most 3D viewers) or IFC4 ("ifc", for architects' and builders'
+        software; it needs IfcOpenShell, the ifc extra), by default the one the path's suffix says. `option`, a wall
+        option's id, shows that option in place of what it replaces, as the viewer does; without it, the site as it
+        is. It reads the model as last built into `output`, so build the site after changing it."""
+        from . import export
+
+        with self._use():
+            return export.write(path, format, option)
 
     def check(self, checks=None, tags=None, plots=False):
         """Runs the adversarial checks, as domus prep check does: `checks` names some of sanity, roof, plumb, clouds,

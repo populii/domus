@@ -53,6 +53,7 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 | `model/` | The model's parts: the ground (`terrain` reads the site's, `tin` triangulates), the house and its looks, walls, small features, plants (`canopy` reads the site's, `vegetation` draws), drains |
 | `options/` | The wall options: `scheme` works them out, `design` reads a site's for it, `sketch` turns a drawing into one |
 | `build/` | The build, and its cache |
+| `export/` | A built model for other software: glTF, and IFC through the optional IfcOpenShell |
 | `checks/` | `domus prep check`'s rules, and the viewer's checklist and video walk (`enrich`) |
 | `capture/` | Videos into placed clouds, and phone scans |
 | `prep/` | A site's documents and photos into its data |
@@ -91,7 +92,7 @@ trusts none, and the server never imports a site's code.
 ## The public API
 
 Site tools, a site's own tests and agents use `domus.api` and `domus.testing` ([docs/api.md](docs/api.md)): open a site,
-read its lot, house, layers, ground and options, evaluate an option, build and check. What they offer changes only
+read its lot, house, layers, ground and options, evaluate an option, build, check and export. What they offer changes only
 after a deprecation in an earlier release and a "For site projects" note in the changelog. The rest of the package is
 internal, so common can change behind the API without breaking a site's tools. A process can hold several sites:
 Domus's modules read the current site (`domus.project.site`), and each site keeps what Domus reads of it.
@@ -112,4 +113,4 @@ next starts:
 | 6 | The package tidied into subpackages |
 
 Beside the phases: a newer three.js in the viewer, a house that can keep an IFC master changed through one edit
-path, shared geometry between the viewer and the build, and exports to IFC and glTF.
+path, and shared geometry between the viewer and the build.

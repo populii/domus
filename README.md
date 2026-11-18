@@ -175,6 +175,10 @@ a drain or ground lowered next to the house.
 To show them to someone, `domus shots` saves pictures of each from the viewer, from the views and cameras you list in a
 small JSON file: [docs/shots.md](docs/shots.md).
 
+To take the site, or an option, into other software, `domus export option-a.glb --option a-one-wall` writes it as glTF for
+Blender and 3D viewers, and `.ifc` as IFC for a designer's software, with each wall's numbers.
+[docs/export.md](docs/export.md) says what each holds.
+
 ## Host it at home
 
 Domus is a single container that keeps everything in one `/site` folder, so backing up that folder backs up everything. Set
@@ -218,6 +222,7 @@ Being honest about the rough edges:
 | The model's parts: ground, house, walls, features, plants, drains | `src/domus/model/` |
 | The build, from site data to `model.json` and textures | `src/domus/build/` |
 | Wall options: designed ground, volumes, checks | `src/domus/options/` |
+| Exports of a built model: glTF and IFC | `src/domus/export/` |
 | Checks, and the checklist and video walk | `src/domus/checks/` |
 | The site folder: its Site, settings, formats and edits | `src/domus/project/` |
 | The viewer, one page using three.js | `src/domus/viewer/` |

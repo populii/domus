@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** `domus export PATH`, and `site.export(path, format=None, option=None)` in the public API,
+  write the built model for other software. A `.glb` is glTF, for Blender and most 3D viewers: what the viewer shows,
+  in its colours and pictures, with the site's grid and origin in its extras so it can be placed again. An `.ifc` is
+  IFC4, for architects' and builders' software, through IfcOpenShell (the `ifc` extra): the ground, the house, the
+  walls, lawns, features and drains on a site georeferenced to the site's grid, each with a property set of the
+  model's numbers. `--option ID` shows a wall option in place of what it replaces, as the viewer does, with its walls
+  as IfcWall and its steps as IfcStair in an IFC. docs/export.md says what each holds.
+- A wall option's walls carry their toe levels, `toe_min` and `toe_max`, in the model and in `site.evaluate`, as the
+  existing walls do.
+
 ## 2026.11.39
 
 - **For site projects:** how sure a datum's offset and the upper floor's level are, `[datums.<datum>] uncertainty_m`

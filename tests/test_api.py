@@ -14,8 +14,8 @@ from domus.errors import DomusError
 
 # The promise: these stay, from one release to the next. Removing or renaming one needs a deprecation first.
 PUBLIC = {"DomusError", "Site", "clip", "fit_affine", "linz_query", "open_site", "resample_line"}
-SITE_METHODS = {"build", "check", "evaluate", "frame", "ground", "house_walls", "layer", "lot", "options", "output",
-                "path", "settings", "title"}
+SITE_METHODS = {"build", "check", "evaluate", "export", "frame", "ground", "house_walls", "layer", "lot", "options",
+                "output", "path", "settings", "title"}
 
 
 def test_the_promised_names_are_all_there():

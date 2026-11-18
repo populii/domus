@@ -9,6 +9,7 @@
     domus title                                               add the lot's title and nearby easements from LINZ
     domus points [--ground]                                   get the classified LiDAR point cloud over the site
     domus build                                               build the model
+    domus export PATH [--option ID]                           the built model as glTF (.glb) or IFC (.ifc), for other software
     domus video <step>                                        turn site videos into point clouds
     domus scan FILE                                           bring in a phone LiDAR scan
     domus prep <step>                                         plans, IFC, textures, checks from your documents
@@ -29,8 +30,8 @@ import sys
 
 from . import __version__
 
-COMMANDS = ["create", "new", "demo", "fetch", "canopy", "marks", "title", "points", "sketch-worker", "build", "serve", "video", "scan", "prep",
-            "site", "shots"]
+COMMANDS = ["create", "new", "demo", "fetch", "canopy", "marks", "title", "points", "sketch-worker", "build", "export", "serve", "video",
+            "scan", "prep", "site", "shots"]
 
 
 def choose_site(path):
@@ -105,8 +106,26 @@ def run(command, rest):
     if command == "site":
         from .project import upgrade
         return upgrade.main(rest)
+    if command == "export":
+        return export(rest)
     from . import build
     return build.main(rest)
+
+
+def export(rest):
+    """`domus export PATH [--option ID] [--format glb|ifc]`: the site's built model for other software, through the
+    public API (site.export). See docs/export.md."""
+    ap = argparse.ArgumentParser(prog="domus export", description="Write the built model for other software: glTF (.glb) "
+                                 "for Blender and 3D viewers, or IFC4 (.ifc) for architects' and builders' software.")
+    ap.add_argument("path", help="the file to write: .glb for glTF, .ifc for IFC")
+    ap.add_argument("--option", help="a wall option's id: its walls, steps, lawns and beds in place of what they replace, "
+                                     "as the viewer shows it (default: the site as it is)")
+    ap.add_argument("--format", choices=["glb", "ifc"], help="the format, if the path's suffix doesn't say it")
+    args = ap.parse_args(rest)
+    from . import api
+
+    path = api.open_site().export(args.path, format=args.format, option=args.option)
+    print(f"wrote {path} ({path.stat().st_size / 1e6:.1f} MB)")
 
 
 if __name__ == "__main__":
