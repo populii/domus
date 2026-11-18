@@ -335,6 +335,22 @@ def git_commit(site):
 
 LAWN_JOIN_M = 1.0       # a new lawn this close to a lawn that is there is drawn as that lawn's grass
 
+# How an option's terraces are drawn, by their kind: the colour of the layer's swatch, the picture laid over them, the
+# metres one copy of it covers and the colour it's tinted. A kind not here is drawn as a planted bed; "ground" isn't
+# drawn, being a regrade only. Paving is the colour the viewer sketches a path or paving in.
+TERRACE_LOOKS = {"lawn": ("#6f9a48", "grass-detail.jpg", 0.5, "#7aa552"),
+                 "planting": ("#6b5a45", "bed.jpg", 2.0, None),
+                 "paving": ("#b9b2a5", "pavers.jpg", 2.0, None)}
+
+
+def terrace_pictures():
+    """The pictures the options' terraces are drawn with, and what paints each into the output folder."""
+    from ..model import wall_looks
+    from ..model.vegetation import bed_texture, grass_detail_texture
+
+    return {"grass-detail.jpg": grass_detail_texture, "bed.jpg": bed_texture,
+            "pavers.jpg": lambda path: wall_looks.paint("pavers", path, (TERRACE_LOOKS["paving"][2],) * 2)}
+
 
 def skin_area(outline, walled, beside):
     """Where a bed, or a lawn on its own, is drawn within its `outline`: a little inside it, but right up to a
@@ -386,15 +402,17 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
             "role": "ground", "uv": r(uv, 5), **tag,
             "mask": r([(mask[0] - e0) / (e1 - e0), (mask[1] - n0) / (n1 - n0),
                        (mask[2] - e0) / (e1 - e0), (mask[3] - n0) / (n1 - n0)], 5)}]
-    # Lawns and beds on the designed ground.
+    # Lawns, beds and paving on the designed ground.
     from shapely.geometry import Polygon as SPoly
 
-    from ..model.vegetation import bed_texture, drape, grass_detail_texture
+    from ..model.vegetation import drape
 
-    if any(t.kind not in ("lawn", "ground") for t in d.terraces) and not (site.output / "bed.jpg").exists():
-        bed_texture(site.output / "bed.jpg")
-    if any(t.kind == "lawn" for t in d.terraces) and not (site.output / "grass-detail.jpg").exists():
-        grass_detail_texture(site.output / "grass-detail.jpg")
+    painters = terrace_pictures()
+    for t in d.terraces:
+        if t.kind != "ground":
+            picture = TERRACE_LOOKS.get(t.kind, TERRACE_LOOKS["planting"])[1]
+            if not (site.output / picture).exists():
+                painters[picture](site.output / picture)
     # A lawn or a bed stops at the walls and steps that stand in it, and runs up to the house's wall. It meets a
     # wall at the wall's own face and back, where the ground under it does (terrain.build), and keeps a little
     # clear of a flight of steps.
@@ -441,15 +459,13 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
             if host["id"] not in pictures:
                 pictures.append(host["id"])
             continue
-        tile = 0.5 if lawn else 2.0      # the grass tile's and the planted bed tile's size on the ground
+        colour, picture, tile, tint = TERRACE_LOOKS.get(t.kind, TERRACE_LOOKS["planting"])
         # Tiled from the viewer's origin: from the grid's own, millions of tiles away, the viewer's 32-bit numbers
         # couldn't place the texture within a tile.
-        out.append({**mesh_json(m, frame, "#6f9a48" if lawn else "#6b5a45",
-                                f"{opt['short']}: {t.name} ({t.poly.area:.0f} m2)"),
+        out.append({**mesh_json(m, frame, colour, f"{opt['short']}: {t.name} ({t.poly.area:.0f} m2)"),
                     "id": f"option-{oid}-terrace-{t.id}", "role": "skin",
                     "uv": r((m.vertices[:, :2] - (frame.e0, frame.n0)) / tile, 4),
-                    "texture": "grass-detail.jpg" if lawn else "bed.jpg", "repeat": True,
-                    "tint": "#7aa552" if lawn else None, **tag})
+                    "texture": picture, "repeat": True, "tint": tint, **tag})
     # The lawns that are there stay drawn where the option leaves them: on its ground inside the mask, less its
     # own lawns and beds and the walls and steps that stand in them, and on the ground as it is outside it. They
     # are drawn as their grass without the bare patches they have today (the picture a new lawn beside them takes),
@@ -823,12 +839,10 @@ def add_regrade(b):
 
 
 def shared_textures(site, layers):
-    """The planted beds' and the grass's tiles, which options' layers share: an option taken from the last build
-    doesn't paint them, so they're painted here if a layer uses one and it isn't there."""
-    from ..model.vegetation import bed_texture, grass_detail_texture
-
+    """The planted beds', the grass's and the paving's tiles, which options' layers share: an option taken from the
+    last build doesn't paint them, so they're painted here if a layer uses one and it isn't there."""
     used = {layer.get("texture") for layer in layers} | {(layer.get("drape") or {}).get("detail") for layer in layers}
-    for name, paint in (("bed.jpg", bed_texture), ("grass-detail.jpg", grass_detail_texture)):
+    for name, paint in terrace_pictures().items():
         if name in used and not (site.output / name).exists():
             paint(site.output / name)
 

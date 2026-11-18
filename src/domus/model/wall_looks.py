@@ -1,4 +1,5 @@
-"""A picture of each wall material, painted for a site with no photo of that kind of wall.
+"""A picture of each wall material, painted for a site with no photo of that kind of wall, and of the steps and the
+paving a wall option lays.
 
 Each picture is one repeat of the material, at the size domus.walls.MATERIAL_TEXTURES gives it, and
 tiles both ways. They are drawn, not photographed: enough to tell a gabion from a block wall in the
@@ -216,8 +217,34 @@ def sleepers(size_m, rng):
     return img
 
 
+PAVER_M = (0.2, 0.1)    # a paver's length and width
+PAVER_RGB = (185, 178, 165)    # its colour on average: the colour the viewer sketches a path or paving in
+
+
+def pavers(size_m, rng):
+    """Concrete pavers seen from above, laid in stretcher bond: rows of pavers 0.2 m long and 0.1 m wide, each row
+    half a paver along from the one before, with sanded joints. Each paver has its own tone, a little darker at its
+    edges where they're bevelled."""
+    h, w = _px(size_m)
+    rows = np.arange(h) * size_m[1] / h / PAVER_M[1]                     # in paver widths down the picture
+    row = np.floor(rows).astype(int)
+    along = np.arange(w)[None, :] * size_m[0] / w / PAVER_M[0] + 0.5 * (row[:, None] % 2)     # in paver lengths
+    paver = np.floor(along).astype(int)
+    count = int(round(size_m[0] / PAVER_M[0])) + 1
+    tone = rng.uniform(0.9, 1.08, (int(round(size_m[1] / PAVER_M[1])) + 1, count))
+    tone[:, -1] = tone[:, 0]                       # the half paver at the right edge is the left edge's other half
+    shade = tone[row[:, None] % tone.shape[0], paver % count] * (1 + 0.05 * _noise((h, w), rng, ((3, 1.0), (0.8, 0.8))))
+    # how far each pixel is from its paver's edge, in metres: darker within a centimetre of it (the bevel), sand in the joint
+    edge = np.minimum(np.minimum(along % 1, 1 - along % 1) * PAVER_M[0],
+                      np.minimum(rows % 1, 1 - rows % 1)[:, None] * PAVER_M[1])
+    shade = shade * (0.82 + 0.18 * np.clip(edge / 0.01, 0, 1))
+    img = _rgb(PAVER_RGB, shade / shade.mean())
+    img[edge < 0.002] = np.asarray((132, 122, 104), float)
+    return img
+
+
 PAINTERS = {"timber": timber, "block": block, "stone": stone, "segmental": segmental, "gabion": gabion,
-            "crib": crib, "concrete": concrete, "sleepers": sleepers}
+            "crib": crib, "concrete": concrete, "sleepers": sleepers, "pavers": pavers}
 
 
 def paint(material, path, size_m, seed=23):

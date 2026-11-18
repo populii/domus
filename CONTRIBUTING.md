@@ -163,7 +163,7 @@ flowchart LR
 | Site | What it is |
 |---|---|
 | `demo` | What `domus demo` writes: a sloping lot, a small house, a block wall, a drain, trees, a fence and two wall options |
-| `richer` | The demo with more of what real sites have: house parts, levels along the drain, a sewer at an assumed depth, a right of way listed before the lot, trees over the drive with the paving under them painted into the photo, and an option in walls of a named block that say how they're built |
+| `richer` | The demo with more of what real sites have: house parts, levels along the drain, a sewer at an assumed depth, a right of way listed before the lot, trees over the drive with the paving under them painted into the photo, a third option with a paved terrace, and an option in walls of a named block that say how they're built |
 | `abroad` | The demo moved onto the British National Grid, rasters and all. Its build must match the demo's within 1.5 mm |
 | `format1`, `format2`, `format3` | The demo as a site in each older format, with what the next format changed. They stay as they are for good |
 | `left` | The demo with its options' frame run the other way along the same boundary, so the lot lies on the frame line's left (`[frame] side = "left"`), and its options drawn to stand where the demo's do |

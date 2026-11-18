@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A wall option's paved terrace (`kind = "paving"`, what a path sketched in the viewer becomes) is drawn as pavers,
+  concrete pavers in stretcher bond in the colour the viewer sketches a path or paving in, where it was drawn as a
+  planted bed. `tools/made_up_sites.py`'s richer site has an option with a paved terrace, which CI builds with the
+  others ([docs/options.md](docs/options.md)).
 - **For site projects:** the names Domus is replacing say so where a site's code uses them: a
   `DomusDeprecationWarning` (a `DeprecationWarning`, from `domus.errors`) that names what replaces each, put at the
   line that used it. They're the modules' old names (`domus.terrain`, `domus.crs`, `domus.video.georef_sfm` and the

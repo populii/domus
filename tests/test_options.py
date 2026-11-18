@@ -5,6 +5,7 @@ across them, the lawns an option leaves alone, walls of named blocks set out in 
 are worked out on."""
 
 import json
+import re
 
 import numpy as np
 import pytest
@@ -746,6 +747,35 @@ def test_options_are_worked_out_on_the_ground_the_build_draws(built, project):
     here = ground.sample(behind[:1], behind[1:])[0]
     assert here == pytest.approx(top[k], abs=0.03)
     assert here > terrain.ground(project).sample(behind[:1], behind[1:])[0] + 0.3
+
+
+def test_a_paved_terrace_is_drawn_as_paving(site, at_site, tmp_path):
+    """A terrace of kind "paving" is drawn with the pavers' picture, in the colour the viewer sketches paving in, where
+    a planted bed is drawn with the bed's."""
+    from PIL import Image
+
+    from domus import build
+    from domus.model import terrain, wall_looks
+    from domus.options import design
+
+    s = at_site(site, tmp_path)
+    low = round(ground_at(10.0, 10.0), 2)
+    opt = {"id": "paved", "name": "Paved", "short": "P", "description": "", "path": "options/paved.toml", "walls": [],
+           "terraces": [{"id": "patio", "kind": "paving", "level": low, "polygon_so": [[9, 6], [11, 6], [11, 12], [9, 12]]},
+                        {"id": "bed", "kind": "planting", "level": low, "polygon_so": [[11, 6], [12, 6], [12, 12], [11, 12]]}]}
+    cfg = s.settings()
+    frame = build.Frame(build.site_origin(cfg, terrain.ground(s)))
+    layers, _, _ = build.option_layers(s, opt, design.evaluate(s, opt), frame, cfg["model"]["extent"], cfg, [])
+    skins = {x["id"]: x for x in layers if x.get("role") == "skin"}
+    patio, bed = skins["option-paved-terrace-patio"], skins["option-paved-terrace-bed"]
+    assert (patio["texture"], patio["colour"], patio["tint"]) == ("pavers.jpg", "#b9b2a5", None) and bed["texture"] == "bed.jpg"
+    pavers = np.asarray(Image.open(tmp_path / "pavers.jpg").convert("RGB"), float)
+    assert pavers.shape == (512, 512, 3)                                     # 2 m of pavers, at the painted pictures' scale
+    assert np.allclose(pavers.reshape(-1, 3).mean(axis=0), wall_looks.PAVER_RGB, atol=8)    # the sketch's paving, on average
+    from domus.app import serve
+
+    sketched = re.search(r'AREA_KINDS = \{[^}]*path: "(#[0-9a-f]{6})"', (serve.VIEWER / "index.html").read_text(encoding="utf-8"))
+    assert sketched[1] == patio["colour"] == "#" + "".join(f"{v:02x}" for v in wall_looks.PAVER_RGB)    # the viewer's sketch of a path
 
 
 def test_a_block_wall_is_drawn_as_deep_as_its_units_with_its_foot_in_the_ground(site, project):

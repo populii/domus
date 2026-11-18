@@ -2,7 +2,7 @@
 
 One TOML file per retaining-wall scheme. `domus build` reads every
 `options/*.toml` (names starting with `_` are skipped) and turns each into designed ground, walls
-with levels, lawns and beds, and a row in the viewer's options table (`src/domus/options/`).
+with levels, lawns, beds and paving, and a row in the viewer's options table (`src/domus/options/`).
 `_site.toml` holds what they share: the site frame and `[regrade]`, the part of the lot options may regrade
 (the whole lot unless `s_max` or `polygon_so` narrows it).
 
@@ -59,16 +59,16 @@ line_so = [[5.0, 2.4], [-1.5, 2.4], [-1.5, 6.5]]   # its face
 [[terraces]]
 id = "lawn"
 name = "Lawn"
-kind = "lawn"           # lawn | planting (sets the look) | paving | ground (a regrade, drawn as the ground round it)
+kind = "lawn"           # lawn | planting | paving (each its look) | ground (a regrade, drawn as the ground round it)
 level = 42.55           # NZVD2016 at `at_so`
 at_so = [7.5, 5.0]
 fall = "1:25"           # or "2%" or 0.02; flat lawn is counted up to 1:20
 fall_to = "north"       # north | east | south | west on the site's grid, or a bearing in degrees
 batter = 2.5            # edges not on a wall slope back to the ground at 1 : batter
 polygon_so = [[-1.5, 2.4], [5.0, 2.4], [5.0, 0.3], [7.5, 0.3], [7.5, 10.9], [3.0, 10.9], [-1.5, 6.5]]
-# A paved terrace (kind = "paving", what a path sketched in the viewer becomes) has its level at the paving's
-# top. paving_m = 0.2 says how deep its paving is, pavers, bedding and any basecourse: the soil is that far under
-# its level. Without it, [defaults] paving_m in _site.toml, else 0.2.
+# A paved terrace (kind = "paving", what a path sketched in the viewer becomes) is drawn as pavers, and has its
+# level at the paving's top. paving_m = 0.2 says how deep its paving is, pavers, bedding and any basecourse: the
+# soil is that far under its level. Without it, [defaults] paving_m in _site.toml, else 0.2.
 
 [[stairs]]
 id = "steps"
@@ -250,8 +250,8 @@ build paints.
   the designed ground it holds, below the wall's top where the wall stands above it.
 - Each flight's risers and goings, flagged when they are steep (a riser over 0.19 m or a going under 0.25 m).
 - Clean edges in the drawn ground: at each wall, round each flight of steps, and where the ground meets the
-  house. The ground keeps its level up to the foot of a wall's face and up to its back, and a lawn or a bed
-  runs right up to the wall, and to another bed or lawn of the scheme that lies against it. It stops at the
+  house. The ground keeps its level up to the foot of a wall's face and up to its back, and a lawn, a bed or
+  paving runs right up to the wall, and to another of the scheme's lawns, beds or paving that lies against it. It stops at the
   walls and steps that stand in it, and the ground runs on under a bay window. Nothing of the ground should
   show through a wall or a tread.
 - The lawns that are there (`kind` lawn in `data/site/trees.geojson`): where an option leaves a lawn alone it

@@ -11,10 +11,10 @@ The sites, all in the sea, so none is a real place:
   richer   The demo with more of what real sites have: house parts (a porch and its steps, a deck and its
            balustrade, a chimney and a tank), levels along the drain, a sewer at an assumed depth, a right of way
            listed before the lot, and two trees over the drive beside it, with the paving under them painted into
-           the aerial photo (data/site/paved-under-canopy.geojson and a paving picture). A fourth wall option, D, is
-           B in walls of a named block that say how they're built: their units' and capping units' depth, how far
-           the capping units stand out, their first course's embedment, the bedding, the base course, the trench and
-           the soil over its drainage aggregate.
+           the aerial photo (data/site/paved-under-canopy.geojson and a paving picture). A third wall option, C, paves
+           part of the ground its wall holds, and a fourth, D, is B in walls of a named block that say how they're
+           built: their units' and capping units' depth, how far the capping units stand out, their first course's
+           embedment, the bedding, the base course, the trench and the soil over its drainage aggregate.
   abroad   The demo moved onto the British National Grid (EPSG:27700), rasters and all. The same site on another grid
            builds the same model, from the site's origin: the report holds the head's build of it to the demo's
            within 1.5 mm (`twin`), and fails if it isn't.
@@ -146,7 +146,7 @@ polygon_so = [[7.0, 2.0], [7.0, 20.0], [14.0, 20.0], [14.0, 2.0]]
 
 def enrich(root):
     """The demo, with house parts, drain levels, a drain at an assumed depth, a lot that isn't listed first, trees
-    over the drive beside it, and its option B in walls of a named block that say how they're built."""
+    over the drive beside it, an option with a paved terrace, and its option B in walls of a named block that say how they're built."""
     from domus.project import demo
 
     x0, y0 = demo.X0, demo.Y0
@@ -193,11 +193,51 @@ def enrich(root):
                                         'confidence = "made up"\n')
     trees_over_the_drive(root)
     level = lambda s: round(float(demo.ground(x0 + 11, y0 + 30 - s)), 1)        # as the demo's own options take them
+    # Option A's lawn, at s 11, part of it paved.
+    (root / "options" / "c-paved-terrace.toml").write_text(PAVED_TERRACE.format(level=level(11) + 0.1), encoding="utf-8",
+                                                           newline="\n")
     # The bed as option B's, and the lawn three 0.2 m courses above it, so the two walls' tops are whole courses apart.
     (root / "options" / "d-block-tiers.toml").write_text(BLOCK_TIERS.format(bed=level(5) + 0.2, lawn=round(level(5) + 0.8, 1)),
                                                          encoding="utf-8", newline="\n")
     # The options' materials lists with an allowance to order, and the weights of two aggregates.
     append(root / "options" / "_site.toml", "\n[materials]\nallowance_pct = 10.0\ndensity_t_m3 = { base = 2.0, drainage = 1.6 }\n")
+
+
+# Option A's wall and level ground, with a terrace of pavers in front of the porch's steps and lawn round it.
+PAVED_TERRACE = """name = "C. A paved terrace"
+short = "C. Paving"
+description = "A timber wall holds level ground: a paved terrace in front of the porch's steps, and lawn round it."
+steps = 0
+keep_existing = []
+
+[[walls]]
+id = "C1"
+name = "Terrace wall"
+material = "timber"
+line_so = [[8.0, 2.0], [8.0, 20.0]]
+
+[[terraces]]
+id = "terrace"
+name = "Paved terrace"
+kind = "paving"
+level = {level}
+at_so = [11.0, 11.0]
+fall = "1:40"
+fall_to = "north"
+batter = 2.5
+polygon_so = [[9.5, 6.0], [9.5, 16.0], [14.0, 16.0], [14.0, 6.0]]
+
+[[terraces]]
+id = "lawn"
+name = "Lawn"
+kind = "lawn"
+level = {level}
+at_so = [11.0, 11.0]
+fall = "1:40"
+fall_to = "north"
+batter = 2.5
+polygon_so = [[8.0, 2.0], [8.0, 20.0], [14.0, 20.0], [14.0, 16.0], [9.5, 16.0], [9.5, 6.0], [14.0, 6.0], [14.0, 2.0]]
+"""
 
 
 # Two made-up trees over the drive east of the lot, which the demo's aerial photo shows as paving from x0 + 22 on: each
