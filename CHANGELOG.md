@@ -28,6 +28,13 @@
   (`paving_bedding_m`, `paving_base_m`); and the soil its cut, fill and net. Quantities are net, with the quantity to
   order beside them: `[materials] allowance_pct` in `options/_site.toml` adds that much (none unless given), and
   `density_t_m3` gives volumes' weights. No costs ([docs/options.md](docs/options.md#what-an-option-takes-its-materials-list)).
+- **For site projects:** `site.ground()` in `domus.api` gives the ground as the build draws it, the one the wall
+  options are designed on and measured from: the LiDAR's bare ground with the ground fixes, as it was, and now with the
+  existing walls' faces and tops cut in too, over the model's extent. Where it read the LiDAR's smeared slope across a
+  wall, a site's tool now reads the wall's step. The build draws the drains on the same ground: a drain's line on the
+  ground, its labels and its pipe at an assumed depth (`[services] assumed_depth_m`) follow it, as the options' checks
+  of the drains already did, so such a pipe now steps with the ground where it passes an existing wall
+  ([docs/api.md](docs/api.md)).
 - `domus prep check blocks` says when a cut piece is under 150 mm, too narrow to cut a unit to.
 
 ## 2026.11.47

@@ -146,9 +146,11 @@ class Site:
         return shapely.force_2d(shape(walls[0]["geometry"])) if walls else None
 
     def ground(self):
-        """The ground model, as a function: ground(e, n) gives the heights at points on the site's grid, an array the
-        shape of e and n. It's the LiDAR's bare ground (data/lidar/dem.tif, or the file `[rasters] dem` names) with
-        ground-fixes.geojson applied, and NaN where that has no ground."""
+        """The ground, as a function: ground(e, n) gives the heights at points on the site's grid, an array the shape of
+        e and n. It's the ground as the build draws it, the one the wall options are designed on and the drains are
+        drawn below: the LiDAR's bare ground (data/lidar/dem.tif, or the file `[rasters] dem` names) with
+        ground-fixes.geojson applied and the existing walls' faces and tops cut in (walls-existing.geojson), over the
+        model's extent. Beyond it, the LiDAR with the fixes; NaN where that has no ground."""
         import numpy as np
 
         from .model import terrain
@@ -158,7 +160,7 @@ class Site:
         if not dem.exists():
             raise DomusError(f"{self.path} has no ground model yet: domus fetch gets one from LINZ, or put your own "
                              f"at {dem}")
-        model = terrain.ground(self._project)
+        model = terrain.existing(self._project)
 
         def heights(e, n):
             e, n = np.broadcast_arrays(np.asarray(e, float), np.asarray(n, float))
@@ -183,8 +185,8 @@ class Site:
     def evaluate(self, option):
         """What an option comes to, as the viewer and its comparison table show it: its walls and their heights, cut and
         fill, flat lawn, its checks, and what it takes to build (`materials`, docs/options.md). `option` is one of
-        options(), or its id. Cut and fill are soil, measured from the ground as the build draws it (ground() with the
-        existing walls' faces and tops in it): a new wall's own body and paving don't count."""
+        options(), or its id. Cut and fill are soil, measured from the ground as the build draws it, ground(): a new
+        wall's own body and paving don't count."""
         from .options import design
 
         if isinstance(option, str):

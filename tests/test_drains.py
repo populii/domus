@@ -75,8 +75,37 @@ def test_a_flagged_drain_says_so_on_its_pipe_and_in_every_check_of_it(site, proj
 def test_a_level_without_a_label_shows_its_invert(site, project):
     from domus import build
 
-    b = SimpleNamespace(site=project, cfg={}, frame=build.Frame(np.zeros(3)), ground=flat, labels={}, layers=[], vertical="NZVD2016",
-                        svc_feats=[drain(), point(5, 9.25), point(15, 9.0, label="IL 9.00 (plan)")])
+    b = SimpleNamespace(site=project, cfg={}, frame=build.Frame(np.zeros(3)), ground=flat, drawn_ground=flat, labels={}, layers=[],
+                        vertical="NZVD2016", svc_feats=[drain(), point(5, 9.25), point(15, 9.0, label="IL 9.00 (plan)")])
     build.add_marks(b)
     texts = [m["text"] for m in next(x for x in b.layers if x["id"] == "marks")["items"]]
     assert "IL 9.25" in texts and "IL 9.00 (plan)" in texts
+
+
+def test_drains_are_drawn_on_the_ground_the_build_draws(tmp_path):
+    """A drain's line, its pipe at an assumed depth and its labels take the ground as the build draws it (the existing
+    walls cut in), the one the wall options' checks of it use, not the LiDAR's alone."""
+    import json
+
+    from domus import build
+
+    (tmp_path / "data" / "site").mkdir(parents=True)
+    features = [drain(), point(5, 9.25)]
+    (tmp_path / "data" / "site" / "services.geojson").write_text(
+        json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
+    site = SimpleNamespace(path=tmp_path, settings=lambda: {"services": {"assumed_depth_m": {"d": 0.6}}})
+    drawn = lambda e, n: np.full(np.shape(np.atleast_1d(e)), 10.5)       # a wall's top, say, where the LiDAR has 10
+    b = SimpleNamespace(site=site, cfg={}, frame=build.Frame(np.zeros(3)), ground=flat, drawn_ground=drawn, labels={},
+                        layers=[], vertical="")
+    build.add_services(b)
+    line = next(x for x in b.layers if x["id"] == "d")
+    assert np.allclose(np.asarray(line["segments"]).reshape(-1, 3)[:, 1], 10.56)    # viewer y is the height
+    build.add_marks(b)
+    assert next(x for x in b.layers if x["id"] == "marks")["items"][0]["at"][1] == pytest.approx(10.7)
+    b.layers = []
+    features[1]["properties"].pop("line")                                  # no levels: drawn at its assumed depth
+    (tmp_path / "data" / "site" / "services.geojson").write_text(
+        json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
+    build.add_services(b)
+    pipe = next(x for x in b.layers if x["type"] == "pipes")
+    assert np.allclose(np.asarray(pipe["path"]).reshape(-1, 3)[:, 1], 10.5 - 0.6 + build.PIPE_RADIUS)

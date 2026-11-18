@@ -93,8 +93,9 @@ PIPE_RADIUS = 0.05      # m: 100 mm drains
 def pipe_layers(site, svc_feats, frame, ground, colours):
     """The drains of data/site/services.geojson as pipes below the ground ("pipes" layers: a viewer polyline of the
     pipe's centre and its radius), at the levels domus.drains works out for each, or [services] assumed_depth_m below
-    the ground. [services.notes] says where each drain's levels came from, and a drain's own `follow_up` what's known
-    to be wrong with them. Drains with neither levels nor an assumed depth are left out."""
+    the ground: `ground(e, n)`, the ground as the build draws it. [services.notes] says where each drain's levels came
+    from, and a drain's own `follow_up` what's known to be wrong with them. Drains with neither levels nor an assumed
+    depth are left out."""
     from shapely.geometry import LineString
 
     from ..model import drains
@@ -833,8 +834,9 @@ def shared_textures(site, layers):
 
 
 def add_services(b):
-    """Services: each drain's line on the ground, and below it the pipe at its depth, for the viewer's see-through ground."""
-    cfg, frame, ground, layers = b.cfg, b.frame, b.ground, b.layers
+    """Services: each drain's line on the ground, and below it the pipe at its depth, for the viewer's see-through ground.
+    Both are on the ground as the build draws it (b.drawn_ground), the ground the wall options' checks of them use."""
+    cfg, frame, ground, layers = b.cfg, b.frame, b.drawn_ground, b.layers
     svc_feats = geojson.read_optional(b.site.path / "data" / "site" / "services.geojson")
     colours = cfg.get("services", {}).get("colours", {})
     for f in svc_feats:
@@ -868,8 +870,8 @@ def add_marks(b):
             lab = p.get("label") or (f"IL {float(p['invert_m']):.2f}" if "invert_m" in p else None)
             if not lab:
                 continue
-            marks.append({"text": f"drain {lab}" if "depth_m" in p else lab, "kind": "sewer",
-                          "at": r(frame.xyz([[e, n, float(ground(e, n)[0]) + 0.2]])[0], 2)})
+            marks.append({"text": f"drain {lab}" if "depth_m" in p else lab, "kind": "sewer",       # on its drain's ground
+                          "at": r(frame.xyz([[e, n, float(b.drawn_ground(e, n)[0]) + 0.2]])[0], 2)})
     site_features = b.site_features = features.read_all(b.site.path)
     for f in site_features:
         if f["properties"].get("kind") == "mark":
@@ -1124,6 +1126,8 @@ def main(site, fresh=False, say=print):
     wall_feats = geojson.read_optional(site.path / "data" / "site" / "walls-existing.geojson")
     b = SimpleNamespace(site=site, cfg=cfg, extent=extent, frame=Frame(origin), dem=dem, origin=origin,
                         ground=lambda e, n: dem.sample(np.atleast_1d(e), np.atleast_1d(n)),
+                        # the ground as the build draws it, the existing walls cut in (terrain.drawn): the drains' ground
+                        drawn_ground=lambda e, n: terrain.existing(site).sample(np.atleast_1d(e), np.atleast_1d(n)),
                         labels=cfg.get("labels", {}), vertical=cfg.get("crs", {}).get("vertical", ""),
                         wall_defs=[walls.from_feature(f) for f in wall_feats], layers=[], summary={},
                         cache=buildcache.Cache(site.path, site.output, fresh), extensions=checked, say=say)

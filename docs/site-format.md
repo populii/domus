@@ -233,7 +233,8 @@ at the top of each module give the full detail: `model/features.py` for fences, 
 - **`services.geojson`**: LineStrings for drains. A Point with `line` (a drain's id) and `invert_m` gives a level
   along it, and its `label`, if any, shows by it. The points from one document (their `source`) give its levels over
   their own stretch; where documents overlap, the higher level is used. Without any, a drain's id in
-  `[services] assumed_depth_m` draws it at that depth. A drain's `follow_up` says what's known to be wrong with its
+  `[services] assumed_depth_m` draws it at that depth, below the ground as the build draws it (with the existing walls'
+  faces and tops in it). A drain's `follow_up` says what's known to be wrong with its
   levels: the viewer shows it on the pipe, and the options' checks of that drain repeat it.
 - **`title.geojson`**: From `domus title`: the lot's title (`kind` `title`, with `title_no`, `estate`, `type`) and the
   easements on or near it (`kind` `easement`, with `intent` and `on_lot`). Wall options flag a wall that runs into an easement.

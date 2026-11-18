@@ -60,6 +60,21 @@ def test_the_ground_comes_back_the_shape_it_was_asked(site):
     assert grid.shape == (2, 3) and ground(e[0], n[0]).shape == ()
 
 
+def test_the_ground_is_the_ground_the_build_draws(site, project):
+    """site.ground() is the ground as the build draws it, the existing walls' faces and tops in it: just behind the
+    demo's old wall, the wall's top, which stands above the LiDAR there."""
+    from domus import design, mesh, terrain, walls
+
+    ground = api.open_site().ground()
+    old = design.existing_walls(project)[0]
+    pts, _, _, _, top = walls.wall_levels(old, terrain.ground(project))
+    k = len(pts) // 2
+    e, n = mesh.offset_behind(pts, old["thickness"] + 0.01, old["side"])[k]
+    assert float(ground(e, n)) == float(terrain.existing(project).sample(np.array([e]), np.array([n]))[0])
+    assert float(ground(e, n)) == pytest.approx(top[k], abs=0.03)
+    assert float(ground(e, n)) > float(terrain.ground(project).sample(np.array([e]), np.array([n]))[0]) + 0.3
+
+
 def test_an_option_is_evaluated_by_itself_or_its_id(site):
     s = api.open_site()
     a = s.evaluate("a-one-wall")

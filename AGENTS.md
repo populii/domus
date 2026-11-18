@@ -785,7 +785,7 @@ for option in site.options():
 | `site.grid` | The site's grid and heights: `epsg`, `label`, `vertical`, `origin`, `datums`, and `to_nztm`, `from_nztm`, `to_lonlat`, `to_model_height` and `from_model_height` to turn points and levels between them |
 | `site.lot()`, `site.house_walls()` | The lot and the house's walls as shapely polygons in plan |
 | `site.layer(name)` | The features of `data/site/<name>.geojson`, or none |
-| `site.ground()` | The ground model, LiDAR with the fixes, as `ground(e, n)` |
+| `site.ground()` | The ground as the build draws it, as `ground(e, n)`: the LiDAR with the fixes and the existing walls' faces and tops |
 | `site.options()`, `site.frame()` | The wall options, and their frame: `frame.en(so)` and `frame.so(en)` |
 | `site.evaluate(option)` | What an option comes to: `walls`, `volumes`, `flat`, `terraces`, `stairs`, `drains`, `edge`, and `materials`, what it takes to build |
 | `site.build(fresh=False)`, `site.output` | Build the model, and the folder it's in |
