@@ -93,10 +93,6 @@ source_modules = ["domus.geo", "domus.model.house", "domus.model.house_texture",
 forbidden_modules = ["domus.project", "domus.api", "domus.testing", "domus.build", "domus.app", "domus.create",
                      "domus.shots", "domus.export", "domus.model.terrain", "domus.model.canopy", "domus.options.design",
                      "domus.options.sketch", "domus.checks", "domus.capture", "domus.prep", "domus.importers"]
-# geo's names from before Domus handed its parts their site (crs.ROOT, crs.settings(), raster.DEM, raster.dem() and the
-# rest, deprecated) give the current site's through these imports alone, until they're removed.
-ignore_imports = ["domus.geo.crs -> domus.project.site", "domus.geo.raster -> domus.project.site",
-                  "domus.geo.raster -> domus.project.rasters"]
 
 [[tool.importlinter.contracts]]
 name = "Nothing imports the app (domus.app), which sits on top, and only its command line imports its server"

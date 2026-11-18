@@ -3,7 +3,7 @@ rasters, and, as data in data/site.toml, the site's grid, its heights' datum, th
 The build never calls one, so a site built once builds without the internet.
 
     nz      New Zealand: LINZ's addresses, parcels, buildings, LiDAR and aerial photos, with OpenStreetMap's addresses
-            and buildings when there's no LINZ key (domus.publicdata, domus.linz, domus.title, domus.points).
+            and buildings when there's no LINZ key (domus.importers.nz: publicdata, linz, title and points).
     osm     Anywhere else: OpenStreetMap's address and buildings, and the Copernicus ground model (domus.importers.osm).
     manual  Your own boundary and rasters: `domus new`.
 

@@ -1,4 +1,4 @@
-"""Place a video reconstruction (domus.sfm output) on the site grid.
+"""Place a video reconstruction (domus.capture.sfm output) on the site grid.
 
 Control points are features picked in two or more frames whose site coordinates are known
 (house corners from the plans, ground heights from the LiDAR). Each is triangulated with

@@ -2,10 +2,10 @@
 
     domus create "12 Example Street, Christchurch" [path]
 
-Looks up the address, parcel and buildings (domus.publicdata), starts a site project, fetches the LiDAR and aerial photo
-(domus.linz), then drafts what it can from them: the house on the lot, as an outline from the public layer with its height
-and roof fitted to the LiDAR; neighbouring buildings as plain blocks; trees from the LiDAR canopy. Everything drafted says
-so in its layer, and the files can be edited like any others.
+Looks up the address, parcel and buildings (domus.importers.nz.publicdata), starts a site project, fetches the LiDAR
+and aerial photo (domus.importers.nz.linz), then drafts what it can from them: the house on the lot, as an outline from
+the public layer with its height and roof fitted to the LiDAR; neighbouring buildings as plain blocks; trees from the
+LiDAR canopy. Everything drafted says so in its layer, and the files can be edited like any others.
 
 It's a first model, not a survey. Roofs are fitted as a single pitch and walls are plain.
 """

@@ -1,4 +1,4 @@
-"""A wall option worked out with no site: domus.scheme takes the frame, the ground and the rest from its caller. Its
+"""A wall option worked out with no site: domus.options.scheme takes the frame, the ground and the rest from its caller. Its
 cut and fill are soil, measured from the ground it's given."""
 
 import numpy as np

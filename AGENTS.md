@@ -129,7 +129,6 @@ everything from `data/prep.json`. This file gives the usage of each of them.
 | `DOMUS_TRUST_FILE` | Where `domus site trust` records what this machine trusts, instead of the user's configuration folder |
 | `DOMUS_BUILD_CACHE` | `0` builds everything again, as `domus build --fresh` does |
 | `DOMUS_STRICT_SETTINGS` | `1` makes reading a setting the schema doesn't declare an error. Domus's tests set it |
-| `DOMUS_STRICT_SITE` | `1` makes calling a part of Domus without its site an error. Domus's tests set it |
 
 [docs/self-hosting.md](docs/self-hosting.md) has the server's own: `DOMUS_PORT`, `DOMUS_ALLOWED_HOSTS`,
 `DOMUS_TRUST_PROXY`, `DOMUS_MAX_SITES` and `DOMUS_ACCESS_LOG`.
@@ -966,12 +965,11 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md) f
   `settings()`, `format()` and `grid`, taken as the function's first argument. What a part reads of a site is kept with
   that site, never in a module's own globals, so one process can hold several. The command line and the server read
   `DOMUS_SITE` once and hand the site down; a job in a process of its own gets the site's folder. The pure layers
-  (`geo`, the model's pure parts and `scheme`) read no site at all. Nothing reads the current site: the older names
-  that do (`crs.ROOT`, `crs.settings()`, `raster.dem()` and the rest, and calls such as `design.frame()` without a
-  site) are kept for site code, deprecated, and each says so where it's used. The tests run in strict mode, where a
-  part called without its site is an error, and so is a `DomusDeprecationWarning`, from those names or a module's old
-  name (`domus.MOVED`): Domus's code and tests import each module by its name now, and a test of an old name catches
-  its warning. `tests/test_handed.py` looks for code that reads the old way.
+  (`geo`, the model's pure parts and `scheme`) read no site at all. No part looks for a site of its own: one called
+  without its site fails, as any call missing an argument does. Only where a process starts is the site it was
+  started for read (`domus.project.site.started()`), and `tests/test_handed.py` looks for code that reads it anywhere
+  else. The tests make a `DomusDeprecationWarning` an error, so Domus's own code and tests use no name it has
+  deprecated.
 - **Text files are UTF-8**, named on every read and write; a test checks.
 - **The app** (`domus/app/`: the command line, the server and the viewer) sits on top, and nothing else in Domus
   imports it. **The viewer** loads nothing from other hosts (new libraries go in its `vendor` folder), and its page is

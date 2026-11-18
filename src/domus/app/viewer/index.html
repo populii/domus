@@ -602,7 +602,7 @@ try {
   if (!res.ok) throw new Error(`model.json: HTTP ${res.status}`);
   model = await res.json();
 } catch (err) {
-  status("The model data didn't load. Build it with: uv run python -m domus.build, then serve the viewer folder over http.");
+  status("The model data didn't load. Build it with: domus build (or domus --site PATH build), then reload.");
   throw err;
 }
 
@@ -760,7 +760,7 @@ function layerTexture(file, repeat) {
   return layerTextures[key];
 }
 
-// Vegetation layers (domus.vegetation). Foliage is drawn as leaf cards: square quads showing
+// Vegetation layers (domus.model.vegetation). Foliage is drawn as leaf cards: square quads showing
 // a sprite of the grey atlas, instanced per plant and sprite, tinted per card and alpha-tested,
 // lit with a normal stored per card that points out of the crown so a crown shades as one mass.
 // Trunks and limbs are tapered tubes, stumps are bark cylinders with their cut face on top, and

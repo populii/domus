@@ -25,7 +25,7 @@ A flight of steps is a line from its foot to its head and a width. It takes its 
 designed ground just beyond each end, so it follows the terraces it joins, and the ground under it
 is a ramp between them.
 
-A pure part of the model: it reads no site. domus.design reads a site's options/_site.toml, ground, regrade area,
+A pure part of the model: it reads no site. domus.options.design reads a site's options/_site.toml, ground, regrade area,
 house, walls, services and easements, and passes them in (a Context).
 """
 
@@ -204,7 +204,7 @@ class Terrace:
 
 
 def option_wall(cfg, defaults, frame):
-    """Wall dict (domus.walls style) for an option's wall; levels come later (Design.wall_levels)."""
+    """Wall dict (domus.model.walls style) for an option's wall; levels come later (Design.wall_levels)."""
     line = _points(cfg, "line", "line_so", frame)
     side = cfg.get("retained_side")
     bays = cfg.get("tops")
@@ -444,7 +444,7 @@ class Design:
     (`existing`, anything with sample(e, n)), regraded only inside `garden` (the regrade area), with the options'
     `defaults` and drawn in their `frame`.
 
-    Each of `existing_walls` (domus.walls dicts) the option takes away, not in its `keep_existing`, goes, face and
+    Each of `existing_walls` (domus.model.walls dicts) the option takes away, not in its `keep_existing`, goes, face and
     all. Its footprint (wall_body's plan, from its face's foot with any batter to its back) joins `garden` as far as
     `limits` lets it (a site's lot within its [regrade] limits, less its house; the whole footprint where it's None),
     and there the option starts from the soil under the wall, at its toe, not from its old face (base): its terraces
@@ -669,8 +669,8 @@ def wall_edges(w, ground=None):
     there fills from the trench's bottom: its base and bedding, the wall's own courses from their embedment below its
     toe, and any drainage aggregate behind them. None of it is soil, so the soil stops at the trench's bottom, its toe
     less its embedment, bedding and base (trench_bottom). A wall that doesn't say how it's built stands on its toe, in
-    a trench as deep as its body. An existing wall's (a domus.walls dict) is its body, where the build draws it into
-    `ground` (domus.tin.build): its face at the foot, half any batter in front of its line, a point for each of its
+    a trench as deep as its body. An existing wall's (a domus.model.walls dict) is its body, where the build draws it into
+    `ground` (domus.model.tin.build): its face at the foot, half any batter in front of its line, a point for each of its
     samples, and the soil stops at its toe, `ground`'s there."""
     line = np.asarray(w["line"], float)[:, :2]
     if ground is None:
@@ -801,7 +801,7 @@ def wall_checks(w, points=()):
 
 def drain_checks(design, services, depths_by_id, rules):
     """Cover over the drains after the cuts, and walls crossing drains. A drain's levels are worked out as for the
-    pipes the viewer draws (domus.drains), or its assumed depth taken; a drain whose levels are known to be wrong
+    pipes the viewer draws (domus.model.drains), or its assumed depth taken; a drain whose levels are known to be wrong
     (`follow_up`) says so in every check of it.
     """
     from ..model import drains
@@ -863,12 +863,12 @@ def easement_checks(w, easements=()):
 
 
 class Context:
-    """What a site gives its wall options to be worked out on: domus.design reads a site's (design.context()).
+    """What a site gives its wall options to be worked out on: domus.options.design reads a site's (design.context()).
 
     `frame` is the options' SiteFrame, `settings` options/_site.toml as read (its defaults and rules), `ground` the
     ground as it is, which the options are designed on and measured from (anything with sample(e, n): a site's is the
     ground as its build draws it), `garden` the regrade area and `regrade` its settings. The rest are for cut and fill
-    and the checks: the existing walls (domus.walls dicts), the house's outline, the building itself and any walls retaining
+    and the checks: the existing walls (domus.model.walls dicts), the house's outline, the building itself and any walls retaining
     the ground against it (shapely geometry, empty or None where there are none), the point features a footing must
     miss ((name, E, N)), the easements ((name, intent, shape)), the services (GeoJSON features) with their settings
     ([services] in data/site.toml), and `limits`, as far as the footprint of an existing wall an option takes away

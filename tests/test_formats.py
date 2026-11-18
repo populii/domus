@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from domus.errors import DomusDeprecationWarning, DomusError
+from domus.errors import DomusError
 from domus.project import formats, upgrade
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
@@ -132,13 +132,12 @@ def test_a_format_3_site_reads_clean_with_how_sure_its_levels_are_under_local(ol
     assert site["local"] == {"datums": {"plans": {"uncertainty_m": 0.05}}, "house": {"fl_upper_uncertainty_m": 0.02}}
     assert "uncertainty_m" not in site["datums"]["plans"] and "fl_upper_uncertainty_m" not in site["house"]
     assert schema.unknown(site, schema.SITE) == []
-    current = at_site(three)
+    held = at_site(three)
     capsys.readouterr()
-    s = current.settings()
+    s = held.settings()
     assert "Warning" not in capsys.readouterr().err
     assert s["local"]["house"]["fl_upper_uncertainty_m"] == 0.02 and s["local"]["datums"]["plans"]["uncertainty_m"] == 0.05
-    with pytest.warns(DomusDeprecationWarning):                     # crs.datums(), by its name from before
-        assert crs.datums() == [{"key": "plans", "label": "The plans' own datum (made up)", "offset_m": 57.3}]
+    assert held.grid.datums == (crs.Datum("plans", "The plans' own datum (made up)", 57.3),)
 
 
 def test_upgrading_a_format_3_site_moves_them_under_local(old_site, tmp_path, capsys):
@@ -176,11 +175,11 @@ def test_moving_them_under_local_keeps_what_local_has():
     assert formats.site_3({"datums": {"a": {"offset_m": 1.0}}, "house": {"fl_upper": 9.0}}) == []
 
 
-@pytest.mark.filterwarnings("ignore::domus.errors.DomusDeprecationWarning")      # crs's names from before
-def test_a_format_3_site_names_its_grid(site, monkeypatch):
-    from domus.geo import crs
+def test_a_format_3_site_names_its_grid(project, tmp_path, at_site):
+    from domus.geo.crs import Grid
 
-    assert crs.site_epsg() == 2193
-    monkeypatch.setattr(crs, "settings", lambda: {"crs": {}})
+    assert project.grid.epsg == 2193
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "site.toml").write_text("[domus]\nformat = 3\n", encoding="utf-8")
     with pytest.raises(DomusError, match=r"\[crs\] epsg is missing"):
-        crs.site_epsg()
+        Grid.from_settings(at_site(tmp_path).settings())

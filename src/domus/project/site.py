@@ -5,23 +5,15 @@ Every part of Domus that reads a site is handed it: the command line and the ser
 environment or --site, and pass it down, so one process can hold several sites, one after another or in turn, and each
 is read as itself. Whatever a part keeps of what it read (the settings, the rasters, the ground) it keeps on the site
 (`cached`), never in a module's own globals.
-
-Site code written before Domus handed its parts their site calls a few of them without one, such as design.frame()
-and terrain.ground(). They then read the current site, deprecated, and say so: the one the process was started for
-(DOMUS_SITE, else the current folder, with its model built into DOMUS_OUTPUT if that's set), found the first time
-something asks for it, or one site code makes current for a while with use(). In Domus's tests (DOMUS_STRICT_SITE=1)
-a part called without its site is an error, so Domus can't lean on the current site unseen.
 """
 
-import contextvars
 import functools
 import os
 import sys
 import tomllib
-from contextlib import contextmanager
 from pathlib import Path
 
-from ..errors import DomusError, deprecated
+from ..errors import DomusError
 from . import formats, schema
 
 
@@ -83,13 +75,7 @@ class Site:
         return self._grid
 
 
-_current = contextvars.ContextVar("domus_site", default=None)
 _started = None
-STRICT = os.environ.get("DOMUS_STRICT_SITE") == "1"
-
-
-class SiteNotHanded(LookupError):
-    """A part of Domus was called without its site (only in strict mode, as in the tests)."""
 
 
 def started():
@@ -110,53 +96,19 @@ def start(path):
     return _started
 
 
-def current():
-    """The current site, for site code written before Domus handed its parts their site (deprecated): the one use()
-    made current, else the one the process was started for."""
-    return _current.get() or started()
-
-
-@contextmanager
-def use(site):
-    """Make `site` the current one while the block runs, for site code that calls Domus without a site."""
-    token = _current.set(site)
-    try:
-        yield site
-    finally:
-        _current.reset(token)
-
-
-def given(site, what=None):
-    """`site`, the site a part was handed; for a call without one, from site code written before, the current site
-    (deprecated, and it says so, naming the part: `what`, else the function that asked). In strict mode
-    (DOMUS_STRICT_SITE=1, as in the tests) a call without a site is an error."""
-    if site is not None:
-        return site
-    if STRICT:
-        raise SiteNotHanded("A part of Domus was called without its site: hand it the Site (domus.project.site)")
-    if what is None:
-        caller = sys._getframe(1)
-        what = f"{caller.f_globals.get('__name__', '?')}.{caller.f_code.co_qualname.removesuffix('.__init__')}"
-    deprecated(f"{what}() was called without its site, which is deprecated: hand it the Site it works on "
-               "(domus.project.site.Site), first or as site=")
-    return current()
-
-
 def cached(fn):
     """functools.lru_cache for fn(site), kept on the site: each site keeps its own result. fn.cache_clear(site)
-    forgets that site's. Called without a site, as site code written before does, it reads the current one."""
+    forgets that site's."""
     name = f"{fn.__module__}.{fn.__qualname__}"
 
     @functools.wraps(fn)
-    def wrapper(site=None):
-        site = given(site, name)
+    def wrapper(site):
         key = (name, (), ())
         if key not in site.cache:
             site.cache[key] = fn(site)
         return site.cache[key]
 
-    def cache_clear(site=None):
-        site = given(site, f"{name}.cache_clear")
+    def cache_clear(site):
         for key in [k for k in site.cache if k[0] == name]:
             del site.cache[key]
 

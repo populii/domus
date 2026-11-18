@@ -51,7 +51,7 @@ def test_behind_is_square_to_the_line_and_mitred_at_a_corner():
 
 
 def serve_sketch():
-    # Importing domus.sketch reads the site from the environment, which is harmless here: behind() needs none.
+    # behind() needs no site.
     from domus.options import sketch
     return sketch
 

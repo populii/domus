@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import types
 
 import numpy as np
 import pytest
@@ -26,6 +27,24 @@ def test_the_promised_names_are_all_there():
     assert set(api.__all__) == PUBLIC
     assert all(hasattr(api, name) for name in PUBLIC)
     assert SITE_METHODS | CHANGE_METHODS <= set(dir(api.Site)) | {"path"}
+
+
+def test_a_deprecation_is_put_at_the_line_outside_domus_that_led_to_it():
+    """How the promise deprecates something: domus.errors.deprecated() warns with a DomusDeprecationWarning, a
+    DeprecationWarning, put at the first line outside Domus that led there, past Domus's own code on the way."""
+    from domus.errors import DomusDeprecationWarning, deprecated
+
+    def old():
+        deprecated("old() is going: use new()")
+
+    # The same function as a part of Domus would have it: its code in Domus's own folder.
+    in_domus = old.__code__.replace(co_filename=os.path.join(os.path.dirname(api.__file__), "made_up.py"))
+    part = types.FunctionType(in_domus, globals(), "old", None, old.__closure__)
+    here = sys._getframe().f_lineno
+    with pytest.warns(DomusDeprecationWarning, match=r"old\(\) is going: use new\(\)") as got:
+        part()
+    assert issubclass(DomusDeprecationWarning, DeprecationWarning)
+    assert [(w.filename, w.lineno) for w in got] == [(__file__, here + 2)]
 
 
 def test_a_site_reads_its_lot_house_layers_and_options(site):
@@ -154,7 +173,8 @@ def test_a_site_opened_by_path_is_built_in_its_own_folder(site, tmp_path):
 
 
 def test_a_site_opens_whatever_domus_imported_first(site, tmp_path):
-    r = run(f"from domus import crs, api, design; print(api.open_site({str(site)!r}).title)", DOMUS_SITE=str(tmp_path))
+    r = run("from domus.geo import crs; from domus import api; from domus.options import design; "
+            f"print(api.open_site({str(site)!r}).title)", DOMUS_SITE=str(tmp_path))
     assert r.returncode == 0 and r.stdout.strip() == "Demo site (made up)", r.stderr
 
 

@@ -1,7 +1,7 @@
-"""domus.video.colmap_sfm: a COLMAP model carried into our conventions, on a synthetic camera.
+"""domus.capture.colmap_sfm: a COLMAP model carried into our conventions, on a synthetic camera.
 
 COLMAP puts the centre of the top-left pixel at (0.5, 0.5) and ours at (0, 0); its
-SIMPLE_RADIAL camera must be the model domus.sfm.project uses. No COLMAP run is needed:
+SIMPLE_RADIAL camera must be the model domus.capture.sfm.project uses. No COLMAP run is needed:
 the scene, poses and pixels are made up, and pycolmap only supplies its camera model and
 its Reconstruction container.
 """

@@ -294,7 +294,7 @@ def check_roof(m, findings, plots):
 
 def placement_tilt(site, tag):
     """(tilt deg, bearing deg the true up leans toward in the placed frame, frames used, frame spread),
-    from every registered frame, with the vertical vanishing-point code domus.video.georef_sfm holds
+    from every registered frame, with the vertical vanishing-point code domus.capture.georef_sfm holds
     placements by."""
     rec = load(video_dir(site) / f"{tag}-sfm.npz")
     params = np.array(json.loads((video_dir(site) / f"{tag}-georef.json").read_text(encoding="utf-8"))["params"])

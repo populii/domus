@@ -90,7 +90,7 @@ Import rules, in `[tool.importlinter]` in `pyproject.toml` and checked by `uv ru
   are functions of what they're handed. The build is the workflow that reads the site and hands it to them.
 - **The pure layers read no site.** `geo` (the grid maths, rasters, GeoJSON, meshes and fits), the model's pure
   parts and the working out of a wall option are handed what they need: a site's grid is made from its settings, and a
-  raster is read from the file and grid it's given. Only the names kept for site code reach a site, and only those.
+  raster is read from the file and grid it's given.
 - **The app sits on top.** Nothing else in Domus imports `domus.app` (the command line, the server and the viewer),
   and within it only the command line imports the server.
 
@@ -104,7 +104,7 @@ A few more rules the code keeps:
 - **Every part that reads a site is handed its Site:** its folder, output, settings, format and grid, as the
   function's first argument. What a part reads of a site is kept with that site, so one process can hold several. The
   command line and the server read `DOMUS_SITE` once and hand the site down, and a job in a process of its own gets the
-  site's folder. Nothing reads the current site: the older names that do, kept for site code, are deprecated.
+  site's folder. No part looks for a site of its own.
 - **The viewer is one page and loads nothing from other hosts.** New libraries go in its `vendor` folder. Its
   `index.html` is a page body with no doctype or head: the server adds the skeleton. Scripts drive it through
   `window.siteViewer` (`setCamera` and `drawn`).
@@ -114,11 +114,10 @@ A few more rules the code keeps:
 ## Tests
 
 The tests run on the made-up demo site, written into a temporary folder and built once for the whole run. They set
-`DOMUS_SITE` to it, `DOMUS_STRICT_SETTINGS=1`, which makes reading a setting the schema doesn't declare, or reading one
-with another default than the schema's, an error, and `DOMUS_STRICT_SITE=1`, which makes a part of Domus called
-without its site an error. Fixtures in `tests/conftest.py` give a test the demo's folder (`site`), the demo as a Site to
-hand to what's tested (`project`), its built model (`built`), and another folder's Site (`at_site`), made current for
-the test as site code would see it.
+`DOMUS_SITE` to it, and `DOMUS_STRICT_SETTINGS=1`, which makes reading a setting the schema doesn't declare, or reading
+one with another default than the schema's, an error. Fixtures in `tests/conftest.py` give a test the demo's folder
+(`site`), the demo as a Site to hand to what's tested (`project`), its built model (`built`), and another folder's Site
+(`at_site`).
 
 Some tests guard the repository itself, so expect them to speak up:
 
@@ -215,8 +214,8 @@ When a change alters how a site says something:
 Site tools, a site's own tests and agents use `domus.api` and `domus.testing` ([docs/api.md](docs/api.md)). What they
 offer keeps working from one release to the next: changing or removing any of it takes a deprecation warning in an
 earlier release and a "For site projects" note in the changelog. Everything else in the package is internal and can
-change in any release. When modules move, their old import paths keep working as the same modules, so a site's tools
-written before don't break.
+change in any release. When modules move, their old import paths keep working for a while, deprecated, so a site's
+tools written before have time to move; a later release removes them, and its changelog says so.
 
 ## Docs and the changelog
 

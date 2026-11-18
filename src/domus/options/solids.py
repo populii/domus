@@ -772,7 +772,7 @@ def _square_column(start, along, t, z, level, far, up):
 
 def option_solids(design, walls, existing_walls=(), segments=SEGMENTS, old=None, within=None, conflict_step=CONFLICT_STEP_M):
     """An option as solids (Solids): `design` worked out (a scheme.Design, on a site's drawn ground for the solids to
-    be exact), `walls` its walls levelled (Design.wall_levels) and `existing_walls` the site's (domus.walls dicts).
+    be exact), `walls` its walls levelled (Design.wall_levels) and `existing_walls` the site's (domus.model.walls dicts).
     `old` gives the existing walls instead, each as (its id, scheme.wall_body's (plan, line, chain, toe)), and
     `within` a box (E0, N0, E1, N1) to work out only what's in it (option_window), and `conflict_step` the grid where
     batters disagree (_cut_wins)."""

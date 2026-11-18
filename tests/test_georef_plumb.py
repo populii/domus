@@ -1,4 +1,4 @@
-"""domus.video.georef_sfm: the frames' vertical, on synthetic cameras with a known up direction.
+"""domus.capture.georef_sfm: the frames' vertical, on synthetic cameras with a known up direction.
 
 The scene is posts (vertical edges) and rails (horizontal ones) on a site whose vertical is +z.
 The reconstruction's frame is the site turned by a known rotation, as a structure-from-motion

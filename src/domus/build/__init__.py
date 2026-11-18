@@ -32,7 +32,6 @@ from ..importers.nz import title
 from ..model import canopy, features, house, house_ifc, house_texture, terrain, vegetation, walls
 from ..options import design, scheme, sketch, solids
 from ..project import rasters
-from ..project.site import given
 from . import cache as buildcache
 
 POINT_STEP = 0.0025     # m, the video point cloud's storage step
@@ -80,7 +79,7 @@ def mesh_json(m, frame, colour, name, **extra):
 
 
 def wall_texture(site, m, wall, painted=False):
-    """uv and texture fields for a wall layer (domus.walls), its image put in the viewer's data: the
+    """uv and texture fields for a wall layer (domus.model.walls), its image put in the viewer's data: the
     picture of the wall's own blocks if it names them, else the site's own picture of that kind of wall,
     or one painted for it (always, with `painted`); none for a material drawn plain."""
     tex = walls.wall_image(wall, site.output, painted, site.path / "data" / "walls")
@@ -92,7 +91,7 @@ PIPE_RADIUS = 0.05      # m: 100 mm drains
 
 def pipe_layers(site, svc_feats, frame, ground, colours):
     """The drains of data/site/services.geojson as pipes below the ground ("pipes" layers: a viewer polyline of the
-    pipe's centre and its radius), at the levels domus.drains works out for each, or [services] assumed_depth_m below
+    pipe's centre and its radius), at the levels domus.model.drains works out for each, or [services] assumed_depth_m below
     the ground: `ground(e, n)`, the ground as the build draws it. [services.notes] says where each drain's levels came
     from, and a drain's own `follow_up` what's known to be wrong with them. Drains with neither levels nor an assumed
     depth are left out."""
@@ -157,19 +156,19 @@ def drape_texture(extent, px, sampler, path, mode="RGB"):
     return {"width": w, "height": h, "file": path.name}
 
 
-def aerial_sampler(E, N, site=None):
+def aerial_sampler(E, N, site):
     """The site's aerial photo at points on its grid, as RGB."""
-    a = rasters.aerial(given(site))
+    a = rasters.aerial(site)
     rgb = np.stack([a.sample(E, N, band=b) for b in range(3)], axis=-1)
     return np.nan_to_num(rgb, nan=200).clip(0, 255).astype(np.uint8)
 
 
-def paved_under_canopy(site=None):
+def paved_under_canopy(site):
     """data/site/paved-under-canopy.geojson: where the site's aerial photo sees paving through tree crowns and deep
     shade, as a shapely polygon (the file's polygons together), or None."""
     from shapely.geometry import shape
 
-    areas = [shape(f["geometry"]) for f in geojson.read_optional(given(site).path / "data" / "site" / "paved-under-canopy.geojson")]
+    areas = [shape(f["geometry"]) for f in geojson.read_optional(site.path / "data" / "site" / "paved-under-canopy.geojson")]
     if not areas:
         return None
     return areas[0] if len(areas) == 1 else unary_union(areas)
@@ -271,10 +270,9 @@ def paint_paving(photo, E, N, area, paving=None, grain=None):
     return (rgb * (1 - w) + out * w).clip(0, 255).astype(np.uint8)
 
 
-def ground_photo_sampler(E, N, site=None):
+def ground_photo_sampler(E, N, site):
     """The aerial photo with the paving under the site's trees painted in (paint_paving): the areas in
     data/site/paved-under-canopy.geojson, [aerial.paving] in data/site.toml and the site's paving texture."""
-    site = given(site)
     return paint_paving(functools.partial(aerial_sampler, site=site), E, N, paved_under_canopy(site),
                         site.settings().get("aerial", {}).get("paving", {}), paving_grain(site))
 
@@ -371,7 +369,7 @@ FILL_RGB = np.array([38, 104, 176], float)
 
 
 def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), existing_tin=None):
-    """Viewer layers, panel summary and drape textures for one wall option (domus.design), from `res`,
+    """Viewer layers, panel summary and drape textures for one wall option (domus.options.design), from `res`,
     design.evaluate's with keep_solids: the option's ground is drawn from its solids. `lawns` are the site's lawns
     (vegetation.lawns) and `existing_tin` the ground as it is (terrain.drawn), which the option's ground is round its
     regrade area: a lawn the option leaves alone stays drawn, on the option's ground, and a new lawn within a metre of
@@ -877,7 +875,7 @@ def add_ifc(b):
 
 
 def add_walls(b):
-    """Walls, textured from the video frames (domus.walls.MATERIAL_TEXTURES) on the same geometry."""
+    """Walls, textured from the video frames (domus.model.walls.MATERIAL_TEXTURES) on the same geometry."""
     frame, layers, summary, wall_defs = b.frame, b.layers, b.summary, b.wall_defs
     wall_info = []
     walls.set_out(wall_defs, b.dem)
@@ -904,7 +902,7 @@ def crossing_warnings(found):
 
 
 def add_options(b):
-    """Wall options (options/*.toml, domus.design): each one's designed ground over the regrade area, its walls, lawns and beds, contours and a cut-and-fill drape, hidden until picked in the viewer's options panel."""
+    """Wall options (options/*.toml, domus.options.design): each one's designed ground over the regrade area, its walls, lawns and beds, contours and a cut-and-fill drape, hidden until picked in the viewer's options panel."""
     cfg, extent, frame, layers, summary, textures, wall_defs = b.cfg, b.extent, b.frame, b.layers, b.summary, b.textures, b.wall_defs
     summary["options"] = []
     b.removed_features = {}     # site feature id -> the options that take it out
@@ -1064,7 +1062,7 @@ def add_marks(b):
 
 
 def add_vegetation(b):
-    """Vegetation (data/site/trees.geojson, domus.vegetation): trees, shrubs and hedges with their crowns from the LiDAR, planted beds, the lawns and the stumps, drawn with leaf cards, bark and cut-face textures written to viewer/data/."""
+    """Vegetation (data/site/trees.geojson, domus.model.vegetation): trees, shrubs and hedges with their crowns from the LiDAR, planted beds, the lawns and the stumps, drawn with leaf cards, bark and cut-face textures written to viewer/data/."""
     frame, ground, layers, summary, tin = b.frame, b.ground, b.layers, b.summary, b.tin
     veg_feats = canopy.read(b.site)
     veg_layers, summary["vegetation"] = vegetation.layers(veg_feats, frame, ground, tin, b.site.output, **canopy.drawn_from(b.site))
@@ -1077,7 +1075,7 @@ def add_vegetation(b):
 
 
 def add_features(b):
-    """Small site features (data/site/features-*.geojson): fences and gates, sheds, bins and stacks, paths and paving, posts and poles, textured with the images in data/features/ (domus.features). One layer per group and material; its info lists the features in it. Features a wall option takes out (its `remove_features`) get layers of their own, which the viewer hides while that option is shown."""
+    """Small site features (data/site/features-*.geojson): fences and gates, sheds, bins and stacks, paths and paving, posts and poles, textured with the images in data/features/ (domus.model.features). One layer per group and material; its info lists the features in it. Features a wall option takes out (its `remove_features`) get layers of their own, which the viewer hides while that option is shown."""
     frame, ground, labels, layers, site_features = b.frame, b.ground, b.labels, b.layers, b.site_features
     removed = getattr(b, "removed_features", {})
     unknown = set(removed) - {f["properties"].get("id") for f in site_features}
@@ -1414,9 +1412,3 @@ def write_model(b):
     for w in summary["walls"]:
         b.say(f"wall {w['id']}: {w['length_m']} m long, exposed {w['height_min_m']}-{w['height_max_m']} m")
     b.say(f"wrote {b.site.output / 'model.json'} ({size:.1f} MB) and textures")
-
-
-if __name__ == "__main__":
-    from ..project.site import started
-
-    main(started())       # run by itself, on the site the environment names

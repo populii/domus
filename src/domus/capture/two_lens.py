@@ -19,10 +19,10 @@ a camera for each lens. The stages, all of them unless --stage names some:
             every N-th frame and the frames named in --keep (the ones that carry marks), which is quicker, and with
             --ranges only the frames in those stretches of seconds;
   convert   the largest model (or --model K, written as --as NAME) is written as two reconstructions in one set of
-            coordinates, as domus.sfm.save writes them: data/video/<CLIP>[-PART]-main-sfm.npz and -wide-sfm.npz, with
+            coordinates, as domus.capture.sfm.save writes them: data/video/<CLIP>[-PART]-main-sfm.npz and -wide-sfm.npz, with
             a .json beside each. Each holds its own lens's frames and intrinsics and the points two or more of those
             frames see, so a placement found for one is the other's too. The saved files are reprojected with
-            domus.sfm.project and must give the median error COLMAP's own camera model gives.
+            domus.capture.sfm.project and must give the median error COLMAP's own camera model gives.
 """
 
 import json

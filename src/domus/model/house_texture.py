@@ -1,7 +1,7 @@
 """Textures for the house: an atlas holding every wall-like face and a palette of solid
 colours, and a repeating roof-tile texture.
 
-Each face (domus.house.Face) is drawn at PPM pixels per metre: weatherboards above a
+Each face (domus.model.house.Face) is drawn at PPM pixels per metre: weatherboards above a
 plastered base, with its windows and doors (data/site/house.geojson), in the colours sampled
 from the site photos. Where a rectified photo or video texture exists in
 data/house/ (tools/house_textures.py), it is laid over the drawing, so the drawing only

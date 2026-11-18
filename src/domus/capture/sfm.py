@@ -4,7 +4,7 @@ Incremental reconstruction of an ordered frame sequence:
 SIFT features, matching within a sliding window, fundamental-matrix checks, tracks,
 two-view start, PnP registration of each further frame, triangulation, and bundle
 adjustment (scipy) of poses, points and a shared focal length and radial distortion.
-The result is in an arbitrary frame and scale; domus.sfm_georef places it on the site.
+The result is in an arbitrary frame and scale; domus.capture.sfm_georef places it on the site.
 
 Features and pair matching can run in worker processes (`workers`); the matching workers
 read the descriptors from a memory-mapped file, so each pair costs no copying.

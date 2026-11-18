@@ -3,18 +3,13 @@
 import json
 
 import numpy as np
-import pytest
 from PIL import Image
-
-from domus.errors import DomusDeprecationWarning
 
 
 def test_a_raster_has_no_shift_unless_the_site_gives_one(site, monkeypatch, project):
-    from domus.geo import raster
     from domus.project import rasters
 
-    with pytest.warns(DomusDeprecationWarning):
-        assert rasters.shift(project, "aerial") == (0.0, 0.0) and raster.shift("aerial") == (0.0, 0.0)   # and by its old name
+    assert rasters.shift(project, "aerial") == (0.0, 0.0)
     monkeypatch.setattr(project, "settings", lambda: {"rasters": {"shift_m": {"aerial": [-0.5, 0.25]}}})
     assert rasters.shift(project, "aerial") == (-0.5, 0.25)
     assert rasters.shift(project, "dem") == (0.0, 0.0)
@@ -106,8 +101,8 @@ def test_a_raster_that_names_no_grid_is_on_the_sites(site, tmp_path, project):
     e0, n0 = project.settings()["model"]["origin"][:2]
     e, n = np.meshgrid(e0 + np.linspace(-6, 6, 13), n0 + np.linspace(-6, 6, 13))
     epsg = project.grid.epsg
-    with pytest.warns(DomusDeprecationWarning):                     # raster.DEM, by its name from before
-        assert np.allclose(raster.Raster(tmp_path / "bare.tif", epsg).sample(e, n), raster.Raster(raster.DEM, epsg).sample(e, n), equal_nan=True)
+    assert np.allclose(raster.Raster(tmp_path / "bare.tif", epsg).sample(e, n),
+                       raster.Raster(rasters.path(project, "dem"), epsg).sample(e, n), equal_nan=True)
 
 
 def test_heights_in_feet_are_read_in_metres(site, tmp_path, project):

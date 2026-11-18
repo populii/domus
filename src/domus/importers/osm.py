@@ -1,4 +1,4 @@
-"""Anywhere: OpenStreetMap's address and buildings (domus.publicdata), and the Copernicus ground model.
+"""Anywhere: OpenStreetMap's address and buildings (domus.importers.nz.publicdata), and the Copernicus ground model.
 
 The Copernicus DEM, GLO-30, covers the world's land on a grid of one arc-second, about 30 m, from the TanDEM-X radar
 survey. Its open copy on AWS needs no key, and Domus reads just the site's patch of it, as it does LINZ's LiDAR. It's

@@ -1,7 +1,7 @@
 """A picture of each wall material, painted for a site with no photo of that kind of wall, and of the steps and the
 paving a wall option lays.
 
-Each picture is one repeat of the material, at the size domus.walls.MATERIAL_TEXTURES gives it, and
+Each picture is one repeat of the material, at the size domus.model.walls.MATERIAL_TEXTURES gives it, and
 tiles both ways. They are drawn, not photographed: enough to tell a gabion from a block wall in the
 model, and to compare how a scheme looks in each.
 """
@@ -162,7 +162,7 @@ def _hex(colour, default):
 def units(length_m, height_m, cap_m, colour, blocks, courses, top_m, rng):
     """A wall of split-faced blocks `length_m` by `height_m`, laid dry in running bond. From the top of the picture:
     a capping course `cap_m` high if it has one, `courses` courses of blocks, and `top_m` of the cap's smooth top
-    (domus.walls lays the picture so the wall's top face takes that). `blocks` blocks across, each its own tone."""
+    (domus.model.walls lays the picture so the wall's top face takes that). `blocks` blocks across, each its own tone."""
     w = int(round(blocks * length_m * PPM))
     h = int(round((cap_m + courses * height_m + top_m) * PPM))
     top = int(round(top_m * PPM))

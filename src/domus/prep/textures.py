@@ -14,7 +14,7 @@ What to cut comes from data/prep.json:
     "house_textures": {"sources": {"north": {"photo": ..., "faces": {"north": [[[u, height], [x, y]], ...]},
         "keep": [[u0, u1, z0, z1]], "drop": [...], "note": ...}, "west": {"frames": ["tag", "all"]}}}
 
-Sources are under sources/raw/ in the site project. domus.features.MATERIALS and domus.walls give the size in metres
+Sources are under sources/raw/ in the site project. domus.model.features.MATERIALS and domus.model.walls give the size in metres
 one copy of a texture covers.
 """
 

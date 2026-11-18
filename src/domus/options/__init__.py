@@ -1,7 +1,7 @@
 """Wall options: one TOML file per scheme in options/ (files starting with "_" are skipped;
 options/_site.toml holds the settings they share).
 
-Each option lists its terraces, the walls that hold them and any steps; domus.design turns one into
+Each option lists its terraces, the walls that hold them and any steps; domus.options.design turns one into
 designed ground and walls with levels, and compares it with the others. An option can also be another
 one restyled: `based_on` names it, and `restyle` gives its walls other materials. See docs/options.md
 for the format.
@@ -9,8 +9,6 @@ for the format.
 
 import tomllib
 from pathlib import Path
-
-from ..project.site import given
 
 # How a wall is built, below and behind its face (docs/options.md), which goes with its block when a restyle gives it
 # another material.
@@ -71,10 +69,8 @@ def current(site, cfg):
     return formats.option(cfg, fmt, design.settings(site).get("frame"))
 
 
-def load(path, site=None):
-    """The option in the file at `path`, one of the site's. Site code calls it without a site (deprecated, and it says
-    so), and then it reads the current one."""
-    site = given(site)
+def load(path, site):
+    """The option in the file at `path`, one of the site's."""
     cfg = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     if "based_on" in cfg:
         cfg = restyled(cfg, path)

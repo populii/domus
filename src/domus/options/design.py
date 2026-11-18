@@ -1,8 +1,7 @@
 """A site's wall options: options/_site.toml (their frame, defaults, rules and regrade area), read through the
 settings schema, and what they're worked out on, read from the site each is handed: the ground, the house, the
-existing walls, the services and the easements (context()). domus.scheme works them out and reads no site; its names
-are kept here, on a site's frame and ground, for the site tools and tests that use them. Those call settings(),
-frame(), Terrace and Design without a site (deprecated, and they say so), and then read the current one.
+existing walls, the services and the easements (context()). domus.options.scheme works them out and reads no site; its names
+are kept here, on a site's frame and ground, for the site tools and tests that use them.
 
 Options are drawn in the site frame of options/_site.toml: s along a reference boundary from its first corner, o in
 from it, into the lot.
@@ -19,7 +18,7 @@ from shapely.ops import unary_union
 from ..errors import DomusError
 from ..geo import geojson
 from ..model import terrain
-from ..project.site import cached, given
+from ..project.site import cached
 from . import scheme, solids
 from .scheme import (  # noqa: F401 (the names site tools and tests use, as they were here)
     LIDAR_TOLERANCE_M,
@@ -76,7 +75,7 @@ def title(site):
 def house_outline(site):
     """What the house takes of the ground: its walls and every part drawn as an area (porches, blocks such as
     decks and landings) in data/site/house.geojson. A bay window hangs from the wall above the ground
-    (domus.house draws it from `bottom_above_fl` up), so the ground runs on under it and it is left out."""
+    (domus.model.house draws it from `bottom_above_fl` up), so the ground runs on under it and it is left out."""
     feats = geojson.read_optional(site.path / "data" / "site" / "house.geojson")
     polys = [Polygon(np.asarray(f["geometry"]["coordinates"][0])[:, :2]) for f in feats
              if f["geometry"]["type"] == "Polygon" and f["properties"].get("part") != "bay"]
@@ -143,8 +142,8 @@ def removed_limits(site):
 class Terrace(scheme.Terrace):
     """scheme.Terrace in the frame of `site`."""
 
-    def __init__(self, cfg, defaults, site=None):
-        super().__init__(cfg, defaults, frame(given(site)))
+    def __init__(self, cfg, defaults, site):
+        super().__init__(cfg, defaults, frame(site))
 
 
 class Design(scheme.Design):
@@ -152,8 +151,7 @@ class Design(scheme.Design):
     of one an option takes away joins its regrade area (removed_limits), and its ground as it is (the ground as the
     build draws it, terrain.existing()) unless `existing` gives another."""
 
-    def __init__(self, opt, existing=None, site=None):
-        site = given(site)
+    def __init__(self, opt, existing=None, *, site):
         super().__init__(opt, settings(site)["defaults"], existing or terrain.existing(site), regrade_area(site), frame(site),
                          existing_walls(site), removed_limits(site))
 

@@ -2,10 +2,7 @@
 face's photo when the site asks."""
 
 import numpy as np
-import pytest
 from PIL import Image
-
-from domus.errors import DomusDeprecationWarning
 
 
 def spec(**extra):
@@ -18,12 +15,10 @@ def lap_rows(shade):
     return np.flatnonzero(dark & ~np.r_[False, dark[:-1]])
 
 
-def test_boards_default_to_150_mm_and_are_not_drawn_on_photos(site):
-    from domus.geo import crs
+def test_boards_default_to_150_mm_and_are_not_drawn_on_photos(project):
     from domus.model import house_texture
 
-    with pytest.warns(DomusDeprecationWarning):                     # crs.settings(), by its name from before
-        assert house_texture.Looks(crs.settings().get("house", {})).boards() == (0.15, False)
+    assert house_texture.Looks(project.settings().get("house", {})).boards() == (0.15, False)
 
 
 def test_boards_take_their_size_from_the_site(site):

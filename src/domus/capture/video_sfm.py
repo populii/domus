@@ -118,7 +118,7 @@ def reconstruct(site, clip, step=1, window=6, focal=1100.0, k1=0.0, fix_intrinsi
 def loop_matches(frames, matches, window, cfile, candidates=12, workers=1):
     """Pairs of frames that see the same place at different times (a return to the wall,
     a pan back): each frame's most similar frames outside its window, by a global descriptor
-    (domus.sfm.vlad), get the full match. Cached in `cfile`."""
+    (domus.capture.sfm.vlad), get the full match. Cached in `cfile`."""
     if cfile.exists():
         found = safe_npz.load(cfile)["matches"].item()
         log(f"loaded {len(found)} revisit pairs from {cfile.name}")

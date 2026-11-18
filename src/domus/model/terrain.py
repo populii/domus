@@ -2,16 +2,14 @@
 triangulated surface, with walls cut in as breaklines, built from it about the model's origin. The ground as the build
 draws it, with the site's existing walls cut in, is the ground its wall options are worked out on (existing()).
 
-The geometry is domus.tin's, which reads no site; this module reads the site it's handed and passes it on. Its names
-are kept here for the site tools that use them, which call ground(), wall_levels() and build() without a site
-(deprecated, and they say so): they then read the current one.
+The geometry is domus.model.tin's, which reads no site; this module reads the site it's handed and passes it on.
 """
 
 
 from ..geo import geojson
 from ..geo.mesh import resample_line  # noqa: F401 (as it was, here)
 from ..project import rasters
-from ..project.site import cached, given
+from ..project.site import cached
 from . import tin
 from . import walls as walls_mod
 from .tin import Ground, contours, cut_cells, distance_to_polyline, grid, outline_points  # noqa: F401
@@ -51,12 +49,11 @@ def existing(site):
     return tin.DrawnGround(drawn(site), ground(site))
 
 
-def wall_levels(wall, spacing=0.25, probe=0.6, site=None):
+def wall_levels(wall, spacing=0.25, probe=0.6, *, site):
     """walls.wall_levels on the site's ground: a wall's points, normals, chainage, toe and top."""
-    return walls_mod.wall_levels(wall, ground(given(site)), spacing, probe)
+    return walls_mod.wall_levels(wall, ground(site), spacing, probe)
 
 
-def build(extent, step, walls=(), surface=None, edges=(), site=None):
+def build(extent, step, walls=(), surface=None, edges=(), *, site):
     """tin.build on the site's ground, about the model's origin: the triangulated ground over `extent`."""
-    site = given(site)
     return tin.build(extent, step, ground(site), site.settings()["model"]["origin"], walls, surface, edges)

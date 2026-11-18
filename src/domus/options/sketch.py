@@ -1,4 +1,4 @@
-"""A sketch from the viewer as a wall option: what it does to the ground, worked out by domus.design.
+"""A sketch from the viewer as a wall option: what it does to the ground, worked out by domus.options.design.
 
 `domus sketch-worker` answers one JSON request per line on stdin, so the site's ground is read once and each answer takes a fraction of a second.
 
@@ -14,7 +14,7 @@ from . import design, scheme
 
 DEFAULT_BACK_M = 3.0
 GRID_STEP_M = 0.5
-GRID_REACH_M = 6.0        # how far past the terraces a batter can reach (domus.design)
+GRID_REACH_M = 6.0        # how far past the terraces a batter can reach (domus.options.design)
 DIRECTIONS = {"north": (0, 1), "east": (1, 0), "south": (0, -1), "west": (-1, 0)}
 FALLS = {"flat": 0.0, "1:100": 0.01, "1:50": 0.02, "1:40": 0.025, "1:25": 0.04}
 KINDS = {"lawn": "lawn", "bed": "planting", "path": "paving"}

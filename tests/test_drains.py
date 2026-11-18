@@ -1,4 +1,4 @@
-"""Drain levels, worked out once for the pipes and the options' checks (domus.drains), and a drain flagged to follow up."""
+"""Drain levels, worked out once for the pipes and the options' checks (domus.model.drains), and a drain flagged to follow up."""
 
 from types import SimpleNamespace
 

@@ -11,7 +11,7 @@ The surface drawn that way is the best ground there is, and DrawnGround reads it
 worked out on it.
 
 A pure part of the model: it reads no site, and takes the ground model, its fixes and the model's origin from the
-caller (`domus.terrain` gives a site's).
+caller (`domus.model.terrain` gives a site's).
 """
 
 import itertools

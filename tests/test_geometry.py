@@ -21,13 +21,10 @@ def test_frame_round_trip(site):
     assert np.allclose(design.SiteFrame([100.0, 200.0], [100.0, 180.0], "left").en(np.array([0.0, 1.0])), [101.0, 200.0])
 
 
-@pytest.mark.filterwarnings("ignore::domus.errors.DomusDeprecationWarning")      # crs's names from before
-def test_crs_defaults_to_nztm(site):
-    from domus.geo import crs
-
-    assert crs.site_epsg() == 2193
-    assert crs.site_to_nztm(1500000.0, 5500000.0) == pytest.approx((1500000.0, 5500000.0))
-    assert crs.datums() == []
+def test_crs_defaults_to_nztm(project):
+    assert project.grid.epsg == 2193
+    assert project.grid.to_nztm(1500000.0, 5500000.0) == pytest.approx((1500000.0, 5500000.0))
+    assert project.grid.datums == ()
 
 
 def test_designed_ground_holds_its_level(site, project):

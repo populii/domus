@@ -37,7 +37,7 @@ def add(steps, command):
     sub.add_argument("video")
     sub.add_argument("--fps", type=float, default=6.0)
 
-    sub = step("reconstruct", _reconstruct, "Reconstruct a site video with COLMAP (pycolmap) instead of domus.sfm.")
+    sub = step("reconstruct", _reconstruct, "Reconstruct a site video with COLMAP (pycolmap) instead of domus.capture.sfm.")
     sub.add_argument("clip")
     sub.add_argument("--step", type=int, default=1, help="use every n-th frame")
     sub.add_argument("--extra", default="", help="comma-separated clips whose frames are added")

@@ -32,7 +32,7 @@ MATERIAL_COLOURS = {
 # Material -> (texture image in data/walls/, metres one copy covers (u along the wall, v down
 # its face from the top edge), bays). A site's own images are cut from its video frames by
 # `domus prep wall-textures`, and the options' walls of these materials take them too; a material
-# the site has no image of gets a painted one (domus.wall_looks). With `bays` the
+# the site has no image of gets a painted one (domus.model.wall_looks). With `bays` the
 # image is one bay with half a post at each side: each segment of the wall's line takes a whole
 # number of copies, as near the given length as it can, so a post stands at every vertex.
 MATERIAL_TEXTURES = {
@@ -265,7 +265,7 @@ def texture_size(wall):
 
 @lru_cache
 def unit_image(unit, out):
-    """Paint the picture of a wall of these blocks (domus.wall_looks.units) into `out` and return its name there."""
+    """Paint the picture of a wall of these blocks (domus.model.wall_looks.units) into `out` and return its name there."""
     from . import wall_looks
 
     length, height, cap, colour = unit

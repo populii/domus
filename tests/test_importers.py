@@ -9,7 +9,6 @@ import rasterio
 from rasterio.transform import from_origin
 
 from domus import importers
-from domus.errors import DomusDeprecationWarning
 from domus.importers import osm
 from domus.importers.nz import publicdata
 
@@ -67,7 +66,7 @@ def test_copernicus_tiles_are_named_for_their_south_west_corner():
 
 
 def test_fetch_takes_the_site_s_patch_of_the_ground_model(site, tmp_path, monkeypatch, at_site, project):
-    from domus.geo import raster
+    from domus.project import rasters
 
     west, south, east, north = osm.site_box(project)
     step = 1 / 3600                                                     # one arc-second, as GLO-30's are here
@@ -84,8 +83,7 @@ def test_fetch_takes_the_site_s_patch_of_the_ground_model(site, tmp_path, monkey
     (tmp_path / "data" / "site.toml").write_bytes((site / "data" / "site.toml").read_bytes())     # the demo, moved
     monkeypatch.setattr(osm, "tile", lambda lat, lon: str(tile))
     moved = at_site(tmp_path)
-    with pytest.warns(DomusDeprecationWarning):
-        assert raster.DEM == tmp_path / "data" / "lidar" / "dem.tif"                # the old name, on the current site
+    assert rasters.path(moved, "dem") == tmp_path / "data" / "lidar" / "dem.tif"
     osm.fetch(moved)
     with rasterio.open(tmp_path / "data" / "lidar" / "dem.tif") as src:
         assert src.crs.to_epsg() == 4326 and src.units == ("metre",)

@@ -1,4 +1,4 @@
-"""Reconstruct a site video with COLMAP (pycolmap) instead of domus.sfm.
+"""Reconstruct a site video with COLMAP (pycolmap) instead of domus.capture.sfm.
 
     domus video reconstruct VIDEO --extra VIDEO,VIDEO,VIDEO \
         --extra-step 1 --focal 630
@@ -6,7 +6,7 @@
 
 The frames are those tools/video_sfm.py takes (sources/raw/frames6/<clip>/, every --step-th,
 then every --extra-step-th frame of the --extra clips), and the output is the same:
-data/video/<tag>-sfm.npz, .ply and .json, written by domus.sfm.save, and further
+data/video/<tag>-sfm.npz, .ply and .json, written by domus.capture.sfm.save, and further
 disconnected models as <tag>-m2, -m3 ... So georef_sfm.py, triangulate_picks.py,
 dense_sfm.py and link_picks.py read it unchanged. The tag defaults to <clip>-colmap, so a
 model from video_sfm.py is never overwritten.
@@ -24,12 +24,12 @@ Stages (each logs its wall time):
    verified the same way;
 4. mapping: COLMAP's global mapper (GLOMAP, the default) or its incremental mapper, on the
    pairs with at least --min-matches verified matches;
-5. conversion and a check: the saved model reprojected with domus.sfm.project must give
+5. conversion and a check: the saved model reprojected with domus.capture.sfm.project must give
    the median reprojection error COLMAP's own camera model gives, or the tool stops.
 
 Conventions: COLMAP puts the centre of the top-left pixel at (0.5, 0.5), OpenCV and our
 files at (0, 0), so keypoints and the principal point move by -0.5 px. COLMAP's
-SIMPLE_RADIAL camera (f, cx, cy, k) is the model domus.sfm.project uses (normalised
+SIMPLE_RADIAL camera (f, cx, cy, k) is the model domus.capture.sfm.project uses (normalised
 x, y scaled by 1 + k (x^2 + y^2), then f and the principal point), so f and k carry over
 unchanged. Poses are COLMAP's cam_from_world (world to camera), as Rodrigues vectors.
 
@@ -95,7 +95,7 @@ def colmap_pixels(xy):
 
 
 def colmap_pose(cam_from_world):
-    """pycolmap.Rigid3d (world to camera) -> (rvec, tvec) for domus.sfm.project."""
+    """pycolmap.Rigid3d (world to camera) -> (rvec, tvec) for domus.capture.sfm.project."""
     rvec = Rotation.from_matrix(cam_from_world.rotation.matrix()).as_rotvec()
     return rvec, np.array(cam_from_world.translation, float)
 
@@ -125,7 +125,7 @@ def colmap_views(rec):
 
 
 def to_ours(rec, names, frame_of):
-    """A pycolmap.Reconstruction as a domus.sfm.Reconstruction that sfm.save writes.
+    """A pycolmap.Reconstruction as a domus.capture.sfm.Reconstruction that sfm.save writes.
 
     `names` are our frame names in our order, `frame_of` maps a COLMAP image name to its
     index in `names`. Each frame keeps only its keypoints that observe a 3D point (see
@@ -160,7 +160,7 @@ def to_ours(rec, names, frame_of):
 
 
 def median_reproj(rec):
-    """Median reprojection error (px) of a domus.sfm.Reconstruction over all its views."""
+    """Median reprojection error (px) of a domus.capture.sfm.Reconstruction over all its views."""
     pi, fi, uv = [], [], []
     for t, tr in enumerate(rec.tracks):
         for f_i, kp in tr.items():
@@ -238,7 +238,7 @@ def unit_rows(desc):
 
 def vlad_descriptors(d, ids, rng):
     """One VLAD vector per image (rows in `ids` order) from its SIFT descriptors in database `d`,
-    normalised as domus.sfm.vlad does (per word, square root, whole vector); 64 words by
+    normalised as domus.capture.sfm.vlad does (per word, square root, whole vector); 64 words by
     k-means on a sample of every frame's descriptors. Descriptors are read one frame at a time:
     a long clip's would not fit in memory at once."""
     sample = []

@@ -13,7 +13,7 @@ Format 2:
   frame: "north" back along its boundary, "east" towards it.
 - `[front_garden]` in options/_site.toml is `[regrade]`.
 - `[house] fl_lower` is written down, not worked out from `fl_upper_rel` and `fl_lower_rel`.
-- `[services] printed_line` has gone: a drain's levels count by the document they come from (domus.drains).
+- `[services] printed_line` has gone: a drain's levels count by the document they come from (domus.model.drains).
 
 Format 3:
 - `[crs] epsg`, `[crs] vertical` and `[site] attribution` have no New Zealand defaults. A site in format 2 or before

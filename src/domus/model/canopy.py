@@ -1,6 +1,6 @@
 """A site's canopy and plants: candidate crowns mapped from its LiDAR and aerial photo (`domus canopy`, written to
 data/sources/canopy.geojson for curating), its curated plants (data/site/trees.geojson), and what the build draws
-them from, for the site each is handed. The arithmetic and the drawing are domus.vegetation's, which reads no site.
+them from, for the site each is handed. The arithmetic and the drawing are domus.model.vegetation's, which reads no site.
 """
 
 import numpy as np

@@ -1,6 +1,6 @@
 """Vegetation: trees, shrubs, hedges, planted beds, the lawns and stumps.
 
-Mapping (`domus canopy`, domus.canopy). The LiDAR surface model less the ground model (with the
+Mapping (`domus canopy`, domus.model.canopy). The LiDAR surface model less the ground model (with the
 curated fixes) is the canopy height. Cells count as vegetation where the canopy stands above
 0.5 m and there are living leaves: NDVI from LINZ's near-infrared photo where it has one, else
 the aerial photo green there (or dark and not grey: foliage in shade). That leaves out roofs,
@@ -36,7 +36,7 @@ colour the plant's own varied with the aerial's light and dark, darker deeper in
 normal pointing out of the crown. Trunks and branches are tapered tubes, stumps have their cut
 face on top, and the lawns and the soil under the beds are drapes on the ground's triangles.
 
-A pure part of the model: it reads no site. domus.canopy reads the site's trees, rasters and lot for it.
+A pure part of the model: it reads no site. domus.model.canopy reads the site's trees, rasters and lot for it.
 """
 
 import heapq

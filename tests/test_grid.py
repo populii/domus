@@ -1,5 +1,5 @@
-"""A site's grid (domus.geo.crs.Grid), made from its settings and reading no site; the Site's own settings, format and
-grid (domus.project.site); and crs's names from before the split, which give the current site's."""
+"""A site's grid (domus.geo.crs.Grid), made from its settings and reading no site; and the Site's own settings, format
+and grid (domus.project.site)."""
 
 import numpy as np
 import pytest
@@ -87,21 +87,3 @@ def test_it_reads_its_settings_once_until_it_forgets_them(tmp_path):
     assert site.format() == 4                                   # the file as it is now
     site.forget_settings()
     assert site.settings()["crs"]["epsg"] == 2193 and site.grid.epsg == 2193
-
-
-@pytest.mark.filterwarnings("ignore::domus.errors.DomusDeprecationWarning")      # crs's names from before
-def test_crs_names_from_before_give_the_current_sites(tmp_path, at_site):
-    from domus import crs  # by its old name, as site code imports it
-
-    site = at_site(write_site(tmp_path / "abroad"), tmp_path / "out")
-    assert crs.ROOT == site.path and crs.OUTPUT == site.output == (tmp_path / "out").resolve()
-    s = crs.settings()
-    assert s is site.settings() and crs.site_format() == site.format() == 3
-    assert crs.site_epsg() == 27700 and crs.label() == site.grid.label == "OSGB36 / British National Grid (EPSG:27700)"
-    assert crs.datums() == [{"key": "plans", "label": "The plans' own datum (made up)", "offset_m": 2.5}]
-    assert crs.to_model_height(10.0, "plans") == 7.5 and crs.from_model_height(7.5, "plans") == 10.0
-    x, y = crs.site_to_nztm(100000.0, 100000.0)
-    assert (x, y) == site.grid.to_nztm(100000.0, 100000.0) and crs.nztm_to_site(x, y) == site.grid.from_nztm(x, y)
-    assert crs.site_to_lonlat(100000.0, 100000.0) == site.grid.to_lonlat(100000.0, 100000.0)
-    crs.settings.cache_clear()
-    assert crs.settings() is not s and crs.settings() == s

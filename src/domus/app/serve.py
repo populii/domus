@@ -13,7 +13,7 @@ Pages:
     /api/scan/<name>          POST: a scan's video or tracked positions, saved to sources/raw/
     /api/scan-job             GET: how the scan's processing is going; POST {file}: start it, one at a time
     /api/create               GET: how the address box's build is going; POST {address}: start one, in an empty site only
-    /api/sketch               POST {items}: what a sketch comes to (domus.sketch)
+    /api/sketch               POST {items}: what a sketch comes to (domus.options.sketch)
     /api/sketch/option        GET: how its build is going; POST {name, items}: save a sketch as an option and build it
     /api/changes              GET: the changes proposed to the site's data, the edits made to it (docs/changes.md), and
                               how the change asked for last is going

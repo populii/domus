@@ -14,6 +14,27 @@
   thickness round the corner, as it does where its top doesn't step. Each copy of the point, one at each level,
   took its own leg's offset, so the back cut the corner short outside the turn, by 0.125 m² of its plan on a
   made-up 0.5 m gabion wall turning a right angle, and ran on past it inside, where its top covered 0.375 m² twice.
+- **For site projects:** the names Domus replaced are gone, as their warnings said. A module's old name
+  (`domus.terrain`, `domus.crs`, `domus.video.georef_sfm` and the rest) fails to import as any missing module does,
+  and `python -m domus.cli` runs nothing; `domus.geo.crs` and `domus.geo.raster` have no names that read the current
+  site; and a part of Domus called without its site, which read the current site, is an error, as any call missing an
+  argument is. `DOMUS_STRICT_SITE`, which made that an error in Domus's tests, has gone with them. Each had warned
+  since 2026.11.49 (a `DomusDeprecationWarning`), and `domus.cli` and `domus.serve` since 2026.11.43; the modules
+  moved in 2026.11.38, crs's names were deprecated in 2026.11.41 and the calls without a site in 2026.11.42. Nothing
+  in `domus.api` or `domus.testing` changes. What to use instead:
+
+  | Gone | Use |
+  |---|---|
+  | `domus.terrain`, `domus.design`, `domus.crs` and the modules' other old names | The module at its place now, such as `domus.model.terrain`, `domus.options.design` and `domus.geo.crs` ([ARCHITECTURE.md](ARCHITECTURE.md) has the table) |
+  | `domus.video.<module>` | `domus.capture.<module>` |
+  | `domus.cli`, `domus.serve`, `python -m domus.cli` | `domus.app.cli`, `domus.app.serve`, the `domus` command |
+  | `crs.ROOT`, `crs.OUTPUT`, `crs.settings()`, `crs.settings.cache_clear()`, `crs.site_format()` | The Site's `path`, `output`, `settings()`, `forget_settings()` and `format()`; `api.open_site()` gives `path`, `output` and `settings()` too |
+  | `crs.site_epsg()`, `crs.label()`, `crs.datums()`, `crs.site_to_nztm()` and crs's other sums | The site's `grid`: `epsg`, `label`, `datums`, `to_nztm()`, `from_nztm()`, `to_lonlat()`, `to_model_height()` and `from_model_height()` |
+  | `raster.DEM`, `raster.DSM`, `raster.AERIAL`, `raster.NIR`, `raster.shift(key)` | `domus.project.rasters.path(site, "dem")` and so on, and `rasters.shift(site, key)` |
+  | `raster.dem()`, `raster.dsm()`, `raster.aerial()`, `raster.nir()` | `rasters.dem(site)` and so on, or `site.ground()` in `domus.api` for the ground |
+  | A part called without its site, such as `design.frame()`, `terrain.ground()` or `options.load(path)` | The same, handed the site: first, as `design.frame(site)`; as `site=` for `design.Design`, `terrain.wall_levels` and `terrain.build`; or after the rest, as `options.load(path, site)`, `design.Terrace(cfg, defaults, site)` and `build`'s `aerial_sampler(E, N, site)` and `ground_photo_sampler(E, N, site)` |
+- The viewer, when a model's data doesn't load, says to build it with `domus build` (or `domus --site PATH build`) and
+  reload. It said to run `python -m domus.build`, which hasn't run since the build became a package in 2026.11.38.
 
 ## 2026.11.62
 

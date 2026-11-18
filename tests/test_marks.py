@@ -91,11 +91,13 @@ def run_python(code, **env):
 
 
 def test_site_on_the_command_line_moves_the_output_with_it(tmp_path):
-    code = (f"import domus.app.cli,sys; domus.app.cli.choose_site({str(tmp_path)!r}); from domus import crs; print(crs.OUTPUT); print(crs.ROOT)")
+    code = (f"import domus.app.cli,sys; domus.app.cli.choose_site({str(tmp_path)!r}); from domus.project.site import started; "
+            "print(started().output); print(started().path)")
     out = run_python(code, DOMUS_OUTPUT=str(tmp_path / "elsewhere"), DOMUS_SITE=str(tmp_path / "other")).splitlines()
     assert out == [str((tmp_path / "viewer" / "data").resolve()), str(tmp_path.resolve())]
 
 
 def test_output_stays_where_the_environment_says_without_site(tmp_path):
-    out = run_python("from domus import crs; print(crs.OUTPUT)", DOMUS_OUTPUT=str(tmp_path / "there"), DOMUS_SITE=str(tmp_path))
+    out = run_python("from domus.project.site import started; print(started().output)", DOMUS_OUTPUT=str(tmp_path / "there"),
+                     DOMUS_SITE=str(tmp_path))
     assert out == str((tmp_path / "there").resolve())
