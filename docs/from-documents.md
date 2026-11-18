@@ -69,6 +69,15 @@ domus prep wall-textures
 domus prep house-textures
 ```
 
+`boards` reads the weatherboards off the walls' rectified photos (`data/house/faces.json`): how far apart their lap
+lines are up the wall, which is `[house] board_m`, and the lap lines' heights. `domus prep boards north` reads the north
+face in bands 0.5 m wide along it (`--band WIDTH`, and `--along U0 U1` for part of the face), over the photo's whole
+height (`--heights Z0 Z1` for less), trying spacings from 80 to 250 mm (`--spacing MIN MAX`, every 0.2 mm: `--step`).
+It prints each band's spacing, how clear its lap lines are (their contrast) and their heights, then the face's spacing,
+the median of its bands'. `--above HEIGHT` adds the first lap line at or above a height, such as the top of the
+plastered base, where the model counts the boards from. A band across a window or a door reads less clearly, or
+wrongly, so go by the median. A spacing found at an end of the range tried is marked: the boards' may lie beyond it.
+
 ## Checking the model
 
 ```sh

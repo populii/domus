@@ -8,6 +8,12 @@
   fl_upper_uncertainty_m`. Sites are in format 4 now. One in format 3 or before that gives them reads with them there,
   with no warning, and `domus site upgrade` moves them there in its file, comments and all. A site's tool that read
   them from `[datums]` or `[house]` reads them from `[local]` now.
+- `domus prep boards` reads the weatherboards off a wall's rectified photo (`data/house/faces.json`, from
+  `domus prep house-textures`): how far apart their lap lines are up the wall, which is `[house] board_m`, and the
+  heights of the lap lines, band by band along the face and as the face's median. Which part of the face it reads, in
+  bands how wide, between which heights and over what range of spacings are its arguments. It grew in a real site's own
+  tool, and on that site's walls finds the spacing the tool found, face by face, wherever the boards read clearly, so a
+  site with its own copy can drop it.
 - `domus prep check through` leaves out a wall's or a flight's top where it lies inside another of the option's walls
   or flights, under that one's top, as where a wall's end tucks into a thicker wall at a corner. Nothing shows there,
   but the option's ground inside the thicker wall, which rises from its face to the ground it holds, was reported as
