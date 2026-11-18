@@ -296,7 +296,7 @@ ticks items off by their file names.
 ## 6. The video walk, end to end
 
 ```mermaid
-flowchart LR
+flowchart TD
   A[Plan the route] --> B[Film and narrate] --> C["domus video frames"] --> D["domus video reconstruct"]
   D --> E["Write control,<br/>domus video place"] --> F["domus video dense"] --> G["[video] clouds,<br/>domus video export"] --> H["domus build"]
   H --> I["domus prep check<br/>plumb clouds"]

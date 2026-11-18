@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The README drops its small 3D model, which GitHub's viewer drew as a little blue patch on a wire floor, and the
+  README's and AGENTS.md's flowcharts of many steps read top to bottom, so GitHub doesn't shrink them.
+
 ## 2026.11.43
 
 - **For site projects:** the command line, the server and the viewer are Domus's app, in `domus.app`:
