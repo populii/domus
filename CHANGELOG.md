@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.44
 
 - **For site projects:** on a site whose options' frame has the lot on its left (`[frame] side = "left"`), the viewer's
   s and o (the corner readout while dragging, the sketch editor's corners and the s and o saved with a sketch) had o
