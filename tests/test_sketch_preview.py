@@ -8,7 +8,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from shapely.geometry import box
+import shapely
+from shapely.geometry import MultiPoint, box
 
 from domus.options import design, preview, scheme, sketch, solids
 
@@ -54,6 +55,58 @@ def test_the_preview_works_a_sketch_out_as_its_python_reference_does(built, mode
         v = preview.sketch_solids(given(model, sk), sk["items"], segments, conflict_step)[0].volumes()
         assert row["cut_m3"] == pytest.approx(v["cut_m3"], abs=3e-6), sk["name"]
         assert row["fill_m3"] == pytest.approx(v["fill_m3"], abs=3e-6), sk["name"]
+
+
+def levels_on(tris, pts, z, e, n):
+    """Levels at points (e, n), linear on triangles (each three corners of `pts` by index, with their levels `z`)."""
+    out = np.full(len(e), np.nan)
+    for a, b, c in tris:
+        (ax, ay), (bx, by), (cx, cy) = pts[a], pts[b], pts[c]
+        den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+        u = ((by - cy) * (e - cx) + (cx - bx) * (n - cy)) / den
+        v = ((cy - ay) * (e - cx) + (ax - cx) * (n - cy)) / den
+        inside = (u >= -1e-9) & (v >= -1e-9) & (1.0 - u - v >= -1e-9)
+        out[inside] = (u * z[a] + v * z[b] + (1.0 - u - v) * z[c])[inside]
+    return out
+
+
+def test_the_preview_levels_a_terrace_as_the_build_does(tmp_path):
+    """A terrace with its own level at each corner is linear on its corners' Delaunay triangles, which scheme.Terrace
+    has from scipy, worked out about its first corner. The viewer's copy finds the same triangles, so the same levels,
+    on corners scattered at random on a site's grid: across 3 to 60 m, many come near four on one circle, where Qhull
+    on the grid itself would cut them as rounding fell. Where four lie on one circle, either way of cutting them is
+    Delaunay: the copy lays them as a fan when their levels lie on one plane, which gives the same levels, and
+    otherwise finds none, so the preview says it can't show that terrace."""
+    rng = np.random.default_rng(7)
+    sets = []
+    for k in (3, 4, 5, 6, 8, 12, 20, 30):
+        for size in (3.0, 8.0, 20.0, 60.0):
+            for _ in range(3):
+                at = np.array([1500000.0, 5500000.0]) + rng.uniform(-3000.0, 3000.0, 2)
+                sets.append({"pts": (at + rng.uniform(0.0, size, (k, 2))).tolist(), "z": rng.uniform(40.0, 43.0, k).tolist()})
+    square = [[1500000.0, 5500000.0], [1500004.0, 5500000.0], [1500004.0, 5500004.0], [1500000.0, 5500004.0], [1500002.0, 5500009.0]]
+    sets += [{"pts": square, "z": [41.0, 41.0, 41.0, 41.0, 41.5]},       # four on one circle, level
+             {"pts": square, "z": [41.0, 41.2, 41.2, 41.0, 41.5]}]       # four on one circle, on one plane
+    off_a_plane = {"pts": square, "z": [41.0, 41.2, 41.0, 41.2, 41.5]}   # four on one circle, on no one plane
+    (tmp_path / "sets.json").write_text(json.dumps([*sets, off_a_plane]), encoding="utf-8")
+    out = subprocess.run(["node", str(HERE / "delaunay_check.mjs"), str(VIEWER / "sketch-core.js"), str(tmp_path / "sets.json")],
+                         capture_output=True, text=True, encoding="utf-8", check=False, timeout=300)
+    assert out.returncode == 0, out.stderr
+    found = [json.loads(line) for line in out.stdout.splitlines()]
+    assert len(found) == len(sets) + 1
+    for s, tris in zip(sets, found, strict=False):
+        assert tris is not None
+        pts = np.asarray(s["pts"])
+        terrace = scheme.Terrace({"id": "t", "polygon": [[*p, z] for p, z in zip(pts.tolist(), s["z"], strict=True)]},
+                                 {"batter": 1.0}, None)
+        x0, y0 = pts.min(axis=0)
+        x1, y1 = pts.max(axis=0)
+        e, n = (v.ravel() for v in np.meshgrid(np.linspace(x0, x1, 60), np.linspace(y0, y1, 60)))
+        inside = shapely.contains_xy(MultiPoint(pts).convex_hull.buffer(-1e-6), e, n)
+        ours = levels_on(tris, pts - pts[0], s["z"], e - pts[0][0], n - pts[0][1])
+        assert np.isfinite(ours[inside]).all()
+        assert np.nanmax(np.abs(ours[inside] - terrace.z(e[inside], n[inside]))) < 1e-9
+    assert found[-1] is None
 
 
 @pytest.mark.parametrize("sk", DRAWN, ids=[sk["name"] for sk in DRAWN])

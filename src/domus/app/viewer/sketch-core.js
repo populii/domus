@@ -6,8 +6,9 @@
 // work out to within about a millionth of a cubic metre. Like the Python it works on the site's grid (east, north)
 // with heights as they are, from what the model gives the viewer: model.json's `origin`, `regrade` and ground layer.
 //
-// Only what a sketch makes is here, and of that only what's level: walls with level ground behind them, and areas
-// that don't fall. A sketch with an area that falls, or a wall whose top changes along it, says so (`unsupported`).
+// Only what a sketch makes is here: walls and the ground they hold, and areas, level or falling, with their batters.
+// Where four corners of a terrace lie on one circle with levels on no one plane, either way of cutting them is
+// Delaunay, so a sketch with one says it can't be shown (`unsupported`).
 //
 // No DOM: the viewer runs this in a worker (sketch-worker.js), and node runs it in the tests. Manifold's objects live
 // in the WebAssembly's memory, so each one made is kept in a list and deleted when the work it was for is done.
@@ -18,6 +19,7 @@ export const DRAG_CONFLICT_STEP_M = 0.05;   // the grid where batters disagree, 
 const EDGE_M = 1e-6;                  // solids.EDGE_M: how far a solid reaches past the part of the plan it's for
 const MARGIN_M = 1.0;                 // solids.MARGIN_M: how far past the regrade area the ground is taken
 const CONFLICT_STEP_M = 0.02;         // solids.CONFLICT_STEP_M: the grid where batters disagree
+const TIE_LIFT_M = 1e-8;              // solids.TIE_LIFT_M: each piece's distance cone this much over the one before
 const FALLS = { flat: 0.0, "1:100": 0.01, "1:50": 0.02, "1:40": 0.025, "1:25": 0.04 };   // sketch.FALLS
 const KINDS = { lawn: "lawn", bed: "planting", path: "paving" };                          // sketch.KINDS
 
@@ -262,10 +264,26 @@ function capsuleSpan(a, d, p, q, r) {
   return [Math.min(...spans.map((s) => s[0])), Math.max(...spans.map((s) => s[1]))];
 }
 
-// solids.free_pieces: each terrace's outline less what a wall holds (within its thickness and HELD_M of its line).
+// A terrace's corners as scheme.Terrace has them: shapely's buffer(0) turns a polygon clockwise and keeps its first
+// corner.
+function clockwise(ring) {
+  const [x0, y0] = ring[0];
+  let area2 = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [ax, ay] = ring[(i + ring.length - 1) % ring.length], [bx, by] = ring[i];
+    area2 += (ax - x0) * (by - y0) - (bx - x0) * (ay - y0);
+  }
+  return area2 > 0 ? [ring[0], ...ring.slice(1).reverse()] : [...ring];
+}
+
+// solids.free_pieces: each terrace's outline less what a wall holds (within its thickness and HELD_M of its line),
+// taken round it as the Python takes it. Two pieces that meet at a corner have the same cone round it, and where those
+// coincide the first of them has that part of the plan (nearestCells), so the pieces come in the Python's order: round
+// a corner where the level changes, which one has it changes the batter.
 function freePieces(terraces, walls, held) {
   return terraces.map((t) => {
-    const ring = [...t.ring, t.ring[0]], pieces = [];
+    const ring = clockwise(t.ring), pieces = [];
+    ring.push(ring[0]);
     for (let k = 0; k + 1 < ring.length; k++) {
       const a = ring[k], b = ring[k + 1], d = [b[0] - a[0], b[1] - a[1]], length = hyp(d[0], d[1]);
       if (length <= 1e-12) continue;
@@ -289,9 +307,116 @@ function freePieces(terraces, walls, held) {
   });
 }
 
+// A terrace's own levels at its corners as a plane, when they lie on one: (z at its first corner, dz/de, dz/dn), from
+// the three corners furthest apart, every corner within a nanometre of it; else null. Domus reads such a terrace on
+// its corners' triangles, which give the plane wherever they're cut.
+function planeOf(ring, z) {
+  const [x0, y0] = ring[0];
+  let best = null, area = 0;
+  for (let i = 1; i < ring.length; i++) for (let j = i + 1; j < ring.length; j++) {
+    const a = (ring[i][0] - x0) * (ring[j][1] - y0) - (ring[i][1] - y0) * (ring[j][0] - x0);
+    if (Math.abs(a) > area) { area = Math.abs(a); best = [i, j]; }
+  }
+  if (!best || area < 1e-9) return null;
+  const [i, j] = best;
+  const ax = ring[i][0] - x0, ay = ring[i][1] - y0, az = z[i] - z[0], bx = ring[j][0] - x0, by = ring[j][1] - y0, bz = z[j] - z[0];
+  const den = ax * by - ay * bx, ge = (az * by - ay * bz) / den, gn = (ax * bz - az * bx) / den;
+  for (let k = 0; k < ring.length; k++) {
+    if (Math.abs(z[0] + ge * (ring[k][0] - x0) + gn * (ring[k][1] - y0) - z[k]) > 1e-9) return null;
+  }
+  return [z[0], ge, gn];
+}
+
+// scheme.Terrace's triangles for a terrace with its own level at each corner, the Delaunay triangles of its corners
+// (scipy's, by Qhull), as [i, j, k] counter-clockwise: three corners make one where no other corner is inside their
+// circle. They're unique wherever no four corners lie on one circle. Where four or more do, any way of cutting them
+// is Delaunay: if their levels lie on one plane each gives the same levels, and they're laid as a fan; if not, null,
+// and the terrace isn't previewed.
+export function delaunay(pts, z) {
+  const n = pts.length, [x0, y0] = pts[0];
+  const P = pts.map(([x, y]) => [x - x0, y - y0]);
+  const size = Math.max(...P.map(([x, y]) => Math.max(Math.abs(x), Math.abs(y)))) || 1;
+  const area2 = (a, b, c) => (P[b][0] - P[a][0]) * (P[c][1] - P[a][1]) - (P[b][1] - P[a][1]) * (P[c][0] - P[a][0]);
+  const inCircle = (a, b, c, d) => {              // > 0 where d is inside the circle through a, b, c (counter-clockwise)
+    const [ax, ay] = [P[a][0] - P[d][0], P[a][1] - P[d][1]], [bx, by] = [P[b][0] - P[d][0], P[b][1] - P[d][1]];
+    const [cx, cy] = [P[c][0] - P[d][0], P[c][1] - P[d][1]];
+    return (ax * ax + ay * ay) * (bx * cy - cx * by) - (bx * bx + by * by) * (ax * cy - cx * ay) + (cx * cx + cy * cy) * (ax * by - bx * ay);
+  };
+  const flat = 1e-12 * size * size, round = 1e-10 * size ** 4;
+  const tris = [], groups = new Map();
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) for (let k = j + 1; k < n; k++) {
+    const o = area2(i, j, k);
+    if (Math.abs(o) <= flat) continue;
+    const [a, b, c] = o > 0 ? [i, j, k] : [i, k, j];
+    let empty = true;
+    const on = [];
+    for (let m = 0; m < n && empty; m++) {
+      if (m === a || m === b || m === c) continue;
+      const v = inCircle(a, b, c, m);
+      if (v > round) empty = false;
+      else if (v >= -round) on.push(m);
+    }
+    if (!empty) continue;
+    if (!on.length) tris.push([a, b, c]);
+    else {
+      const group = [a, b, c, ...on].sort((p, q) => p - q);
+      groups.set(group.join(","), group);
+    }
+  }
+  for (const group of groups.values()) {         // corners on one circle: a fan, where their levels are one plane
+    const plane = planeOf(group.map((m) => pts[m]), group.map((m) => z[m]));
+    if (!plane && !group.every((m) => z[m] === z[group[0]])) return null;
+    const cx = group.reduce((t, m) => t + P[m][0], 0) / group.length, cy = group.reduce((t, m) => t + P[m][1], 0) / group.length;
+    const round_ = [...group].sort((p, q) => Math.atan2(P[p][1] - cy, P[p][0] - cx) - Math.atan2(P[q][1] - cy, P[q][0] - cx));
+    for (let m = 1; m + 1 < round_.length; m++) tris.push([round_[0], round_[m], round_[m + 1]]);
+  }
+  return tris.length ? tris : null;
+}
+
+// A terrace's level at (e, n) on its triangles (scheme.Terrace.z): in the one it's in; a micrometre or less outside
+// them, the nearest's carried on to it (Terrace._carried); further, the nearest corner's.
+function onTriangles(pts, z, tris) {
+  const T = tris.map(([a, b, c]) => {
+    const [ax, ay] = pts[a], [bx, by] = pts[b], [cx, cy] = pts[c];
+    const den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+    return { a, b, c, ax, ay, bx, by, cx, cy, den };
+  });
+  const weights = (t, e, n) => {
+    const u = ((t.by - t.cy) * (e - t.cx) + (t.cx - t.bx) * (n - t.cy)) / t.den;
+    const v = ((t.cy - t.ay) * (e - t.cx) + (t.ax - t.cx) * (n - t.cy)) / t.den;
+    return [u, v, 1 - u - v];
+  };
+  const level = (t, w) => w[0] * z[t.a] + w[1] * z[t.b] + w[2] * z[t.c];
+  const gap = (t, e, n) => Math.min(...[[t.ax, t.ay, t.bx, t.by], [t.bx, t.by, t.cx, t.cy], [t.cx, t.cy, t.ax, t.ay]].map(([px, py, qx, qy]) => {
+    const dx = qx - px, dy = qy - py, u = Math.min(1, Math.max(0, ((e - px) * dx + (n - py) * dy) / (dx * dx + dy * dy)));
+    return hyp(e - px - u * dx, n - py - u * dy);
+  }));
+  return (e, n) => {
+    let near = null, best = Infinity;
+    for (const t of T) {
+      const w = weights(t, e, n);
+      if (w[0] >= -1e-9 && w[1] >= -1e-9 && w[2] >= -1e-9) return level(t, w);
+      const g = gap(t, e, n);
+      if (g < best) { best = g; near = t; }
+    }
+    if (near && best < 1e-6) return level(near, weights(near, e, n));
+    let corner = 0, d = Infinity;
+    pts.forEach(([x, y], m) => { const g = hyp(e - x, n - y); if (g < d) { d = g; corner = m; } });
+    return z[corner];
+  };
+}
+
 function makeDesign(opt, defaults, rules, ground, garden) {
-  const terraces = opt.terraces.map((t) => ({ ...t, batter: Number(t.batter ?? defaults.batter),
-    paving: t.kind === "paving" ? Number(defaults.paving_m ?? 0.2) : 0.0, level: t.z[0], isLevel: t.z.every((z) => z === t.z[0]) }));
+  const terraces = opt.terraces.map((t) => {
+    const isLevel = t.z.every((z) => z === t.z[0]);
+    const plane = isLevel ? null : planeOf(t.ring, t.z);
+    const [x0, y0] = t.ring[0];
+    const tris = isLevel || plane ? null : delaunay(t.ring, t.z);
+    const zAt = isLevel ? () => t.z[0] : plane ? (e, n) => plane[0] + plane[1] * (e - x0) + plane[2] * (n - y0)
+      : tris ? onTriangles(t.ring, t.z, tris) : null;
+    return { ...t, batter: Number(t.batter ?? defaults.batter), paving: t.kind === "paving" ? Number(defaults.paving_m ?? 0.2) : 0.0,
+      level: t.z[0], isLevel, plane, tris, zAt, lowest: Math.min(...t.z), highest: Math.max(...t.z) };
+  });
   const walls = opt.walls.map((w) => {         // scheme.option_wall: how it's built, from the options' defaults
     const thickness = Number(defaults.thickness_m), depth = Number(defaults.depth_m || thickness);
     return { ...w, thickness, depth, upstand: Number(defaults.upstand_m),
@@ -307,16 +432,17 @@ function makeDesign(opt, defaults, rules, ground, garden) {
     let raise = -Infinity, lower = Infinity;
     terraces.forEach((t, k) => {
       if (!pieces[k].length) return;
-      let best = Infinity;
+      let best = Infinity, fx = 0, fy = 0;
       for (const [a, b] of pieces[k]) {
         const abx = b[0] - a[0], aby = b[1] - a[1];
         const u = Math.min(1.0, Math.max(0.0, ((e - a[0]) * abx + (n - a[1]) * aby) / (abx * abx + aby * aby)));
-        const d = hyp(e - (a[0] + u * abx), n - (a[1] + u * aby));
-        if (d < best) best = d;
+        const x = a[0] + u * abx, y = a[1] + u * aby, d = hyp(e - x, n - y);
+        if (d < best) { best = d; fx = x; fy = y; }
       }
       if (best < rules.reach_m) {
-        raise = Math.max(raise, t.level - best / t.batter);
-        lower = Math.min(lower, t.level + best / t.batter);
+        const ze = t.isLevel ? t.level : t.zAt(fx, fy);
+        raise = Math.max(raise, ze - best / t.batter);
+        lower = Math.min(lower, ze + best / t.batter);
       }
     });
     return [raise, lower];
@@ -327,7 +453,7 @@ function makeDesign(opt, defaults, rules, ground, garden) {
   D.sample = (e, n) => {
     const h0 = ground.z(e, n);
     if (!Number.isFinite(h0) || !inRings(garden.rings, e, n)) return h0;
-    for (const t of terraces) if (inRings([t.ring], e, n)) return t.level;
+    for (const t of terraces) if (inRings([t.ring], e, n)) return t.zAt(e, n);
     const [r, l] = D.batters(e, n);
     const up = Math.max(r - h0, 0), down = Math.max(h0 - l, 0);
     return up >= down ? h0 + up : h0 - down;
@@ -563,7 +689,9 @@ export function makePreview(wasm, model) {
     return cells;
   }
 
-  // solids._nearest_cells: for each straight piece of a line, the part of the plan within `reach` nearest it.
+  // solids._nearest_cells: for each straight piece of a line, the part of the plan within `reach` nearest it. Where two
+  // pieces' cones coincide, round a corner they share, the first piece has it: each cone stands TIE_LIFT_M over the
+  // one before, so it's not left to which face Manifold's union keeps.
   function nearestCells(ends, segments, reach) {
     const ring = [];
     for (let k = 0; k < segments; k++) {
@@ -572,8 +700,8 @@ export function makePreview(wasm, model) {
     }
     const ids = new Map(), distance = [];
     ends.forEach(([a, b], k) => {
-      const pts = [[a[0], a[1], 0.0], [b[0], b[1], 0.0]];
-      for (const p of [a, b]) for (const r of ring) pts.push([p[0] + r[0], p[1] + r[1], reach]);
+      const lift = k * TIE_LIFT_M, pts = [[a[0], a[1], lift], [b[0], b[1], lift]];
+      for (const p of [a, b]) for (const r of ring) pts.push([p[0] + r[0], p[1] + r[1], reach + lift]);
       const m = K(K(Manifold.hull(pts)).asOriginal());
       ids.set(m.originalID(), k);
       distance.push(m);
@@ -644,12 +772,71 @@ export function makePreview(wasm, model) {
   // terrace's free edge is above the level its fill cones change nothing, and where it's all below its cut cones
   // don't: those are left out (`fills`, `cuts` false), which leaves the solids as they were.
   function batter(t, pieces, low, high, segments, fills = true, cuts = true) {
+    if (!t.isLevel) return sloping(t, pieces, low, high, segments, fills, cuts);
     const hulls = pieces.map(([a, b]) => {
       const p = [a[0] - ox, a[1] - oy], q = [b[0] - ox, b[1] - oy];
       return [fills ? coneHull(p, t.level, q, t.level, t.batter, low, segments, false) : null,
         cuts ? coneHull(p, t.level, q, t.level, t.batter, high, segments, true) : null];
     });
     return [union(hulls.map((h) => h[0]).filter(Boolean)), union(hulls.map((h) => h[1]).filter(Boolean))];
+  }
+
+  // solids._batter's second way: where the level changes along the free edge, each straight piece gives the batter
+  // only in its own part of the plan (where it's the nearest piece), and there it's a wedge along the piece, or a cone
+  // round whichever end is nearest. A piece of a plane's edge needs no cutting where the level bends, as it doesn't.
+  function sloping(t, given, low, high, segments, fills, cuts) {
+    const pieces = t.tris ? bent(t, given) : given;
+    const R = rules.reach_m, ends = pieces.map(([a, b]) => [[a[0] - ox, a[1] - oy], [b[0] - ox, b[1] - oy]]);
+    const bottom = Math.min(low, high) - 1.0, roof = Math.max(low, high) + 1.0;
+    const region = (corners) => K(new CrossSection([corners], "NonZero"));
+    const cells = nearestCells(ends, segments, R), raised = [], cut = [];
+    ends.forEach(([a, b], k) => {
+      const cell = cells[k];
+      if (cell.isEmpty()) return;
+      const za = t.zAt(pieces[k][0][0], pieces[k][0][1]), zb = t.zAt(pieces[k][1][0], pieces[k][1][1]);
+      const len = hyp(b[0] - a[0], b[1] - a[1]), along = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+      const across = [-along[1] * R, along[0] * R], far = [along[0] * 2 * R, along[1] * 2 * R];
+      const plus = (p, q, f = 1) => [p[0] + f * q[0], p[1] + f * q[1]];
+      const slab = region([plus(a, across, -1), plus(b, across, -1), plus(b, across), plus(a, across)]);
+      const beyond = [[a, za, region([plus(a, across, -1), plus(a, across), plus(plus(a, across), far, -1), plus(plus(a, across, -1), far, -1)])],
+        [b, zb, region([plus(b, across, -1), plus(plus(b, across, -1), far), plus(plus(b, across), far), plus(b, across)])]];
+      for (const [up, out, end, want] of [[false, raised, low, fills], [true, cut, high, cuts]]) {
+        if (!want) continue;
+        const drop = ((up ? 1.0 : -1.0) * R) / t.batter, pts = [];
+        for (const [q, zp] of [[a, za], [b, zb]]) {
+          pts.push([q[0], q[1], zp], [...plus(q, across, -1), zp + drop], [...plus(q, across), zp + drop],
+            [...plus(q, across, -1), end], [...plus(q, across), end]);
+        }
+        out.push(K(K(Manifold.hull(pts)).intersect(prism(K(slab.intersect(cell)), bottom, roof))));
+        for (const [p, zp, side] of beyond) {
+          const part = K(side.intersect(cell));
+          if (!part.isEmpty()) out.push(K(coneHull(p, zp, p, zp, t.batter, end, segments, up).intersect(prism(part, bottom, roof))));
+        }
+      }
+    });
+    return [union(raised), union(cut)];
+  }
+
+  // solids._straight: the straight pieces of a terrace's free edge cut again where they cross an edge of its triangles,
+  // where its level bends.
+  function bent(t, pieces) {
+    const edges = new Map();
+    for (const [a, b, c] of t.tris) for (const [i, j] of [[a, b], [b, c], [c, a]]) edges.set(`${Math.min(i, j)},${Math.max(i, j)}`, [t.ring[i], t.ring[j]]);
+    const out = [];
+    for (const [p, q] of pieces) {
+      const dx = q[0] - p[0], dy = q[1] - p[1], len = hyp(dx, dy), cuts = new Set();
+      for (const [r, s] of edges.values()) {
+        const ex = s[0] - r[0], ey = s[1] - r[1], den = dx * ey - dy * ex;
+        if (Math.abs(den) < 1e-15) continue;                       // along it, or never meeting it
+        const u = ((r[0] - p[0]) * ey - (r[1] - p[1]) * ex) / den, v = ((r[0] - p[0]) * dy - (r[1] - p[1]) * dx) / den;
+        if (u >= 0 && u <= 1 && v >= 0 && v <= 1) cuts.add(u * len);
+      }
+      const at = [0, ...[...cuts].filter((c) => c > 1e-9 && c < len - 1e-9).sort((a, b) => a - b), len];
+      for (let k = 0; k + 1 < at.length; k++) {
+        if (at[k + 1] - at[k] > 1e-9) out.push([[p[0] + (dx / len) * at[k], p[1] + (dy / len) * at[k]], [p[0] + (dx / len) * at[k + 1], p[1] + (dy / len) * at[k + 1]]]);
+      }
+    }
+    return out;
   }
 
   // The lowest and highest ground within `reach` of straight pieces (site metres): the corners of the triangles near.
@@ -742,8 +929,8 @@ export function makePreview(wasm, model) {
       const opt = sketched(items, Number(defaults.upstand_m), Number(rules.sketch_back_m));
       if (!opt.walls.length && !opt.terraces.length) return { empty: true };
       const design = makeDesign(opt, defaults, rules, ground, garden);
-      if (design.terraces.some((t) => !t.isLevel)) {
-        return { unsupported: "an area that falls, or a wall whose top changes along it: the preview of those comes next" };
+      if (design.terraces.some((t) => !t.zAt)) {
+        return { unsupported: "a terrace whose corners lie on a circle with levels on no one plane" };
       }
       const walls = design.wallLevels();
       const out = solids(design, walls, optionWindow(design, walls), segments, conflictStep);
@@ -878,8 +1065,8 @@ export function makePreview(wasm, model) {
       Math.min(Math.ceil(win[2] / step) * step + step, vmax[0] - 2.5), Math.min(Math.ceil(win[3] / step) * step + step, vmax[1] - 2.5)];
     const pieces = design.pieces;
     const deep = design.terraces.map((t, k) => (pieces[k].length ? rules.reach_m / t.batter : 0.0));
-    const lowest = Math.min(...design.terraces.map((t, k) => t.level - deep[k]));
-    const highest = Math.max(...design.terraces.map((t, k) => t.level + deep[k]));
+    const lowest = Math.min(...design.terraces.map((t, k) => t.lowest - deep[k]));
+    const highest = Math.max(...design.terraces.map((t, k) => t.highest + deep[k]));
     const ground = groundOver(q, lowest, highest, segments);
     const { zb, top, groundM, before, olds, winCS } = ground;
     mark("ground and the soil before", before);
@@ -935,12 +1122,23 @@ export function makePreview(wasm, model) {
       const mine = K(sectionOf([t.ring]).intersect(area));
       const own = K(mine.subtract(taken));
       taken = K(taken.add(mine));
-      const col = prism(wide(t.ring), zb + 1.0, top + 1.0);
-      const [level] = splitByPlane(col, [0.0, 0.0, t.level], [0.0, 0.0]);
-      levels.push([own, level]);
-      const [soilTop, over] = splitByPlane(col, [0.0, 0.0, t.level - t.paving], [0.0, 0.0]);
-      soils.push([own, soilTop]);
-      soil(K(own.subtract(walled)), soilTop, over, "terrace");
+      // one level or a plane over the whole terrace; with its own level at each corner, a plane over each of its
+      // triangles (solids._terrace_columns takes their surface whole), each part of the terrace worked out on its own
+      const planes = !t.tris ? [[t.ring, t.level, t.plane ? [t.plane[1], t.plane[2]] : [0.0, 0.0], own]]
+        : t.tris.map(([a, b, c]) => {
+          const tri = [t.ring[a], t.ring[b], t.ring[c]];
+          const [z0, ge, gn] = planeOf(tri, [t.z[a], t.z[b], t.z[c]]) || [t.z[a], 0.0, 0.0];
+          return [tri, z0, [ge, gn], K(own.intersect(sectionOf([tri])))];
+        });
+      for (const [ring, z0, gradient, part] of planes) {
+        if (part.isEmpty()) continue;
+        const col = prism(wide(ring), zb + 1.0, top + 1.0), at = [ring[0][0] - ox, ring[0][1] - oy];
+        const [level] = splitByPlane(col, [at[0], at[1], z0], gradient);
+        levels.push([part, level]);
+        const [soilTop, over] = splitByPlane(col, [at[0], at[1], z0 - t.paving], gradient);
+        soils.push([part, soilTop]);
+        soil(K(part.subtract(walled)), soilTop, over, "terrace");
+      }
     });
 
     // The rest of the regrade area: the batters.
@@ -950,7 +1148,7 @@ export function makePreview(wasm, model) {
     design.terraces.forEach((t, k) => {
       if (!pieces[k].length) return;
       const [lo, hi] = groundRange(pieces[k], rules.reach_m);
-      const [r, c] = batter(t, pieces[k], zb + 0.25, top + 2.5, segments, lo < t.level, hi > t.level);
+      const [r, c] = batter(t, pieces[k], zb + 0.25, top + 2.5, segments, lo < t.highest, hi > t.lowest);
       fills.push(r);
       cuts.push(c);
     });

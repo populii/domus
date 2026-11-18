@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** a terrace that gives its own level at each corner is cut into its corners' Delaunay
+  triangles about its first corner, not on the site's grid. A grid such as New Zealand's puts the corners millions of
+  metres out, where Qhull (through scipy) rounds away the triangles' shape: where four corners lay near one circle it
+  cut them either way as the rounding fell, and could leave a corner out, so the levels inside the terrace could be
+  as far out as its corners' levels bend there. Options with such terraces can measure a little differently: their
+  cut, fill and the ground's heights where four corners lie near one circle.
+- The viewer's sketch preview shows an area with a fall, and a wall whose top changes along it, as solids too: the
+  ground a wall holds on a plane where its top falls along a straight line, and on its corners' triangles where their
+  levels lie on no one plane, with the batters from it. Where four of a terrace's corners lie on one circle with
+  levels on no one plane, either way of cutting them is Delaunay, so the preview can't say which the build takes: that
+  sketch is drawn as before.
+
 ## 2026.11.53
 
 - **For site projects:** an existing wall an option takes away (one not in its `keep_existing`) goes, face and all.

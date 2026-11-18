@@ -117,8 +117,12 @@ class Terrace:
         pts = _points(cfg, "polygon", "polygon_so", frame)
         self.poly = Polygon(pts[:, :2]).buffer(0)
         if pts.shape[1] == 3:
-            # its own level at each corner, linear between them
-            self._lin = LinearNDInterpolator(pts[:, :2], pts[:, 2])
+            # its own level at each corner, linear between them on its corners' Delaunay triangles, worked out about
+            # its first corner: Qhull finds them from each corner's squared distance from the origin, which on the
+            # site's grid is too large to keep their shape, so near four corners on one circle it would cut them as
+            # the rounding fell, and could leave a corner out
+            self._origin = pts[0, :2].copy()
+            self._lin = LinearNDInterpolator(pts[:, :2] - self._origin, pts[:, 2])
             self._near = NearestNDInterpolator(pts[:, :2], pts[:, 2])
             self.plane = None
         else:
@@ -135,7 +139,7 @@ class Terrace:
         if self.plane is not None:
             level, at, grad = self.plane
             return level - ((e - at[0]) * grad[0] + (n - at[1]) * grad[1])
-        z = self._lin(e, n)
+        z = self._lin(e - self._origin[0], n - self._origin[1])
         bad = ~np.isfinite(z)
         if bad.any():
             z[bad] = self._carried(e[bad], n[bad])
@@ -147,9 +151,9 @@ class Terrace:
         coordinates, so a point within a micrometre of a triangle takes that triangle's level, carried on to it.
         Only a point further out takes the nearest corner's."""
         tri = self._lin.tri
-        corners = tri.points[tri.simplices]                                    # (triangles, 3 corners, 2)
+        corners = tri.points[tri.simplices]                                    # (triangles, 3 corners, 2), about _origin
         ends = np.roll(corners, -1, axis=1)
-        p = np.column_stack([e, n])
+        p = np.column_stack([e, n]) - self._origin
         rel = p[:, None, None, :] - corners[None]                              # (points, triangles, 3, 2)
         side = ends - corners
         u = np.clip((rel * side[None]).sum(-1) / (side * side).sum(-1)[None], 0.0, 1.0)

@@ -70,6 +70,7 @@ SEGMENTS = 128          # the sides of a batter's cone
 EDGE_M = 1e-6           # how far a solid reaches past the part of the plan it's worked out in, so no two share a face
 MARGIN_M = 1.0          # how far past the regrade area the ground is taken
 CONFLICT_STEP_M = 0.02  # where batters disagree, how finely the larger change is found (scheme takes it point by point)
+TIE_LIFT_M = 1e-8       # each piece's distance cone is this much higher than the one before it (_nearest_cells)
 
 
 # --- solids from shapes ----------------------------------------------------------------------
@@ -755,8 +756,9 @@ def _straight(t, free):
     pieces = list(free)
     if t.plane is not None or _is_level(t):
         return pieces
-    tri = t._lin.tri
-    edges = shapely.MultiLineString([tri.points[[i, j]] for s in tri.simplices for i, j in ((s[0], s[1]), (s[1], s[2]), (s[2], s[0]))])
+    tri = t._lin.tri                                            # about the terrace's first corner, t._origin
+    edges = shapely.MultiLineString([tri.points[[i, j]] + t._origin
+                                     for s in tri.simplices for i, j in ((s[0], s[1]), (s[1], s[2]), (s[2], s[0]))])
     out = []
     for p, q in pieces:
         line = shapely.LineString([p, q])
@@ -769,12 +771,18 @@ def _straight(t, free):
 
 def _nearest_cells(ends, segments, reach=BATTER_REACH_M):
     """For each straight piece (a, b) of an edge or a line, the part of the plan within `reach` where it's the nearest
-    piece: where the distance to it (an upturned cone of slope one along it) is the lowest of them all."""
+    piece: where the distance to it (an upturned cone of slope one along it) is the lowest of them all.
+
+    Two pieces that meet at a corner have the same cone round it, and where those coincide either could have that
+    part of the plan: Manifold's union keeps one face of the two, and which can differ from one build of Manifold to
+    another (Windows' and Linux's, say). So each piece's cone stands TIE_LIFT_M higher than the one before it, and
+    the part goes to the first of them, wherever this runs; the cells move by no more than that."""
     ang = 2 * np.pi * np.arange(segments) / segments
     ring = np.column_stack([np.cos(ang), np.sin(ang)]) * reach
     distance = []
-    for a, b in ends:
-        pts = [[*a, 0.0], [*b, 0.0]] + [[*(p + r), reach] for p in (a, b) for r in ring]
+    for k, (a, b) in enumerate(ends):
+        lift = k * TIE_LIFT_M
+        pts = [[*a, lift], [*b, lift]] + [[*(p + r), reach + lift] for p in (a, b) for r in ring]
         distance.append(mf.Manifold.hull_points(np.ascontiguousarray(pts, dtype=np.float64)).as_original())
     ids = {m.original_id(): k for k, m in enumerate(distance)}
     lowest = union(distance).to_mesh64()
@@ -849,7 +857,7 @@ def _terrace_columns(t, plan_cs, origin, zb, top, paving):
         return split_by_plane(col, (0.0, 0.0, _level_of(t) - paving), (0.0, 0.0))
     # Its own level at each corner, linear between them on the triangles Domus interpolates on (where four corners
     # lie on a circle there's a choice of diagonal: take the interpolator's).
-    corners = np.asarray(t._lin.tri.points, float) - origin
+    corners = np.asarray(t._lin.tri.points, float) + (t._origin - origin)      # its triangles are about t._origin
     z = np.asarray(t._lin.values, float).ravel() - paving
     surface = close_surface(np.column_stack([corners, z]), t._lin.tri.simplices, zb + 0.5)
     return surface ^ col, col - surface
