@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.61
 
 - **For site projects:** walls and steps are drawn as closed solids, an option's and the existing walls: each
   encloses its volume, down to a bottom in the ground, as Manifold takes a solid, and looks and lays its pictures as
