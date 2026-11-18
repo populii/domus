@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.54
 
 - **For site projects:** a terrace that gives its own level at each corner is cut into its corners' Delaunay
   triangles about its first corner, not on the site's grid. A grid such as New Zealand's puts the corners millions of
