@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.58
 
 - **For site projects:** an option's cut and fill are measured as solids (`domus.options.solids`), the shapes of the
   soil it takes away and brings in, where they were added up point by point on a 0.1 m grid. The comparison table,
