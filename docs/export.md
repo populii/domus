@@ -54,10 +54,11 @@ One binary file holding a single scene, its pictures inside it.
 - **Lawns and beds are raised 20 mm** off the ground they're drawn on. The viewer draws them in front of the ground,
   which glTF has no way to say; at the same height the two would flicker.
 - **Walls and steps are closed solids:** each wall and each flight of steps, an option's and the existing walls,
-  encloses its volume, down to its bottom in the ground, but for a wall of named blocks round a sharp corner (a turn
-  of 120 degrees or more), which isn't yet. Where two walls of a named block share a length of face, each has it, as
-  each is a solid: the viewer draws it once (`shared` in model.json), and other software may show the two
-  flickering there.
+  encloses its volume, down to its bottom in the ground, but for a wall of named blocks with a capping course
+  standing out or deeper than its body that turns back on itself: more than 168 degrees, or so sharply for the
+  length of a leg that the corner of its back lies past that leg's end, as a 0.5 m leg off a turn of 120 degrees
+  does. Where two walls of a named block share a length of face, each has it, as each is a solid: the viewer draws
+  it once (`shared` in model.json), and other software may show the two flickering there.
 - **Left out:** the grass's close-up detail, which the viewer adds as you come near.
 
 Open it in Blender with File > Import > glTF 2.0. Blender turns y up into z up, so x stays east and y becomes north,
@@ -80,7 +81,7 @@ IFC4, written with IfcOpenShell, Domus's `ifc` extra: `uv sync --extra ifc` in a
   of that origin. The site's reference latitude, longitude and elevation are the origin's too.
 - **Geometry:** each element is an IfcTriangulatedFaceSet, in the colour of its swatch in the viewer's layers panel.
   A wall's and a flight of steps' is closed (`Closed`), its corners welded, where Manifold takes it as a solid,
-  so it bounds one; a wall of named blocks round a sharp corner (a turn of 120 degrees or more) isn't marked so yet.
+  so it bounds one: every one but a wall of named blocks that turns back on itself, as the glTF section above says.
   They're shapes to see, measure and set out against, not walls a designer can edit as walls.
 - **Ids:** each element's GlobalId stays the same from one export of a site to the next, so software that compares
   versions sees the same elements. An element the model gives an id, such as a wall's `A1`, has it as its Tag.

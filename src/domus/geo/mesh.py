@@ -247,11 +247,14 @@ def prism(ring, bottom, top):
     return Mesh(verts, faces)
 
 
-def corner_offsets(line, side=1):
+MITRE_INSIDE = 0.1     # a wall's own offset lines (wall_offset) reach an inside corner's mitre to 1 / this: a turn of 168 degrees
+
+
+def corner_offsets(line, side=1, inside=0.5):
     """For each point of a polyline, the way to the same point of a line offset from it by 1 m (to the left of its
     direction, times `side`): the unit normal on a straight run, and at a corner the bisector, lengthened so the
-    offset line keeps its distance from both legs (1.41 at a right angle, 2 at most). A point given twice, as
-    where a wall's top steps, takes the leg it has."""
+    offset line keeps its distance from both legs (1.41 at a right angle, 2 at most, or 1 / `inside` at most on the
+    inside of the turn). A point given twice, as where a wall's top steps, takes the leg it has."""
     pts = np.asarray(line, float)[:, :2]
     n = len(pts)
     out = np.zeros((n, 2))
@@ -265,17 +268,18 @@ def corner_offsets(line, side=1):
             legs = [np.array([1.0, 0.0])]
         t = legs[0] + legs[-1]
         t = legs[0] if np.hypot(*t) < 1e-9 else t / np.hypot(*t)
-        out[i] = side * np.array([-t[1], t[0]]) / max(float(legs[0] @ t), 0.5)
+        least = inside if cross2(legs[0], legs[-1]) * side > 1e-6 else 0.5
+        out[i] = side * np.array([-t[1], t[0]]) / max(float(legs[0] @ t), least)
     return out
 
 
-def offset_behind(line, distance, side=1):
+def offset_behind(line, distance, side=1, inside=0.5):
     """The points of a polyline moved `distance` to the left of its direction (times `side`), as the back of a wall
-    is from its face: square off a straight run, and to the mitre at a corner. On the inside of a corner every
-    point whose own offset would land in the other leg's wall goes to that mitre too, so the offset line never
-    folds back on itself."""
+    is from its face: square off a straight run, and to the mitre at a corner (corner_offsets, `inside` its least
+    on the inside of a turn). On the inside of a corner every point whose own offset would land in the other leg's
+    wall goes to that mitre too, so the offset line never folds back on itself."""
     pts = np.asarray(line, float)[:, :2]
-    out = pts + distance * corner_offsets(pts, side)
+    out = pts + distance * corner_offsets(pts, side, inside)
     chain = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(pts, axis=0).T))])
     for i in range(1, len(pts) - 1):
         a, b = pts[i] - pts[i - 1], pts[i + 1] - pts[i]
@@ -286,9 +290,19 @@ def offset_behind(line, distance, side=1):
         if cross2(a, b) * side <= 1e-6:                 # straight on, or turning away from the offset side
             continue
         half = np.sqrt(max(0.0, (1 + float(a @ b)) / 2))                       # the cosine of half the turn
-        reach = distance * np.sqrt(max(0.0, 1 - half ** 2)) / max(half, 0.5)    # how far along each leg the mitre shadows
+        reach = distance * np.sqrt(max(0.0, 1 - half ** 2)) / max(half, inside)    # how far along each leg the mitre shadows
         out[np.abs(chain - chain[i]) < reach - 1e-9] = out[i]
     return out
+
+
+def wall_offset(line, distance, side=1):
+    """A wall's offset line (its back, or its capping course's face or back) from its face line `line`, as its mesh
+    draws it: offset_behind on the line with each point once, so a point given twice, where the wall's top steps,
+    takes the corner's own mitre for both its copies, and an inside corner's mitre reaching as far as the two legs'
+    offsets meet (MITRE_INSIDE), so the offset line lies on both. One for each point of `line`."""
+    pts = np.asarray(line, float)[:, :2]
+    once = np.concatenate([[True], np.hypot(*np.diff(pts, axis=0).T) > 1e-9])
+    return offset_behind(pts[once], distance, side, MITRE_INSIDE)[np.cumsum(once) - 1]
 
 
 def join_t_junctions(vertices, faces, uv=None, tol=1e-6):
@@ -297,7 +311,8 @@ def join_t_junctions(vertices, faces, uv=None, tol=1e-6):
     pieces is then closed edge to edge, as a solid's is. Corners within `tol` of each other count as one, and a corner
     within `tol` of an edge lies on it. A cut triangle keeps its turn, the new corners take the places of the corners on
     the edge, and their texture coordinates (`uv`) are its own, read along the edge, so it looks as it did. A triangle
-    with two corners within `tol` of each other draws nothing, and goes: counted, its edges would hide one that's alone.
+    with two corners within `tol` of each other, or its three in a line, draws nothing, and goes: counted, its edges
+    would hide one that's alone.
     Gives (vertices, faces, uv, parent): `parent` is the triangle of `faces` each one comes from."""
     v = np.asarray(vertices, float)
     f = np.array(faces, np.int64).reshape(-1, 3)
@@ -309,7 +324,11 @@ def join_t_junctions(vertices, faces, uv=None, tol=1e-6):
         _, first, weld = np.unique(key, axis=0, return_index=True, return_inverse=True)
         w = weld.reshape(-1)[f]
         flat = (w[:, 0] == w[:, 1]) | (w[:, 1] == w[:, 2]) | (w[:, 2] == w[:, 0])
-        if flat.any():                                      # two corners as one: it draws nothing
+        c = v[f]
+        longest = np.max(np.linalg.norm(c - np.roll(c, 1, axis=1), axis=2), axis=1)
+        across = np.linalg.norm(np.cross(c[:, 1] - c[:, 0], c[:, 2] - c[:, 0]), axis=1) / np.maximum(longest, 1e-300)
+        flat |= across <= tol
+        if flat.any():                                      # two corners as one, or all three in a line: it draws nothing
             f, parent, w = f[~flat], parent[~flat], w[~flat]
         edges = np.concatenate([w[:, [0, 1]], w[:, [1, 2]], w[:, [2, 0]]])
         tri, slot = np.tile(np.arange(len(f)), 3), np.repeat([0, 1, 2], len(f))
@@ -390,7 +409,7 @@ def wall_strip(line, top, bottom, thickness, side, batter=0.0, toe=None, chain=N
     rows = [np.column_stack([foot, bottom])]
     if batter and toe is not None:
         rows.append(np.column_stack([foot, np.broadcast_to(np.asarray(toe, float), (n,))]))
-    behind = head + offset_behind(pts, thickness, side) - pts      # the wall keeps its thickness round a corner
+    behind = head + wall_offset(pts, thickness, side) - pts        # the wall keeps its thickness round a corner
     rows += [np.column_stack([head, top]), np.column_stack([behind, top]), np.column_stack([behind, bottom])]
     if chain is None:
         chain = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(pts, axis=0).T))])

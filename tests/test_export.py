@@ -335,11 +335,12 @@ def test_the_ground_is_cut_along_the_options_edge():
     assert (np.cross(b - a, c - a)[:, 1] > 0).all()                    # every piece still faces up
 
 
-def test_a_wall_manifold_wont_take_as_a_solid_isnt_marked_closed(project):
-    """The IFC export marks a wall's face set Closed only where Manifold takes it as a solid (ifc.shell). A wall of
-    named blocks round a sharp corner, a turn of 135 degrees, its capping course standing out, held on the inside of
-    the turn, has every edge in two triangles but isn't a solid yet, so it isn't marked Closed. Round a right angle
-    it is one, and it is."""
+def test_a_face_set_manifold_wont_take_as_a_solid_isnt_marked_closed(project):
+    """The IFC export marks a wall's face set Closed only where Manifold takes it as a solid (ifc.shell). A unit box
+    with one side turned inside out has every edge in two triangles, but across that side's edges two triangles face
+    the same way: it isn't a solid, and isn't marked Closed. A wall of named blocks round a right angle, and one round
+    a sharp corner, a turn of 135 degrees, its capping course standing out, held on the inside of the turn, are
+    solids, and are."""
     import math
     from collections import Counter
 
@@ -347,14 +348,22 @@ def test_a_wall_manifold_wont_take_as_a_solid_isnt_marked_closed(project):
     from domus.model import terrain
     from domus.options import design
 
+    def edges(f):
+        return Counter(tuple(sorted(e)) for t in f.tolist() for e in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])))
+
+    box = np.array([[x, y, z] for x in (0, 1) for y in (0, 1) for z in (0, 1)], float)       # corner 4x + 2y + z
+    sides = np.array([[0, 2, 6], [0, 6, 4], [1, 5, 7], [1, 7, 3], [0, 4, 5], [0, 5, 1],
+                      [2, 3, 7], [2, 7, 6], [0, 1, 3], [0, 3, 2], [4, 6, 7], [4, 7, 5]])     # facing out
+    assert ifc.shell(box, sides)[2] is True
+    _, f, closed = ifc.shell(box, np.vstack([sides[:10], sides[10:, ::-1]]))              # the side at x = 1 turned
+    assert set(edges(f).values()) == {2} and closed is False
     en = design.frame(project).en(np.array([[8.0, 10.0]]))
     low = round(float(terrain.ground(project).sample(en[:, 0], en[:, 1])[0]), 2)
-    for turn, solid in ((90, True), (135, False)):
+    for turn in (90, 135):
         a = math.radians(turn)
         wall = {"id": "W", "material": "segmental", "unit_m": [0.457, 0.2], "cap_m": 0.1, "thickness_m": 0.27, "depth_m": 0.3,
                 "cap_depth_m": 0.26, "cap_overhang_m": 0.025, "retained_side": "left", "top": low + 1.0,
                 "line_so": [[10.0, 6.0], [10.0, 9.0], [10.0 + 3 * math.sin(a), 9.0 + 3 * math.cos(a)]]}
         m = design.evaluate(project, {"id": "x", "name": "x", "walls": [wall]}, segments=0)["walls"][0]["mesh"]
         _, f, closed = ifc.shell(m.vertices, m.faces)
-        edges = Counter(tuple(sorted(e)) for t in f.tolist() for e in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])))
-        assert set(edges.values()) == {2} and closed is solid, f"a turn of {turn} degrees"
+        assert set(edges(f).values()) == {2} and closed is True, f"a turn of {turn} degrees"

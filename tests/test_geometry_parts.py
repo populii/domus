@@ -5,6 +5,8 @@ These grew in a real site's own tests and test only Domus's functions, so they l
 import math
 
 import numpy as np
+import pytest
+import shapely
 from shapely.geometry import Polygon
 
 from domus.geo.georef import fit_affine, fit_rigid
@@ -81,6 +83,36 @@ def test_wall_end_caps_take_the_texture_across_the_end():
     assert np.allclose(v[:5], [-1.15, -1.0, 0.0, 0.0, -1.15])
     face_rows = m.faces[~np.any(m.cap[m.faces], axis=1)]    # round the cross-section: face, top, back, and the bottom
     assert len(face_rows) == 5 * 2 * 2 and np.all(m.cap[m.faces].sum(axis=1) % 3 == 0)
+
+
+def exact_body(line, thickness, side):
+    """The plan of a wall `thickness` thick on a two-leg `line`, held on `side` (+1 the left of its direction): from
+    its face to its back, the back's corner where the two legs' backs meet."""
+    p0, p1, p2 = np.asarray(line, float)
+    d1, d2 = (p1 - p0) / np.hypot(*(p1 - p0)), (p2 - p1) / np.hypot(*(p2 - p1))
+    n1, n2 = side * np.array([-d1[1], d1[0]]), side * np.array([-d2[1], d2[0]])
+    corner = p1 + thickness * (n1 + n2) / (1 + n1 @ n2)
+    return Polygon([p0, p1, p2, p2 + thickness * n2, corner, p0 + thickness * n1])
+
+
+@pytest.mark.parametrize(("turn", "side"), [(30, 1), (30, -1), (90, 1), (90, -1), (120, 1), (150, -1), (165, -1)])
+def test_a_wall_strip_keeps_its_thickness_round_a_corner_where_its_top_steps(turn, side):
+    """A plain wall 0.3 m thick on a made-up line, its 3 m legs turning `turn` degrees (held on side -1, the inside
+    of the turn), with a level top and with its top stepping at the turn, the point there twice, once at each level:
+    its top covers its plan once, from its face to its back, whose corner is where the two legs' backs meet. Where
+    the top stepped, each copy of the point took its own leg's offset, so the back cut the corner short outside the
+    turn and ran on past it inside, its top covering some of the plan twice; and inside a turn sharper than 120
+    degrees the back's corner stopped at twice the wall's thickness from the face's."""
+    a = math.radians(turn)
+    line = np.array([[0.0, 0.0], [0.0, 3.0], [3 * math.sin(a), 3.0 + 3 * math.cos(a)]])
+    want = exact_body(line, 0.3, side)
+    for top, along in ((1.0, line), ([1.2, 1.2, 1.0, 1.0], line[[0, 1, 1, 2]])):
+        m = wall_strip(along, top, -0.2, 0.3, side)
+        t = np.asarray(m.vertices, float)[np.asarray(m.faces).reshape(-1, 3)]
+        n = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+        up = shapely.polygons(t[n[:, 2] > 0.5 * np.linalg.norm(n, axis=1)][:, :, :2])          # the top
+        assert shapely.unary_union(up).symmetric_difference(want).area < 1e-9, f"top {top}"
+        assert shapely.area(up).sum() == pytest.approx(want.area, abs=1e-9), f"top {top}"     # once
 
 
 def test_flood_gives_each_crown_its_own_slope():

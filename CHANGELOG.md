@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** a wall round a sharp corner, a turn of more than 120 degrees, keeps its thickness round it.
+  Held on the inside of the turn, its back, and its capping course's, stopped at twice its depth from the face,
+  short of where the two legs' backs meet, so the back crossed itself there and its top covered some of its plan
+  twice; a wall of named blocks with a capping course standing out or deeper than its body wasn't a solid, and its
+  IFC export didn't mark it closed. Now the back reaches that point, to a turn of 168 degrees, and the wall is a
+  closed solid. One that turns back on itself more sharply, or so sharply for a short leg that the corner of its
+  back lies past the leg's end, still isn't ([docs/export.md](docs/export.md)). A wall of named blocks round a turn
+  of 120 degrees, held on the outside, is a closed solid now too.
+- **For site projects:** a plain wall (timber, block, stone, gabion) whose top steps where its line turns keeps its
+  thickness round the corner, as it does where its top doesn't step. Each copy of the point, one at each level,
+  took its own leg's offset, so the back cut the corner short outside the turn, by 0.125 m² of its plan on a
+  made-up 0.5 m gabion wall turning a right angle, and ran on past it inside, where its top covered 0.375 m² twice.
+
 ## 2026.11.62
 
 - **For site projects:** a flight of steps whose side lies within 10 mm of a wall's face beside it runs out to the

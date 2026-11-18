@@ -17,7 +17,7 @@ from shapely.geometry import box as sbox
 from shapely.ops import unary_union
 
 from ..errors import DomusError
-from ..geo.mesh import Mesh, join_t_junctions, offset_behind, prism, resample_line, triangulate_polygon, wall_strip
+from ..geo.mesh import Mesh, join_t_junctions, offset_behind, prism, resample_line, triangulate_polygon, wall_offset, wall_strip
 
 MATERIAL_COLOURS = {
     "concrete": "#a8a49c",
@@ -925,21 +925,22 @@ def unit_mesh(wall, pts, chain, top, bottom):
             t = (c - chain[i - 1]) / (chain[i] - chain[i - 1])
             pts, chain, top, bottom = (np.insert(v, i, v[i - 1] + t * (v[i] - v[i - 1]), axis=0)
                                        for v in (pts, chain, top, bottom))
-    # Offset lines worked out on the line with each point once: where the top steps at a corner the point is there
-    # twice, and both copies take the corner's own mitre, so the wall's back closes round the step.
-    once = np.concatenate([[True], np.hypot(*np.diff(pts, axis=0).T) > 1e-9])
-    copy = np.cumsum(once) - 1
-
-    def offset(distance, side_):
-        """`pts` moved `distance` to the left of its direction (times `side_`), as offset_behind moves a line."""
-        return offset_behind(pts[once], distance, side_)[copy]
-    behind = offset(body_depth(wall), side)
+    # Its offset lines as a wall's mesh takes them (wall_offset): where the top steps at a corner both copies of the
+    # point take the corner's own mitre, so the wall's back closes round the step, and round a sharp inside corner.
+    behind = wall_offset(pts, body_depth(wall), side)
+    # Round a sharp inside corner the points near it on both legs share one back point, the corner's mitre: there the
+    # back's foot is one level, the lowest of theirs, so the bottom meets it in one corner, not a stack of slivers
+    # between their levels.
+    sole = bottom.copy()
+    first = np.flatnonzero(np.concatenate([[True], np.hypot(*np.diff(behind, axis=0).T) > 1e-9]))
+    for a, b in zip(first, np.append(first[1:], len(sole)), strict=True):
+        sole[a:b] = bottom[a:b].min()
     # A capping course deeper or shallower than the body, or standing out from its face: the body's face and back stop
     # under it, and the cap has a face and a back of its own.
     overhang = float(wall.get("cap_overhang") or 0.0)
     split = bool(cap) and (abs(cap_depth(wall) - body_depth(wall)) > 1e-9 or overhang > 1e-9)
-    cap_front = offset(overhang, -side) if split and overhang > 1e-9 else pts
-    cap_behind = offset(cap_depth(wall) - overhang, side) if split else behind
+    cap_front = wall_offset(pts, overhang, -side) if split and overhang > 1e-9 else pts
+    cap_behind = wall_offset(pts, cap_depth(wall) - overhang, side) if split else behind
     # The picture's courses start under its cap: the wall's highest course is its first or its second, so that
     # odd and even courses stay the ones the grid makes them.
     shift = 2 * height * math.floor((datum - (float(top.max()) - cap)) / (2 * height) + 1e-6)
@@ -1170,7 +1171,7 @@ def unit_mesh(wall, pts, chain, top, bottom):
             back_face = tuple(c + each * float((behind[j] - pts[j]) @ d) for c, j in ((ca, i), (cb, i + 1)))
             ta, tb, sa, sb = ca + 0.25, cb + 0.25, back_face[0] + 0.25, back_face[1] + 0.25
         quad([(*pts[i], bottom[i], ta, 0.0), (*pts[i + 1], bottom[i + 1], tb, 0.0),          # the bottom, in the ground
-              (*behind[i + 1], bottom[i + 1], sb, wb), (*behind[i], bottom[i], sa, wa)], np.array([0.0, 0.0, -1.0]))
+              (*behind[i + 1], sole[i + 1], sb, wb), (*behind[i], sole[i], sa, wa)], np.array([0.0, 0.0, -1.0]))
         # A length of face that lies in another wall's face is drawn here too, so this wall is a closed solid, but the
         # viewer leaves it to that wall (`shared`): drawn by both, the two would show through each other.
         mine = len(faces)
@@ -1190,7 +1191,7 @@ def unit_mesh(wall, pts, chain, top, bottom):
             if overhang > 1e-9:
                 quad([(*cap_front[i], under[0], fa_u, 0.0), (*cap_front[i + 1], under[1], fb_u, 0.0),
                       (*pts[i + 1], under[1], tb, overhang), (*pts[i], under[0], ta, overhang)], np.array([0.0, 0.0, -1.0]))
-            panel(behind[i], behind[i + 1], va, vb, bot, under, np.array([*back, 0.0]), bare=True)
+            panel(behind[i], behind[i + 1], va, vb, (sole[i], sole[i + 1]), under, np.array([*back, 0.0]), bare=True)
             cva, cvb = (u + rate[k] * float((cap_behind[j] - pts[j]) @ d) for u, j in ((ua, i), (ub, i + 1)))
             cap_back = tuple(c + each * float((cap_behind[j] - pts[j]) @ d) for c, j in ((ca, i), (cb, i + 1))) if caps else None
             panel(cap_behind[i], cap_behind[i + 1], cva, cvb, under, head, np.array([*back, 0.0]), cap_back)
@@ -1215,7 +1216,7 @@ def unit_mesh(wall, pts, chain, top, bottom):
             panel(pts[i], pts[i + 1], ua, ub, bot, head, np.array([*-back, 0.0]), face)             # the face
         if any(c0 - 1e-6 <= mid <= c1 + 1e-6 for c0, c1 in so["hidden"]):
             shared.extend(range(mine, len(faces)))
-        panel(behind[i], behind[i + 1], va, vb, bot, head, np.array([*back, 0.0]), back_face)       # the back
+        panel(behind[i], behind[i + 1], va, vb, (sole[i], sole[i + 1]), head, np.array([*back, 0.0]), back_face)    # the back
         if not stacked(mid):
             quad([(*pts[i], top[i], ta, 0.0), (*pts[i + 1], top[i + 1], tb, 0.0),
                   (*behind[i + 1], top[i + 1], sb, wb), (*behind[i], top[i], sa, wa)], np.array([0.0, 0.0, 1.0]))    # the top
@@ -1226,12 +1227,12 @@ def unit_mesh(wall, pts, chain, top, bottom):
         out = pts[i] - far[0 if i == 0 else -1]
         ue = u0[k] + rate[k] * (chain[i] - cuts[k]) + turn
         if split:           # the body's end under the cap, and the cap's own
-            panel(pts[i], behind[i], ue, ue + math.copysign(across(i), turn), (bottom[i],) * 2, (top[i] - cap,) * 2,
+            panel(pts[i], behind[i], ue, ue + math.copysign(across(i), turn), (bottom[i], sole[i]), (top[i] - cap,) * 2,
                   np.array([*out, 0.0]), bare=True)
             panel(cap_front[i], cap_behind[i], ue, ue + math.copysign(across(i, cap_behind, cap_front), turn),
                   (top[i] - cap,) * 2, (top[i],) * 2, np.array([*out, 0.0]), end_cap(i, cap_behind, cap_front))
             continue
-        panel(pts[i], behind[i], ue, ue + math.copysign(across(i), turn), (bottom[i],) * 2, (top[i],) * 2, np.array([*out, 0.0]),
+        panel(pts[i], behind[i], ue, ue + math.copysign(across(i), turn), (bottom[i], sole[i]), (top[i],) * 2, np.array([*out, 0.0]),
               end_cap(i))
     # Where a piece's edge runs past another's corner, as the capping course's end does past the body's, it's cut there,
     # so the pieces meet edge to edge: with its bottom, the wall is a closed solid.

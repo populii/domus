@@ -160,8 +160,7 @@ def shell(v, faces, tol=1e-6):
     """A mesh's corners welded where its pieces meet (a wall's pieces each have corners of their own, for its picture),
     less any triangle that closes up: (positions, triangles, and whether it's a closed solid). It's one only where
     Manifold takes it as one, with a volume: every edge in two triangles isn't enough, as the two can face the same
-    way, or the surface pass through itself, as round a wall of named blocks' sharp corner (a turn of 120 degrees
-    or more) it still does."""
+    way."""
     import manifold3d as mf
 
     v = np.asarray(v, float)

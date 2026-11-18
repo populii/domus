@@ -1,9 +1,9 @@
 """Walls and steps drawn as closed solids, as Manifold takes them (its check of a valid solid), with the looks and the
 picture coordinates they had, on the demo site: plain walls (timber in level bays with its posts and with an open end,
 block, battered, and held on either side), walls of a named block (straight, with a capping course standing out or deeper than the body, round a
-corner, stepped with their stacked capping units, stepped two courses, stepped where the line turns, along an arc
-with a stepped top, and two that meet along a face), and steps (of blocks and of sleepers, on a level foot and on one
-that slopes across them)."""
+corner, round a sharp corner, stepped with their stacked capping units, stepped two courses, stepped where the line
+turns, along an arc with a stepped top, and two that meet along a face), and steps (of blocks and of sleepers, on a
+level foot and on one that slopes across them)."""
 
 import math
 
@@ -65,6 +65,9 @@ def cases(low):
         "named blocks, stepped where the line turns a little": {"walls": [turning(7.5)]},
         "named blocks, stepped where the line turns, a cap standing out": {"walls": [{**turning(30), **OUT}]},
         "named blocks, stepped at a corner, a deeper cap": {"walls": [{**turning(90), **DEEP}]},
+        "named blocks, stepped at a sharp corner, a cap standing out": {"walls": [{**turning(150), **OUT}]},
+        "named blocks round a sharp corner, a height over the toe, a cap standing out": {"walls": [
+            {**{k: v for k, v in turning(150).items() if k != "tops"}, **OUT, "height_m": 1.0}]},
         "named blocks along an arc, stepping, a cap standing out": {"walls": [{**stepped, **OUT, "line_so": arc,
                                                                                 "tops": [low + 1.2 - 0.2 * (i % 2) for i in range(12)]}]},
         "named blocks meeting along a face": {"walls": meeting},
@@ -101,6 +104,26 @@ def test_walls_and_steps_are_closed_solids(which, project):
         assert status == mf.Error.NoError and volume > 0.1, f"{which}: {name}: {status}, {volume:.4f} m3"
         if getattr(m, "uv", None) is not None:
             assert len(m.uv) == len(m.vertices) and np.isfinite(m.uv).all()
+
+
+@pytest.mark.parametrize("turn", [120, 135, 150, 165])
+def test_named_blocks_round_a_sharp_corner_are_closed_solids(turn, project):
+    """A wall of named blocks round a sharp corner, its 3 m legs turning `turn` degrees, its top level, is a closed
+    solid: plain, with a capping course standing out and with one deeper than the body, held on either side of its
+    line. At 120 degrees, held on the outside of the turn, some of its pieces had their three corners in a line,
+    which, counted, gave an edge a third triangle and left two alone. Held on the inside of a sharper turn, its back's
+    and its capping course's corners stopped at twice their depth from the face's, short of where the two legs' backs
+    meet, and with a capping course standing out or deeper than the body its pieces crossed there, two of them facing
+    the same way across an edge."""
+    low = low_at(project)
+    a = math.radians(turn)
+    line = [[10.0, 6.0], [10.0, 9.0], [10.0 + 3 * math.sin(a), 9.0 + 3 * math.cos(a)]]
+    for name, kind in (("plain", BLOCK), ("a cap standing out", {**BLOCK, **OUT}), ("a deeper cap", {**BLOCK, **DEEP})):
+        for side in ("left", "right"):
+            w = {**kind, "id": "W", "line_so": line, "retained_side": side, "top": low + 1.0}
+            m = design.evaluate(project, {"id": "x", "name": "x", "walls": [w]}, segments=0)["walls"][0]["mesh"]
+            status, volume = solid(m)
+            assert status == mf.Error.NoError and volume > 0.1, f"{name}, held {side}: {status}, {volume:.4f} m3"
 
 
 def test_the_demo_options_walls_are_closed_solids(project):
