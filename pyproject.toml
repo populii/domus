@@ -15,7 +15,7 @@ dependencies = [
     "opencv-python-headless>=4.10",
     "av>=14",
     "pycolmap>=4.2",
-    "laspy[lazrs]>=2.5",
+    "laspy[lazrs]>=2.7.0",
     "tomlkit>=0.13",
 ]
 

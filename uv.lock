@@ -363,7 +363,7 @@ dev = [
 requires-dist = [
     { name = "av", specifier = ">=14" },
     { name = "ifcopenshell", marker = "extra == 'ifc'", specifier = ">=0.9.0.post1" },
-    { name = "laspy", extras = ["lazrs"], specifier = ">=2.5" },
+    { name = "laspy", extras = ["lazrs"], specifier = ">=2.7.0" },
     { name = "numpy", specifier = ">=2.1" },
     { name = "opencv-python-headless", specifier = ">=4.10" },
     { name = "pdfplumber", marker = "extra == 'plans'", specifier = ">=0.11" },
