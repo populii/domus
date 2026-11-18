@@ -11,7 +11,10 @@ The sites, all in the sea, so none is a real place:
   richer   The demo with more of what real sites have: house parts (a porch and its steps, a deck and its
            balustrade, a chimney and a tank), levels along the drain, a sewer at an assumed depth, a right of way
            listed before the lot, and two trees over the drive beside it, with the paving under them painted into
-           the aerial photo (data/site/paved-under-canopy.geojson and a paving picture).
+           the aerial photo (data/site/paved-under-canopy.geojson and a paving picture). A fourth wall option, D, is
+           B in walls of a named block that say how they're built: their units' and capping units' depth, how far
+           the capping units stand out, their first course's embedment, the bedding, the base course, the trench and
+           the soil over its drainage aggregate.
   abroad   The demo moved onto the British National Grid (EPSG:27700), rasters and all. The same site on another grid
            builds the same model, from the site's origin: the report holds the head's build of it to the demo's
            within 1.5 mm (`twin`), and fails if it isn't.
@@ -77,9 +80,67 @@ def append(path, text):
         fh.write(text)
 
 
+BLOCK_WALL = """material = "segmental"
+unit_m = [0.457, 0.2]
+cap_m = 0.1
+thickness_m = 0.2285
+depth_m = 0.3
+cap_depth_m = 0.26
+cap_overhang_m = 0.025
+embed_m = 0.1
+embed_per_m = 0.125
+bedding_m = 0.03
+base_m = 0.15
+trench_m = 0.6
+seal_m = 0.2"""
+
+# The demo's option B in walls of a named block (made up), built as a maker might say: units 0.3 m deep set out on half a
+# block's thickness, capping units 0.26 m deep standing 25 mm out from the face, the first course at least 0.1 m into the
+# ground, on bedding and a base course, in a trench 0.6 m wide with drainage aggregate behind the units under 0.2 m of
+# soil.
+BLOCK_TIERS = f"""name = "D. Two tiers of blocks"
+short = "D. Blocks"
+description = "B's two tiers in walls of a named block, three courses apart, built in a trench with a base course, bedding and drainage."
+steps = 1
+keep_existing = []
+
+[[walls]]
+id = "D1"
+name = "Lower wall"
+{BLOCK_WALL}
+line_so = [[3.0, 2.0], [3.0, 20.0]]
+
+[[walls]]
+id = "D2"
+name = "Upper wall"
+{BLOCK_WALL}
+line_so = [[7.0, 2.0], [7.0, 20.0]]
+
+[[terraces]]
+id = "bed"
+name = "Planted bed"
+kind = "planting"
+level = {{bed}}
+at_so = [5.0, 11.0]
+batter = 2.5
+polygon_so = [[3.0, 2.0], [3.0, 20.0], [7.0, 20.0], [7.0, 2.0]]
+
+[[terraces]]
+id = "lawn"
+name = "Lawn"
+kind = "lawn"
+level = {{lawn}}
+at_so = [11.0, 11.0]
+fall = "1:40"
+fall_to = "north"
+batter = 2.5
+polygon_so = [[7.0, 2.0], [7.0, 20.0], [14.0, 20.0], [14.0, 2.0]]
+"""
+
+
 def enrich(root):
-    """The demo, with house parts, drain levels, a drain at an assumed depth, a lot that isn't listed first, and trees
-    over the drive beside it."""
+    """The demo, with house parts, drain levels, a drain at an assumed depth, a lot that isn't listed first, trees
+    over the drive beside it, and its option B in walls of a named block that say how they're built."""
     from domus import demo
 
     x0, y0 = demo.X0, demo.Y0
@@ -125,6 +186,10 @@ def enrich(root):
                                         '\n[services.notes.drain]\ntext = "Invert {lo} to {hi}, made up ({span})."\n'
                                         'confidence = "made up"\n')
     trees_over_the_drive(root)
+    level = lambda s: round(float(demo.ground(x0 + 11, y0 + 30 - s)), 1)        # as the demo's own options take them
+    # The bed as option B's, and the lawn three 0.2 m courses above it, so the two walls' tops are whole courses apart.
+    (root / "options" / "d-block-tiers.toml").write_text(BLOCK_TIERS.format(bed=level(5) + 0.2, lawn=round(level(5) + 0.8, 1)),
+                                                         encoding="utf-8", newline="\n")
 
 
 # Two made-up trees over the drive east of the lot, which the demo's aerial photo shows as paving from x0 + 22 on: each

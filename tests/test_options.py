@@ -278,6 +278,13 @@ line_so = [[0, 2], [1, 2]]
     assert "restyle_stairs" not in out
     same = options.restyled({"based_on": "base", "restyle": [{"thickness_m": 0.4}]}, tmp_path / "variant.toml")
     assert same["walls"][0]["unit_m"] == [0.457, 0.2] and "material" not in same["stairs"][0]
+    built = (tmp_path / "base.toml").read_text(encoding="utf-8").replace("cap_m = 0.1\n", "cap_m = 0.1\ndepth_m = 0.3\n"
+                                                                        "embed_m = 0.1\nbase_m = 0.15\n")
+    (tmp_path / "base.toml").write_text(built, encoding="utf-8")
+    same = options.restyled({"based_on": "base", "restyle": [{"thickness_m": 0.4}]}, tmp_path / "variant.toml")
+    assert {"depth_m", "embed_m", "base_m"} <= set(same["walls"][0])
+    out = options.restyled({"based_on": "base", "restyle": [{"material": "gabion"}]}, tmp_path / "variant.toml")
+    assert not set(options.CONSTRUCTION) & set(out["walls"][0])            # how the block wall was built goes too
 
 
 def test_steps_can_be_railway_sleepers(two_lawns, project):
@@ -725,3 +732,39 @@ def test_options_are_worked_out_on_the_ground_the_build_draws(built, project):
     here = ground.sample(behind[:1], behind[1:])[0]
     assert here == pytest.approx(top[k], abs=0.03)
     assert here > terrain.ground(project).sample(behind[:1], behind[1:])[0] + 0.3
+
+
+def test_a_block_wall_is_drawn_as_deep_as_its_units_with_its_foot_in_the_ground(site, project):
+    """A wall of a named block can say how deep its units are (depth_m) and its capping units (cap_depth_m), how far
+    its capping course stands out from its face (cap_overhang_m), and how far its first course goes into the ground at
+    its toe: it's drawn that deep, its capping course standing out that far, and its foot on the course at or below
+    that depth, so it steps down with the ground a course at a time. thickness_m still sets it out, so its blocks and
+    capping units are laid as they were."""
+    from domus import design, walls
+
+    low = round(ground_at(8.0, 10.0), 2)
+    plain = {**BLOCK, "id": "W", "line_so": [[10.0, 6.0], [10.0, 12.0]], "retained_side": "left", "top": low + 1.0}
+    built = {**plain, "depth_m": 0.3, "cap_depth_m": 0.26, "cap_overhang_m": 0.025, "embed_m": 0.1, "embed_per_m": 0.125}
+    a, b = (design.Design({"walls": [cfg]}, site=project).wall_levels()[0] for cfg in (plain, built))
+    walls.set_out([a])
+    walls.set_out([b])
+    datum = a["set_out"]["datum"]
+    assert a["set_out"]["caps"] == b["set_out"]["caps"] and datum == b["set_out"]["datum"]
+    sunk = np.maximum(0.1, 0.125 * (b["top"] - b["toe"]))
+    on_course = datum - np.ceil((datum - (b["toe"] - sunk)) / 0.2 - 1e-9) * 0.2     # the course at or below that
+    assert np.all(on_course <= b["toe"] - sunk + 1e-9) and np.all(on_course > b["toe"] - sunk - 0.2)
+    fr = design.frame(project)
+    for w, body, cap, out, foot in ((a, 0.27, 0.27, 0.0, a["toe"] - 0.15), (b, 0.3, 0.26, 0.025, on_course)):
+        m, info = walls.mesh(w)
+        off = fr.so(m.vertices[:, :2])[:, 0] - 10.0
+        back = off * np.sign(off[np.abs(off).argmax()])                       # how far behind its face
+        top = np.abs(m.vertices[:, 2] - m.vertices[:, 2].max()) < 1e-9
+        assert back.max() == pytest.approx(body) and back.min() == pytest.approx(-out, abs=1e-9)
+        assert back[top].min() == pytest.approx(-out, abs=1e-9) and back[top].max() == pytest.approx(cap - out)
+        assert m.vertices[:, 2].min() == pytest.approx(foot.min())
+        assert info["height_max_m"] == pytest.approx((w["top"] - w["toe"]).max())    # what shows is the same
+    # One whole course buried, where that's more than the rule
+    deep = design.Design({"walls": [{**built, "embed_courses": 1}]}, site=project).wall_levels()[0]
+    walls.set_out([deep])
+    assert deep["embedment"] == pytest.approx(np.maximum(sunk, 0.2))
+    assert walls.mesh(deep)[0].vertices[:, 2].min() <= (deep["toe"] - 0.2).min() + 1e-9

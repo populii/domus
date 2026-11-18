@@ -240,6 +240,22 @@ OPTIONS_SITE = Table("options/_site.toml", {
         "thickness_m": Key("A wall's thickness", REQUIRED),
         "paving_m": Key("How deep a paved terrace's paving is, from its top (the terrace's level) to the soil under it: "
                         "the pavers, their bedding and any basecourse, which cut and fill don't count", 0.2),
+        # How a wall is built, below and behind its face: none of it is soil (docs/options.md)
+        "depth_m": Key("A wall's body, from its face to its back, drawn and not soil, where thickness_m is what its "
+                       "set-out and corners take: thickness_m, unless given", COMPUTED),
+        "cap_depth_m": Key("Its capping course's depth, from its front to its back: depth_m, unless given", COMPUTED),
+        "cap_overhang_m": Key("How far its capping course stands out in front of its face", 0.0),
+        "embed_m": Key("How far its first course goes below the ground at its toe, at least", 0.0),
+        "embed_per_m": Key("And for each metre the wall stands above the ground at its toe, this much, where that's more",
+                           0.0),
+        "embed_courses": Key("And for a wall of named blocks, this many whole courses, where that's more", 0),
+        "bedding_m": Key("A bedding layer under its first course", 0.0),
+        "base_m": Key("A base course under the bedding, compacted", 0.0),
+        "trench_m": Key("Its trench's width from its face, filled from the bottom of the base course with what's brought "
+                        "in (the base, the bedding, the wall and any drainage aggregate behind it): depth_m, unless given",
+                        COMPUTED),
+        "seal_m": Key("Soil over the drainage aggregate behind it, at the top of its trench under the finished ground: "
+                      "soil brought back in, counted as fill", 0.0),
     }),
     "rules": Table("Checks every option is held to", {
         "drain_cover_m": Key("Least cover over a drain under lawn after a cut", 0.3),

@@ -14,10 +14,12 @@ terrace's level inside its polygon. Terrace edges not held by a wall slope back 
 batter, inside the regrade area only: whatever a batter cannot reach there is reported as a step
 at the edge of that area.
 
-Cut and fill are soil, measured from the existing ground (soil_change). The soil a new wall holds back counts; the wall
-itself, from its face to its back and from its toe to its top, doesn't, and nor does the paving of a paved terrace
-(`kind` paving), whose level is the paving's top: the soil is `paving_m` under it. An existing wall isn't soil either:
-under one, the soil is at its toe.
+Cut and fill are soil, measured from the existing ground (soil_moved). The soil a new wall holds back counts; the wall
+itself, from its face to its back and from its toe to its top, doesn't, nor does what it's built on and with: a wall
+that says how it's built stands in a trench from its face, which its base, bedding, courses and drainage aggregate
+fill from the trench's bottom; the soil it gives over the aggregate (`seal_m`) is soil, brought back in. Nor does the
+paving of a paved terrace (`kind` paving), whose level is the paving's top: the soil is `paving_m` under it. An
+existing wall isn't soil either: under one, the soil is at its toe.
 
 A flight of steps is a line from its foot to its head and a width. It takes its levels from the
 designed ground just beyond each end, so it follows the terraces it joins, and the ground under it
@@ -156,13 +158,31 @@ def option_wall(cfg, defaults, frame):
     if bays is not None and len(bays) != len(line) - 1:
         raise ValueError(f"wall {cfg['id']}: `tops` gives a level for each stretch of its line, so it needs "
                          f"{len(line) - 1} of them, not {len(bays)}")
+    thickness = float(cfg.get("thickness_m", defaults["thickness_m"]))
+    depth = float(cfg.get("depth_m", defaults.get("depth_m") or thickness))
     return {
         "id": cfg["id"],
         "name": cfg.get("name", cfg["id"]),
         "material": cfg.get("material", "block"),
         "status": "proposed",
         "confidence": "",
-        "thickness": float(cfg.get("thickness_m", defaults["thickness_m"])),
+        "thickness": thickness,
+        # How it's built, in the ground and behind its face (docs/options.md): its body `depth` deep from the face,
+        # where `thickness` is what its set-out and its corners take; its capping course `cap_depth` deep, standing
+        # `cap_overhang` out from the face; its first course `embed` below the ground at its toe: at least the first
+        # number, the second for each metre the wall stands above it, and the third in whole courses, where each is
+        # more; on `bedding` and a `base` course, in a trench `trench` wide from its face, with `seal` of soil over the
+        # drainage aggregate behind the wall.
+        "depth": depth,
+        "cap_depth": float(cfg.get("cap_depth_m", defaults.get("cap_depth_m") or depth)),
+        "cap_overhang": float(cfg.get("cap_overhang_m", defaults.get("cap_overhang_m", 0.0))),
+        "embed": (float(cfg.get("embed_m", defaults.get("embed_m", 0.0))),
+                  float(cfg.get("embed_per_m", defaults.get("embed_per_m", 0.0))),
+                  int(cfg.get("embed_courses", defaults.get("embed_courses", 0)))),
+        "seal": float(cfg.get("seal_m", defaults.get("seal_m", 0.0))),
+        "bedding": float(cfg.get("bedding_m", defaults.get("bedding_m", 0.0))),
+        "base": float(cfg.get("base_m", defaults.get("base_m", 0.0))),
+        "trench": float(cfg.get("trench_m", defaults.get("trench_m") or depth)),
         "side": None if side is None else (1 if side == "left" else -1),
         "line": line[:, :2],
         "fixed_top": line[:, 2] if line.shape[1] == 3 else (float(cfg["top"]) if "top" in cfg else None),
@@ -461,7 +481,7 @@ class Design:
                 right = self.sample(*(pts[:, :2] - nrm * 0.8).T)
                 w["side"] = 1 if np.nanmean(left - right) > 0 else -1
             nrm = nrm * w["side"]
-            back = pts[:, :2] + nrm * (w["thickness"] + BACK_PROBE_M)
+            back = pts[:, :2] + nrm * (w["depth"] + BACK_PROBE_M)
             front = pts[:, :2] - nrm * TOE_PROBE_M
             retained = self.sample(back[:, 0], back[:, 1])
             toe = self.sample(front[:, 0], front[:, 1])
@@ -483,8 +503,13 @@ class Design:
             else:
                 top = retained + w["upstand"]
             top = np.maximum(top, toe + 0.05)
+            # its first course below the ground at its toe: at least `least`, `per_m` for each metre of its height
+            # there, and `courses` whole courses of a wall of named blocks
+            least, per_m, courses = w["embed"]
+            course = (walls_mod.units(w) or (0.0, 0.0))[1]
+            sunk = np.maximum(np.maximum(least, per_m * np.maximum(top - toe, 0.0)), courses * course)
             w.update(top=top, top_chain=chain, toe=toe, toe_chain=chain, retained=retained,
-                     samples=pts[:, :2], normals=nrm)
+                     samples=pts[:, :2], normals=nrm, embedment=sunk)
             out.append(w)
         return out
 
@@ -502,14 +527,18 @@ def grid_in(poly, step):
 
 
 def wall_edges(w, ground=None):
-    """A wall's face and back, and its toe along it: (face, back, chain, toe), the toe at each distance `chain` along
-    its line. A new wall's (levelled by Design.wall_levels) face is its line and its back `thickness` behind it, on its
-    retained `side`; its toe is known where Design.wall_levels sampled it. An existing wall's (a domus.walls dict) is
-    where the build draws it into `ground` (domus.tin.build): its face at the foot, half any batter in front of its
-    line, a point for each of its samples, and its toe `ground`'s there."""
+    """Where a wall stands in the ground, and the level the site's soil stops at under it: (face, back, chain, level),
+    the level at each distance `chain` along its line. A new wall's (levelled by Design.wall_levels) is its trench: its
+    face is its line and its back the trench's `trench` width behind it on its retained `side`, which what's built
+    there fills from the trench's bottom: its base and bedding, the wall's own courses from their embedment below its
+    toe, and any drainage aggregate behind them. None of it is soil, so the soil stops at the trench's bottom, its toe
+    less its embedment, bedding and base (trench_bottom). A wall that doesn't say how it's built stands on its toe, in
+    a trench as deep as its body. An existing wall's (a domus.walls dict) is its body, where the build draws it into
+    `ground` (domus.tin.build): its face at the foot, half any batter in front of its line, a point for each of its
+    samples, and the soil stops at its toe, `ground`'s there."""
     line = np.asarray(w["line"], float)[:, :2]
     if ground is None:
-        return line, offset_behind(line, w["thickness"], w["side"]), w["toe_chain"], w["toe"]
+        return line, offset_behind(line, w["trench"], w["side"]), w["toe_chain"], trench_bottom(w)
     pts, nrm, chain, _, _ = walls_mod.wall_levels(w, ground)
     half = 0.5 * w.get("batter", 0.0)
     face = pts - nrm * half
@@ -517,12 +546,35 @@ def wall_edges(w, ground=None):
     return face, back, chain, ground.sample(face[:, 0], face[:, 1])
 
 
+def trench_bottom(w):
+    """A new wall's trench's bottom at each of its toe's samples (levelled by Design.wall_levels): where its first
+    course stands (walls.foot), less its bedding and base course."""
+    return walls_mod.foot(w, w["toe_chain"], w["toe"], clear=0.0) - w["bedding"] - w["base"]
+
+
 def wall_body(w, ground=None):
-    """A wall's own plan, from its face to its back, and its toe along it: (plan, line, chain, toe), from wall_edges.
-    The plan reaches a micrometre past its outline, so a point on the outline is the wall's on any grid, however its
-    sums round."""
-    face, back, chain, toe = wall_edges(w, ground)
-    return Polygon(np.vstack([face, back[::-1]])).buffer(1e-6), LineString(np.asarray(w["line"], float)[:, :2]), chain, toe
+    """A wall's plan in the ground, from its face to its back, and the soil's level under it along it: (plan, line,
+    chain, level), from wall_edges. The plan reaches a micrometre past its outline, so a point on the outline is the
+    wall's on any grid, however its sums round."""
+    face, back, chain, level = wall_edges(w, ground)
+    return Polygon(np.vstack([face, back[::-1]])).buffer(1e-6), LineString(np.asarray(w["line"], float)[:, :2]), chain, level
+
+
+def body_plan(w):
+    """Where a new wall's body stands on the plan (levelled by Design.wall_levels): from its face back its `depth`."""
+    line = np.asarray(w["line"], float)[:, :2]
+    return Polygon(np.vstack([line, offset_behind(line, w["depth"], w["side"])[::-1]])).buffer(1e-6)
+
+
+def drainage(w):
+    """The drainage aggregate behind a new wall (levelled by Design.wall_levels), where its trench reaches past its body
+    and its option gives soil over the aggregate (`seal`): (plan, line, chain, level, seal), the plan from its body's
+    back to its trench's, the trench's bottom along it, and that soil's depth. None where there's no such soil."""
+    if w["trench"] <= w["depth"] + 1e-9 or w["seal"] <= 0:
+        return None
+    line = np.asarray(w["line"], float)[:, :2]
+    back, deep = offset_behind(line, w["depth"], w["side"]), offset_behind(line, w["trench"], w["side"])
+    return Polygon(np.vstack([back, deep[::-1]])).buffer(1e-6), LineString(line), w["toe_chain"], trench_bottom(w), w["seal"]
 
 
 def _on_toes(bodies, e, n, z):
@@ -536,22 +588,46 @@ def _on_toes(bodies, e, n, z):
     return np.where(np.isfinite(under), under, z)
 
 
-def soil_change(design, walls, existing_walls, e, n):
-    """How far an option (`design`) moves the soil at points (e, n): up for fill, down for cut. Cut and fill are soil.
+def soil_moved(design, walls, existing_walls, e, n):
+    """How much soil an option (`design`) digs out and brings in at points (e, n): (cut, fill), each a depth of soil.
+    Cut and fill are soil.
 
     Before, the soil is the ground as it is (`design.existing`), but inside an existing wall (`existing_walls`, from
     its face to its back) it's at the wall's toe: the wall itself isn't soil. After, it's the designed ground where the
-    option regrades, less the paving where a terrace is paved, and as it was everywhere else; inside a new wall
-    (`walls`, levelled by Design.wall_levels), or an existing wall the option keeps, it's at that wall's toe, which
-    the wall stands on. So the soil a new wall holds back counts, and the wall from its toe to its top doesn't."""
+    option regrades, less the paving where a terrace is paved, and as it was everywhere else; in a new wall's trench
+    (`walls`, levelled by Design.wall_levels: its body, unless it says how it's built) it's at the trench's bottom, and
+    inside an existing wall the option keeps, at that wall's toe. So the soil a new wall holds back counts, and what's
+    built of it, the wall from its foot to its top and its base, bedding and drainage aggregate, doesn't (wall_body).
+    Where a wall's option gives soil over its drainage aggregate (`seal_m`), that's soil brought back in over what was
+    dug out: fill, under the finished ground behind the wall's body, where no wall stands."""
     e = np.asarray(e, float)
     n = np.asarray(n, float)
     h0, z = design.existing.sample(e, n), design.sample(e, n)
     old = [wall_body(w, design.existing) for w in existing_walls]
     before = _on_toes(old, e, n, h0)
-    after = np.where(design.regraded(e, n, z, h0), z - design.paving(e, n), before)
+    surface = np.where(design.regraded(e, n, z, h0), z - design.paving(e, n), before)
     kept = [b for w, b in zip(existing_walls, old, strict=True) if w["id"] in design.keep_existing]
-    return _on_toes([wall_body(w) for w in walls] + kept, e, n, after) - before
+    dz = _on_toes([wall_body(w) for w in walls] + kept, e, n, surface) - before
+    cut, fill = np.maximum(-dz, 0.0), np.maximum(dz, 0.0)
+    sealed = [d for d in (drainage(w) for w in walls) if d]
+    if sealed:
+        seal = np.zeros(np.shape(e))
+        for plan, line, chain, level, depth in sealed:
+            inside = shapely.contains_xy(plan, e, n)
+            if inside.any():
+                at = shapely.line_locate_point(line, shapely.points(e[inside], n[inside]))
+                seal[inside] = np.maximum(seal[inside], np.clip(surface[inside] - np.interp(at, chain, level), 0.0, depth))
+        for plan in [body_plan(w) for w in walls] + [b[0] for b in kept]:
+            seal[shapely.contains_xy(plan, e, n)] = 0.0
+        fill = fill + np.where(np.isfinite(seal), seal, 0.0)
+    return cut, fill
+
+
+def soil_change(design, walls, existing_walls, e, n):
+    """How far an option (`design`) moves the soil at points (e, n), up for fill and down for cut: the soil it brings
+    in less the soil it digs out there (soil_moved)."""
+    cut, fill = soil_moved(design, walls, existing_walls, e, n)
+    return fill - cut
 
 
 def flat_area(sample, poly, step=0.25, slope=0.05, exclude=None):
@@ -684,17 +760,17 @@ def evaluate(opt, site, existing=None, step=0.1):
     built = [LineString(w["line"]).buffer(w["thickness"] + 0.3) for w in walls] + [st.poly.buffer(0.1) for st in d.stairs]
     wall_zone = unary_union(built) if built else None
 
-    # Cut and fill over the regrade area: soil, from the ground as it is (soil_change).
+    # Cut and fill over the regrade area: soil, from the ground as it is (soil_moved).
     e, n = grid_in(garden, step)
-    dz = soil_change(d, walls, site.existing_walls, e, n)
-    ok = np.isfinite(dz)
-    e, n, dz = e[ok], n[ok], dz[ok]
+    cut, fill = soil_moved(d, walls, site.existing_walls, e, n)
+    ok = np.isfinite(cut) & np.isfinite(fill)
+    cut, fill = cut[ok], fill[ok]
     cell = step * step
-    disturbed = np.abs(dz) > 0.02
-    vol = {"cut_m3": float(-dz[dz < 0].sum() * cell), "fill_m3": float(dz[dz > 0].sum() * cell),
+    disturbed = (cut > 0.02) | (fill > 0.02)
+    vol = {"cut_m3": float(cut[cut > 0].sum() * cell), "fill_m3": float(fill[fill > 0].sum() * cell),
            "area_m2": float(disturbed.sum() * cell),
-           "cut_max_m": float(max(0.0, -dz.min())) if len(dz) else 0.0,
-           "fill_max_m": float(max(0.0, dz.max())) if len(dz) else 0.0}
+           "cut_max_m": float(cut.max()) if len(cut) else 0.0,
+           "fill_max_m": float(fill.max()) if len(fill) else 0.0}
     vol["net_m3"] = vol["fill_m3"] - vol["cut_m3"]
     vol["tolerance_m3"] = vol["area_m2"] * LIDAR_TOLERANCE_M
 

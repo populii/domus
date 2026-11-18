@@ -55,11 +55,11 @@ def test_an_option_is_worked_out_on_what_it_is_given():
     assert 0.85 < wall["height_max_m"] < 1.0 and wall["flags"] == []
 
 
-def wall_and_lawn(thickness):
+def wall_and_lawn(thickness, **built):
     """A lawn at 41 m on the slope, from o 2 to past the regrade area's far side, held along o 2 by a wall `thickness`
-    deep that runs on past both its sides, so no batter reaches the ground in front of it."""
+    deep (and built as `built` says) that runs on past both its sides, so no batter reaches the ground in front of it."""
     opt = {"terraces": [{"id": "T", "level": 41.0, "polygon_so": [[-3, 2], [13, 2], [13, 13], [-3, 13]]}],
-           "walls": [{"id": "W", "line_so": [[-3, 2], [13, 2]], "retained_side": "left", "thickness_m": thickness}]}
+           "walls": [{"id": "W", "line_so": [[-3, 2], [13, 2]], "retained_side": "left", "thickness_m": thickness, **built}]}
     return scheme.evaluate(opt, on(Slope()), step=0.1)
 
 
@@ -113,3 +113,28 @@ def test_an_option_is_measured_from_the_ground_with_the_existing_walls_in_it():
     # An option that keeps the wall moves no soil where it stands.
     v = scheme.evaluate({**lawn, "keep_existing": ["X"]}, on(drawn, [old]), step=0.1)["volumes"]
     assert (v["fill_m3"], v["cut_m3"]) == (17.5, 24.0)
+
+
+def test_what_a_wall_is_built_on_and_with_isnt_soil():
+    """A wall can say how it's built: its units 0.3 m deep, its first course at least 0.1 m into the ground at its toe
+    and 0.125 m for each metre it stands above it, on 0.03 m of bedding and 0.15 m of base course, in a trench 0.6 m
+    wide from its face that the drainage aggregate behind it fills too. None of that is soil: the soil stops at the
+    trench's bottom, and behind the trench it's filled to the lawn."""
+    built = wall_and_lawn(0.2, depth_m=0.3, embed_m=0.1, embed_per_m=0.125, bedding_m=0.03, base_m=0.15, trench_m=0.6)
+    w = built["walls"][0]["def"]
+    assert w["embedment"][len(w["toe_chain"]) // 2] == pytest.approx(0.125 * 0.935)    # 0.935 m above its toe there
+    bottom = 40.165 - 0.125 * 0.935 - 0.03 - 0.15
+    at = (np.array([5.0, 5.0, 5.0]), np.array([2.1, 2.55, 2.65]))         # in the trench, at its back, and behind it
+    assert np.allclose(scheme.soil_change(built["design"], [w], [], *at), [bottom - 40.21, bottom - 40.255, 41.0 - 40.265])
+    # The trench is dug from the slope, 40.2 to 40.26 m, to its bottom: 2.17 m3 over the 10 m of it in the regrade area.
+    # The lawn is filled from the slope behind it, from o 2.6.
+    assert (built["volumes"]["cut_m3"], built["volumes"]["fill_m3"]) == (2.2, 27.4)
+    # Soil over the aggregate (seal_m) is soil brought back in over what was dug out: fill, 0.2 m deep behind the
+    # units, over the 0.3 m of aggregate there, while the cut stays as it was.
+    sealed = wall_and_lawn(0.2, depth_m=0.3, embed_m=0.1, embed_per_m=0.125, bedding_m=0.03, base_m=0.15, trench_m=0.6,
+                           seal_m=0.2)
+    cut, fill = scheme.soil_moved(sealed["design"], [sealed["walls"][0]["def"]], [], *at)
+    assert np.allclose(cut, [40.21 - bottom, 40.255 - bottom, 0.0]) and np.allclose(fill, [0.0, 0.2, 41.0 - 40.265])
+    assert (sealed["volumes"]["cut_m3"], sealed["volumes"]["fill_m3"]) == (2.2, 28.0)
+    plain = wall_and_lawn(0.2)
+    assert (plain["volumes"]["cut_m3"], plain["volumes"]["fill_m3"]) == (0.1, 30.4)    # unless it says, its body only

@@ -41,8 +41,8 @@ id = "L2"
 name = "Inner wall and its return along the bank"
 material = "timber"     # timber | block | segmental | gabion | crib | stone | concrete
 line_so = [[5.0, 2.4], [-1.5, 2.4], [-1.5, 6.5]]   # its face
-# Optional: thickness_m (0.25: what shows of its top, so for a wall with a capping course the
-# capping unit's depth), upstand_m (0.1, how far its top stands above the ground it
+# Optional: thickness_m (0.25: the thickness its set-out and corners take, and unless depth_m says
+# otherwise the depth drawn), upstand_m (0.1, how far its top stands above the ground it
 # retains), retained_side ("left"/"right" looking along the line; found from the ground if left
 # out). Its top is the designed ground behind it plus the upstand, its toe the designed ground in
 # front, unless the line has a third number per point (a fixed top, NZVD2016), or top = 42.6, or
@@ -53,6 +53,8 @@ line_so = [[5.0, 2.4], [-1.5, 2.4], [-1.5, 6.5]]   # its face
 # and its course height, split-faced and set out as it would be built (see below). With it,
 # cap_m = 0.1 adds a capping course that high along the top, and colour = "#7f868b" gives the blocks
 # their colour.
+# depth_m, cap_depth_m, cap_overhang_m, embed_m, embed_per_m, embed_courses, bedding_m, base_m,
+# trench_m and seal_m say how it's built, below and behind its face: see below.
 
 [[terraces]]
 id = "lawn"
@@ -116,14 +118,42 @@ A wall of a named block (`unit_m`) is set out block by block:
   keeps its whole blocks and the cut block stands in the inside corner.
 - A wall that carries on along the face of one before it in the file takes up that wall's bond, and the length of
   face the two share is drawn once.
-- Its capping course is laid in capping units as long as its blocks and as deep as `thickness_m`. Each length
-  of top, from a corner, a step or an end to the next, starts and ends with a whole unit. At a corner the unit
-  of one face runs through to the far side and the other face's butts against it. Where whole units do not
+- Its capping course is laid in capping units as long as its blocks, set out on `thickness_m` and drawn
+  `cap_depth_m` deep (below). Each length of top, from a corner, a step or an end to the next, starts and ends with
+  a whole unit. At a corner the unit of one face runs through to the far side and the other face's butts against it. Where whole units do not
   reach, the one cut to fit is in the middle of the length, or two share it so that neither is under 150 mm.
   Where the top steps one course along a straight stretch, and two capping units make a course, two capping
   units are stacked beside the end of the higher course and the higher capping course laps half a unit over them.
 - Where something does not fit, a block is drawn cut at the corner, or a course under the cap, and the wall's
   checks say how far to move the corner or the top.
+
+A wall can say how it's built, below and behind its face, as its maker's guide does. Each of these can be given for
+every wall in `[defaults]` in `_site.toml` too, and none changes a wall that doesn't give it:
+
+- `depth_m`: its body, from its face to its back, which is drawn and isn't soil. Unless given, `thickness_m`. A wall
+  of a named block set out on half a block's `thickness_m`, so whole capping units meet at its corners, gives its
+  units' real depth here; its set-out and its corners keep to `thickness_m`.
+- `cap_depth_m`: its capping units' depth, from their front to their back. Unless given, `depth_m`.
+- `cap_overhang_m`: how far its capping units stand out in front of its face: "about 25 mm" is `0.025`. Unless
+  given, 0: flush with it.
+- `embed_m`, `embed_per_m` and `embed_courses`: its first course goes into the ground at its toe, at least
+  `embed_m`, `embed_per_m` for each metre the wall stands above the ground there, and `embed_courses` whole courses
+  of a wall of named blocks, whichever is most. "At least 100 mm, or 25 mm for every 200 mm course of wall" is
+  `embed_m = 0.1` and `embed_per_m = 0.125`; "one unit below the ground" is `embed_courses = 1`. A wall of named
+  blocks stands on the course of its grid at or below that depth, so its first course, and its trench under it,
+  steps down with the ground a course at a time. It's drawn that far down, and the ground in front stays where it
+  is.
+- `bedding_m` and `base_m`: a bedding layer and a compacted base course under its first course.
+- `trench_m`: its trench's width from its face, which the base course, the bedding, the wall and any drainage
+  aggregate behind it fill from the trench's bottom. Unless given, `depth_m`.
+- `seal_m`: soil over the drainage aggregate behind its units, at the top of its trench, under the finished ground
+  ("the top 200 mm in low permeability soil" is `0.2`). Unless given, 0: the aggregate reaches the finished ground.
+
+None of that is soil but the seal, so the trench is cut from the ground down to its bottom, the wall's toe less its
+embedment, bedding and base; the seal is soil brought back in over the aggregate, so it counts as fill; and behind
+the trench the soil is filled to the designed ground as it is behind any wall. A wall that gives none of it stands
+on the ground at its toe, as before. What a guide adds at some places along a wall, such as more drainage aggregate
+behind an outside corner, isn't counted.
 
 Heights are in the site's vertical datum, NZVD2016 by default.
 
@@ -150,7 +180,9 @@ material = "sleepers"
 ```
 
 A `restyle` entry sets anything a wall takes (`material`, `thickness_m`, `upstand_m`, `picture`, `unit_m`), and later
-entries win. One that changes `material` drops the block the base named (`unit_m`, `cap_m`, `colour`). A
+entries win. One that changes `material` drops the block the base named (`unit_m`, `cap_m`, `colour`) and how it's
+built (`depth_m`, `cap_depth_m`, `cap_overhang_m`, `embed_m`, `embed_per_m`, `embed_courses`, `bedding_m`,
+`base_m`, `trench_m`, `seal_m`). A
 `restyle_stairs` entry does the same for the steps. Change the scheme itself in the file it is based on, and every
 style of it follows.
 
@@ -182,7 +214,9 @@ build paints.
   stumps are not drawn while an option is shown.
 - Cut, fill and the area disturbed, with a range from the LiDAR's tolerance. Cut and fill are soil. The soil a
   new wall holds back counts, but the wall itself, from its face to its back and from its toe to its top, doesn't:
-  the soil under it is at its toe. Nor does paving: under a paved terrace the soil is `paving_m` below its level.
+  the soil under it is at its toe. A wall that says how it's built stands in its trench, and the soil stops at the
+  trench's bottom, but for the soil over its drainage aggregate (`seal_m`), which is fill. Nor does paving: under a
+  paved terrace the soil is `paving_m` below its level.
   An existing wall isn't soil either, so taking one out and filling where it stood fills from its toe, and an
   option that keeps one, or leaves its ground alone, moves no soil there.
 - Flat lawn: ground in the regrade area no steeper than 1:20 over 1 m, away from the walls, before and

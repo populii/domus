@@ -185,6 +185,16 @@ gives them in `[datums.<datum>]` and `[house]` reads with them there, and `domus
 | `defaults.batter` | required | Unretained terrace edges slope back at 1 vertical : this horizontal |
 | `defaults.thickness_m` | required | A wall's thickness |
 | `defaults.paving_m` | `0.2` | How deep a paved terrace's paving is, from its top (the terrace's level) to the soil under it: the pavers, their bedding and any basecourse, which cut and fill don't count |
+| `defaults.depth_m` | worked out | A wall's body, from its face to its back, drawn and not soil, where thickness_m is what its set-out and corners take: thickness_m, unless given |
+| `defaults.cap_depth_m` | worked out | Its capping course's depth, from its front to its back: depth_m, unless given |
+| `defaults.cap_overhang_m` | `0.0` | How far its capping course stands out in front of its face |
+| `defaults.embed_m` | `0.0` | How far its first course goes below the ground at its toe, at least |
+| `defaults.embed_per_m` | `0.0` | And for each metre the wall stands above the ground at its toe, this much, where that's more |
+| `defaults.embed_courses` | `0` | And for a wall of named blocks, this many whole courses, where that's more |
+| `defaults.bedding_m` | `0.0` | A bedding layer under its first course |
+| `defaults.base_m` | `0.0` | A base course under the bedding, compacted |
+| `defaults.trench_m` | worked out | Its trench's width from its face, filled from the bottom of the base course with what's brought in (the base, the bedding, the wall and any drainage aggregate behind it): depth_m, unless given |
+| `defaults.seal_m` | `0.0` | Soil over the drainage aggregate behind it, at the top of its trench under the finished ground: soil brought back in, counted as fill |
 | `[rules]` | | Checks every option is held to |
 | `rules.drain_cover_m` | `0.3` | Least cover over a drain under lawn after a cut |
 | `local.<key>` |  | Anything a site keeps for its own tools or records: Domus doesn't read it or warn about it |

@@ -35,6 +35,8 @@ def test_the_richer_site_has_what_the_demo_lacks(sites):
     assert {"porch", "steps", "block", "balustrade", "chimney", "tank"} <= parts
     levels = [f for f in layer(root, "services")["features"] if "invert_m" in f["properties"]]
     assert len(levels) == 2 and levels[0]["properties"]["invert_m"] > levels[1]["properties"]["invert_m"]
+    blocks = tomllib.loads((root / "options" / "d-block-tiers.toml").read_text(encoding="utf-8"))["walls"]
+    assert all(w["depth_m"] > w["thickness_m"] and w["trench_m"] > w["depth_m"] for w in blocks)
 
 
 def test_the_richer_site_paints_in_the_drive_under_its_trees(sites, at_site):

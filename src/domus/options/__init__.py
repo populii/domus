@@ -12,6 +12,11 @@ from pathlib import Path
 
 from ..project.site import given
 
+# How a wall is built, below and behind its face (docs/options.md), which goes with its block when a restyle gives it
+# another material.
+CONSTRUCTION = ("depth_m", "cap_depth_m", "cap_overhang_m", "embed_m", "embed_per_m", "embed_courses", "bedding_m",
+                "base_m", "trench_m", "seal_m")
+
 
 def options_dir(site):
     """The site's wall options, options/."""
@@ -39,8 +44,8 @@ def restyled(cfg, path):
     for rule in cfg.get("restyle", []):
         for w in walls:
             if "walls" not in rule or w["id"] in rule["walls"]:
-                if "material" in rule:          # another material: the block the old one named goes with it
-                    for k in ("unit_m", "cap_m", "colour"):
+                if "material" in rule:          # another material: the block the old one named goes, and how it's built
+                    for k in ("unit_m", "cap_m", "colour", *CONSTRUCTION):
                         w.pop(k, None)
                 w.update({k: v for k, v in rule.items() if k != "walls"})
     stairs = [dict(s) for s in base.get("stairs", [])]

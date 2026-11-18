@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from shapely.geometry import Polygon
 
+from domus.model import walls as walls_mod
 from domus.options import design, scheme, sketch, solids
 from domus.project.demo import X0, Y0
 
@@ -47,6 +48,10 @@ def option(name, project, ctx):
         return {"walls": [{"id": "W", "line_so": [[8.0, 2.0], [8.0, 20.0]]}],
                 "terraces": [{"id": "T", "level": low + 0.6, "at_so": [11.0, 11.0], "batter": float(name.rsplit("-", 1)[1]),
                               "polygon_so": [[8, 2], [8, 20], [14, 20], [14, 2]]}]}
+    if name == "built":         # a wall of named blocks that says how it's built: in a trench, with soil over its drainage
+        return {"walls": [{**wall, "material": "segmental", "unit_m": [0.457, 0.2], "cap_m": 0.1, "thickness_m": 0.2285,
+                           "depth_m": 0.3, "embed_m": 0.1, "embed_per_m": 0.125, "bedding_m": 0.03, "base_m": 0.15,
+                           "trench_m": 0.6, "seal_m": 0.2}], "terraces": [upper]}
     if name == "keeps-the-old-wall":
         return {"keep_existing": ["W1"], "walls": [{"id": "N", "line_so": [[12.0, 3.0], [12.0, 19.0]]}],
                 "terraces": [{"id": "T", "level": ground_at(ctx, 10.0, 10.0) + 0.3, "at_so": [10.0, 10.0], "fall": "1:40",
@@ -60,6 +65,7 @@ def option(name, project, ctx):
 def worked_out(name, project, ctx):
     d = scheme.Design(option(name, project, ctx), ctx.settings["defaults"], ctx.ground, ctx.garden, ctx.frame)
     walls = d.wall_levels()
+    walls_mod.set_out(walls, ctx.ground)       # as scheme.evaluate does: a wall of named blocks steps with its courses
     return d, walls, solids.option_solids(d, walls, ctx.existing_walls)
 
 
@@ -67,8 +73,8 @@ def point_rule(d, walls, existing_walls, step=0.05):
     """Cut and fill as scheme.evaluate counts them, on a finer grid: the demo's walls and terraces lie on its cells'
     edges."""
     e, n = scheme.grid_in(d.garden, step)
-    dz = scheme.soil_change(d, walls, existing_walls, e, n)
-    return float(-dz[dz < 0].sum() * step * step), float(dz[dz > 0].sum() * step * step)
+    cut, fill = scheme.soil_moved(d, walls, existing_walls, e, n)
+    return float(cut.sum() * step * step), float(fill.sum() * step * step)
 
 
 def like_the_point_rule(d, walls, s, existing_walls):
@@ -86,7 +92,7 @@ def like_the_point_rule(d, walls, s, existing_walls):
 
 
 @pytest.mark.parametrize("name", ["a-one-wall", "b-two-tiers", "steps", "sloping-foot", "paving-and-steep",
-                                  "keeps-the-old-wall", "sketch", "steep-batter-0.5", "steep-batter-1.0"])
+                                  "keeps-the-old-wall", "sketch", "steep-batter-0.5", "steep-batter-1.0", "built"])
 def test_an_options_solids_stand_where_the_point_rule_puts_the_ground_and_measure_what_it_does(name, project, ctx):
     like_the_point_rule(*worked_out(name, project, ctx), ctx.existing_walls)
 

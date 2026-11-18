@@ -18,10 +18,13 @@ domus.options.scheme works an option out point by point; the solids follow the s
 - A flight of steps: under its outline the ground it stands on (Stair.z), a ramp, or on a foot that slopes across it
   the higher of the ramp and the ground at its foot carried in level under it. The last flight a point is under gives
   its ground.
-- The soil (scheme.soil_change): before, the ground as it is, but at its toe inside an existing wall; after, inside a
-  new wall or an existing wall the option keeps, at that wall's toe (the lowest where walls meet); under a flight of
-  steps, its ramp; in a terrace, its level less any paving; and where a batter moves the ground, the batter. Everywhere
-  else the soil stays as it was. A wall's plan is scheme.wall_body's, and its toe at a point of the plan is the toe at
+- The soil (scheme.soil_moved): before, the ground as it is, but at its toe inside an existing wall; after, in a new
+  wall's trench (scheme.wall_edges: its body, unless it says how it's built) at the trench's bottom, and inside an
+  existing wall the option keeps at its toe (the lowest where walls meet); under a flight of steps, its ramp; in a
+  terrace, its level less any paving; and where a batter moves the ground, the batter. Everywhere else the soil stays
+  as it was. The soil a new wall's option gives over its drainage aggregate (`seal_m`, scheme.drainage) is brought
+  back in over what its trench took out: fill, from that far under the soil's level after down to no lower than the
+  trench's bottom, behind its body where no wall stands. A wall's plan is scheme.wall_body's, and its toe at a point of the plan is the toe at
   the nearest point of its line: in the part of the plan nearest each straight piece of the line (from the lower
   envelope of the distances to the pieces, as for a batter) it runs along the piece and square across it.
 
@@ -48,9 +51,9 @@ import numpy as np
 import shapely
 from shapely.geometry import Polygon, box
 
-from ..geo.mesh import offset_behind
+from ..geo.mesh import offset_behind, resample_line
 from ..model import walls as walls_mod
-from .scheme import BATTER_REACH_M, wall_body
+from .scheme import BATTER_REACH_M, WALL_STEP_M, body_plan, drainage, trench_bottom, wall_body
 
 SEGMENTS = 128          # the sides of a batter's cone
 EDGE_M = 1e-6           # how far a solid reaches past the part of the plan it's worked out in, so no two share a face
@@ -267,7 +270,7 @@ class Solids:
     """An option as solids (option_solids()), in metres about `origin` (E, N), heights as they are.
 
     `existing` is the ground as it is over the regrade area, and `designed` the pieces of the designed ground there,
-    side by side; `walls` the new walls, each from its face to its back and its toe to its top, and `steps` the treads
+    side by side; `walls` the new walls, each from its face to its back and its foot to its top, and `steps` the treads
     of every flight; `cut` and `fill` the pieces of soil the option takes away and brings in."""
 
     def __init__(self, origin, existing, designed, walls, steps, cut, fill, named=()):
@@ -439,7 +442,7 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
 
     # Terraces: the first a point is in gives its level, and the soil is any paving's depth under it.
     taken = mf.CrossSection()
-    levels = []
+    levels, soils = [], []                                       # (its part of the plan, below its level / its soil's)
     for k, t in enumerate(design.terraces):
         own = ((section(t.poly, origin) ^ area) - taken) - stepped
         taken = taken + (section(t.poly, origin) ^ area)
@@ -447,6 +450,7 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
         levels.append((own, level))
         if t.paving:
             level, over = _terrace_columns(t, wide(t.poly), origin, zb, top, t.paving)
+        soils.append((own, level))
         soil(own - walled, level, over, f"terrace {k}")
 
     # The rest of the regrade area: where the batters raise the ground the soil is theirs, and where they only cut it,
@@ -461,6 +465,7 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
             fills.append(raise_t)
             cuts.append(cut_t)
     designed = []
+    soils += [(foot, below) for foot, below in ramps]
     if fills:
         raise_to, cut_to = union(fills), union(cuts)
         box_all = prism(win, zb + 0.5, top + 1.5)
@@ -476,11 +481,37 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
         soil(down - walled, under_cut, cut_to, "batters cut")
         designed += [("batters raise", raise_to ^ tall(up)), ("batters cut", under_cut ^ tall(down)),
                      ("ground", ground ^ tall((rest - up) - down))]
+        soils += [(up, raise_to), (down, under_cut), ((rest - up) - down, before)]
     else:
         designed.append(("ground", ground ^ tall(rest)))
+        soils.append((rest, before))
     designed += [(f"terrace {k}", level ^ tall(own)) for k, (own, level) in enumerate(levels) if not own.is_empty()]
     designed += [(f"steps {k}", below ^ tall(foot)) for k, (foot, below) in enumerate(ramps) if not foot.is_empty()]
     named += [("designed", part, piece) for part, piece in designed]
+
+    # The soil over a new wall's drainage aggregate: from its `seal` under the soil's level after, down to no lower
+    # than its trench's bottom, behind its body where no wall stands. Where two walls' meet, the deeper seal's.
+    sealed = sorted(((i, d) for i, w in enumerate(walls) if (d := drainage(w))), key=lambda wd: -wd[1][4])
+    if sealed:
+        blocked = mf.CrossSection.batch_boolean([section(body_plan(w), origin) for w in walls]
+                                                + [b[0] for b in bodies if not b[3]], mf.OpType.Add)
+        done = mf.CrossSection()
+        for i, (plan, _, _, _, depth) in sealed:
+            w = walls[i]
+            region = ((section(plan, origin) ^ area) - blocked) - done
+            done = done + region
+            if region.is_empty():
+                continue
+            pts, chain = resample_line(np.asarray(w["line"], float)[:, :2], WALL_STEP_M)
+            back = offset_behind(pts[:, :2], w["depth"], w["side"]) - origin
+            deep = offset_behind(pts[:, :2], w["trench"], w["side"]) - origin
+            above = strip(*_widened(back, deep, 2 * EDGE_M), top + 1.0, np.interp(chain, w["toe_chain"], trench_bottom(w)))
+            for own, below in soils:
+                if (own ^ region).is_empty():
+                    continue
+                piece = ((below ^ tall(own ^ region)) ^ above) - below.translate((0.0, 0.0, -depth))
+                fill.append(piece)
+                named.append(("fill", f"seal {i}", piece))
 
     return Solids(origin, ground ^ tall(area), [d for _, d in designed if not d.is_empty()],
                   [_wall_solid(w, design.existing, origin) for w in walls],
@@ -656,11 +687,26 @@ def _stair_columns(st, origin, zb, top):
     return below, col - below
 
 
+def _widened(face, back, by):
+    """A strip's face and back moved `by` apart, and on past its ends: a solid that reaches past its plan."""
+    face, back = face.copy(), back.copy()
+    across = back - face
+    length = np.maximum(np.hypot(*across.T), 1e-12)[:, None]
+    face, back = face - across / length * by, back + across / length * by
+    for line in (face, back):
+        for k, j in ((0, 1), (-1, -2)):
+            t = line[k] - line[j]
+            line[k] = line[k] + t / max(float(np.hypot(*t)), 1e-12) * by
+    return face, back
+
+
 def _wall_solid(w, ground, origin):
-    """A new wall as a solid: from its face to its back and from its toe to its top, stepped where its top steps."""
-    pts, _, _, toe, top = walls_mod.wall_levels(w, ground)
+    """A new wall as a solid: from its face to its back (its body's depth) and from its foot (its toe, less any
+    embedment, walls.foot) to its top, stepped where its top steps."""
+    pts, _, chain, toe, top = walls_mod.wall_levels(w, ground)
     face = pts - origin
-    return strip(face, offset_behind(pts, w["thickness"], w["side"]) - origin, np.maximum(top, toe + 1e-3), toe)
+    return strip(face, offset_behind(pts, walls_mod.body_depth(w), w["side"]) - origin, np.maximum(top, toe + 1e-3),
+                 walls_mod.foot(w, chain, toe, clear=0.0))
 
 
 def _treads(st, origin):

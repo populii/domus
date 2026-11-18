@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** a wall can say how it's built, below and behind its face, as its maker's guide does, for
+  one wall of an option or for every wall in `[defaults]` of `options/_site.toml`: its body's depth (`depth_m`, where
+  `thickness_m` stays what its set-out and its corners take); its capping units' depth and how far they stand out
+  from its face (`cap_depth_m`, `cap_overhang_m`); how far its first course goes into the ground at its toe, at least
+  `embed_m`, `embed_per_m` for each metre it stands above it, or `embed_courses` whole courses, whichever is most; the
+  bedding and base course under it (`bedding_m`, `base_m`); its trench's width from its face (`trench_m`); and the
+  soil over the drainage aggregate behind it (`seal_m`). It's drawn that deep, with its foot in the ground, and a wall
+  of named blocks stands on the course at or below that, so its foot steps down with the ground a course at a time.
+  None of it is soil but the seal: the trench is cut from the ground down to its bottom, the seal is filled over the
+  aggregate, and behind the trench the ground is filled as before. A wall that gives none of it is drawn and counted
+  as it was, and a restyle to another material drops them with the block. An option's closed solids
+  (`domus.options.solids`) follow the same rule. `tools/made_up_sites.py`'s richer site has an option in such walls
+  ([docs/options.md](docs/options.md)).
+
 ## 2026.11.47
 
 - **For site projects:** a site's `video` and `prep` run the steps of `domus video` and `domus prep` the same way:

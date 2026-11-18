@@ -603,7 +603,7 @@ def check_fixes(site, findings):
         for w in res["walls"]:
             wd = w["def"]
             line, _, _, _, top = terrain.wall_levels(wd, site=site)
-            body = Polygon(np.vstack([line, mesh.offset_behind(line, wd["thickness"], wd["side"])[::-1]])).buffer(0.03)
+            body = Polygon(np.vstack([line, mesh.offset_behind(line, walls.body_depth(wd), wd["side"])[::-1]])).buffer(0.03)
             for p in kept[shapely.contains_xy(body, kept[:, 0], kept[:, 1])]:
                 k = int(np.argmin(np.hypot(line[:, 0] - p[0], line[:, 1] - p[1])))
                 over = float(p[2] - top[k])

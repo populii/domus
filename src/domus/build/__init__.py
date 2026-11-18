@@ -400,7 +400,7 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
     walled = []
     for w in wall_defs:
         line = terrain.wall_levels(w, site=site)[0]
-        walled.append(SPoly(np.vstack([line, mesh.offset_behind(line, w["thickness"], w["side"])[::-1]])).buffer(0))
+        walled.append(SPoly(np.vstack([line, mesh.offset_behind(line, walls.body_depth(w), w["side"])[::-1]])).buffer(0))
     walled = unary_union(walled)
     stepped = unary_union([st.poly for st in d.stairs]).buffer(0.01)
     stand = unary_union([walled, stepped]) if wall_defs or d.stairs else None

@@ -24,7 +24,7 @@ from shapely.ops import unary_union
 
 from ..geo import geojson
 from ..geo.mesh import Mesh, Surface, cross2, offset_behind, resample_line
-from .walls import wall_levels
+from .walls import body_depth, wall_levels
 
 
 def grid(extent, step):
@@ -200,11 +200,11 @@ def build(extent, step, ground, origin, walls=(), surface=None, edges=()):
         once = np.concatenate([[True], np.hypot(*np.diff(pts, axis=0).T) > 1e-9])    # a stepped top has its points twice
         pts, nrm, chain, toe, held = pts[once], nrm[once], chain[once], toe[once], held[once]
         half = 0.5 * w.get("batter", 0.0)
-        clear |= distance_to_polyline(E, N, pts) < max(0.75, w["thickness"] + 0.5 + half)
+        clear |= distance_to_polyline(E, N, pts) < max(0.75, body_depth(w) + 0.5 + half)
         # The ground keeps its level right up to the foot of the wall's face and to its back: the step between the
         # two is inside the wall, where it does not show.
         face = pts - nrm * half
-        back = pts + nrm * half + offset_behind(pts, w["thickness"], w["side"]) - pts   # as the wall's own back
+        back = pts + nrm * half + offset_behind(pts, body_depth(w), w["side"]) - pts    # as the wall's own back
         stood.append((pts, shapely.Polygon(np.vstack([face, back[::-1]])).buffer(0.05)))
         breaks.append(np.column_stack([face, toe]))
         breaks.append(np.column_stack([back, held]))

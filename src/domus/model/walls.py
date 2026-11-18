@@ -143,6 +143,34 @@ def bay_levels(line, bays, chain):
     return before, after
 
 
+def body_depth(wall):
+    """How deep a wall's body is, from its face to its back: its option's `depth` (depth_m) where it gives one, else
+    its thickness. The thickness is what its set-out and its corners take."""
+    return float(wall.get("depth") or wall["thickness"])
+
+
+def cap_depth(wall):
+    """How deep its capping course is from its face, flush with it: its option's `cap_depth` (cap_depth_m), else its
+    body's depth."""
+    return float(wall.get("cap_depth") or body_depth(wall))
+
+
+def foot(wall, chain, toe, clear=0.15):
+    """Where a wall's first course stands, at each distance `chain` along it, over its `toe` there: its embedment below
+    the toe where its option gives one (embed_m, embed_per_m, embed_courses), and for a wall of named blocks set out on
+    its grid of courses, the course line at or below that, so its first course and what's under it step down with the
+    ground a course at a time. A wall that gives no embedment stands at its toe, drawn `clear` below it so it meets
+    the ground cleanly."""
+    sunk = wall.get("embedment")
+    if sunk is None or not np.any(np.asarray(sunk) > 0):
+        return toe - clear
+    level = toe - np.interp(chain, wall["toe_chain"], sunk)
+    unit, datum = units(wall), (wall.get("set_out") or {}).get("datum")
+    if unit and datum is not None:
+        level = datum - np.ceil((datum - level) / unit[1] - 1e-9) * unit[1]
+    return level
+
+
 def wall_levels(wall, ground=None, spacing=0.25, probe=0.6):
     """Resample a wall and work out its toe (low side) and top levels along it.
 
@@ -601,7 +629,13 @@ def unit_mesh(wall, pts, chain, top, bottom):
             t = (c - chain[i - 1]) / (chain[i] - chain[i - 1])
             pts, chain, top, bottom = (np.insert(v, i, v[i - 1] + t * (v[i] - v[i - 1]), axis=0)
                                        for v in (pts, chain, top, bottom))
-    behind = offset_behind(pts, wall["thickness"], side)
+    behind = offset_behind(pts, body_depth(wall), side)
+    # A capping course deeper or shallower than the body, or standing out from its face: the body's face and back stop
+    # under it, and the cap has a face and a back of its own.
+    overhang = float(wall.get("cap_overhang") or 0.0)
+    split = bool(cap) and (abs(cap_depth(wall) - body_depth(wall)) > 1e-9 or overhang > 1e-9)
+    cap_front = offset_behind(pts, overhang, -side) if split and overhang > 1e-9 else pts
+    cap_behind = offset_behind(pts, cap_depth(wall) - overhang, side) if split else behind
     # The picture's courses start under its cap: the wall's highest course is its first or its second, so that
     # odd and even courses stay the ones the grid makes them.
     shift = 2 * height * math.floor((datum - (float(top.max()) - cap)) / (2 * height) + 1e-6)
@@ -618,15 +652,16 @@ def unit_mesh(wall, pts, chain, top, bottom):
         uv.append(p[:, 3:])
         faces.extend([(k, k + 1, k + 2), (k, k + 2, k + 3)])
 
-    def panel(pa, pb, ua, ub, bot, head, out, capped=None):
+    def panel(pa, pb, ua, ub, bot, head, out, capped=None, bare=False):
         """An upright piece of the wall between two points on the plan, `ua` and `ub` blocks along the bond, from
         `bot` up to `head` (each a level at the one point and at the other): the capping course, then the courses
         on the wall's grid, in bands of UNIT_BAND courses down the picture. `capped` is how many capping units
-        along its length of top each of the two points is, where the capping course does not follow the blocks."""
+        along its length of top each of the two points is, where the capping course does not follow the blocks.
+        A `bare` piece has no capping course: its courses run up to `head`."""
         (ba, bb), (ta, tb) = bot, head
         if np.hypot(*(np.asarray(pb) - pa)) < 1e-9 or not np.all(np.isfinite([ba, bb, ta, tb])):
             return
-        ca, cb = (max(ta - cap, ba), max(tb - cap, bb)) if cap else (ta, tb)
+        ca, cb = (max(ta - cap, ba), max(tb - cap, bb)) if cap and not bare else (ta, tb)
         if ta - ca > 1e-9 or tb - cb > 1e-9:
             xa, xb = (capped[0] + 0.25, capped[1] + 0.25) if capped else (ua, ub)       # the picture's cap has its joints a quarter along
             quad([(*pa, ca, xa, ca - ta), (*pb, cb, xb, cb - tb), (*pb, tb, xb, 0.0), (*pa, ta, xa, 0.0)], out)
@@ -642,14 +677,15 @@ def unit_mesh(wall, pts, chain, top, bottom):
                 break
             hi = lo
 
-    def across(i):
-        """The blocks an end of the wall shows across it at point i: whole half blocks, as the end of a corner block
-        is, so that no sliver is drawn where the wall is a little deeper or shallower than that."""
-        return 0.5 * max(1, round(2 * float(np.hypot(*(behind[i] - pts[i]))) / length))
+    def across(i, back=behind, front=pts):
+        """The blocks an end of the wall shows across it at point i, from its `front` to its `back`: whole half
+        blocks, as the end of a corner block is, so that no sliver is drawn where the wall is a little deeper or
+        shallower than that."""
+        return 0.5 * max(1, round(2 * float(np.hypot(*(back[i] - front[i]))) / length))
 
-    def end_cap(i):
-        """The end of a capping unit across the wall at point i: no joint in it."""
-        return (0.05, 0.05 + float(np.hypot(*(behind[i] - pts[i]))) / length) if caps else None
+    def end_cap(i, back=behind, front=pts):
+        """The end of a capping unit across the wall at point i, from its `front` to its `back`: no joint in it."""
+        return (0.05, 0.05 + float(np.hypot(*(back[i] - front[i]))) / length) if caps else None
 
     def cap_at(c, mid):
         """How many capping units along its length of top the distance `c` along the wall is, in the length that
@@ -680,8 +716,8 @@ def unit_mesh(wall, pts, chain, top, bottom):
                     # one is the lower capping course's first, the upper one is drawn here. The higher capping
                     # course laps half a unit over it.
                     for reach, z0, z1, u in ((length, lower, lower + cap, 0.25), (length / 2, higher - cap, higher, 0.75)):
-                        f0, f1, b0, b1 = pts[i], pts[i] + on * reach, behind[i], behind[i] + on * reach
-                        deep = float(np.hypot(*(behind[i] - pts[i])))
+                        f0, f1, b0, b1 = cap_front[i], cap_front[i] + on * reach, cap_behind[i], cap_behind[i] + on * reach
+                        deep = float(np.hypot(*(cap_behind[i] - cap_front[i])))
                         u1 = u + reach / length
                         face = (f0 - b0) / max(deep, 1e-9)
                         quad([(*f0, z0, u, -cap), (*f1, z0, u1, -cap), (*f1, z1, u1, 0.0), (*f0, z1, u, 0.0)], np.array([*face, 0.0]))
@@ -690,8 +726,14 @@ def unit_mesh(wall, pts, chain, top, bottom):
                         quad([(*f1, z0, 0.3, -cap), (*b1, z0, 0.3 + deep / length, -cap), (*b1, z1, 0.3 + deep / length, 0.0),
                               (*f1, z1, 0.3, 0.0)], np.array([*on, 0.0]))
                     continue
-                panel(pts[i], behind[i], ua + 0.5, ua + 0.5 + across(i), (lower, lower), (higher, higher), np.array([*on, 0.0]),
-                      end_cap(i))
+                if split:           # the body's end under the cap, and the cap's own
+                    panel(pts[i], behind[i], ua + 0.5, ua + 0.5 + across(i), (lower, lower), (higher - cap,) * 2,
+                          np.array([*on, 0.0]), bare=True)
+                    panel(cap_front[i], cap_behind[i], ua + 0.5, ua + 0.5 + across(i, cap_behind, cap_front),
+                          (higher - cap,) * 2, (higher, higher), np.array([*on, 0.0]), end_cap(i, cap_behind, cap_front))
+                else:
+                    panel(pts[i], behind[i], ua + 0.5, ua + 0.5 + across(i), (lower, lower), (higher, higher), np.array([*on, 0.0]),
+                          end_cap(i))
             continue
         d = d / run
         back = side * np.array([-d[1], d[0]])
@@ -707,7 +749,34 @@ def unit_mesh(wall, pts, chain, top, bottom):
             face = (ca, cb)
             back_face = tuple(c + each * float((behind[j] - pts[j]) @ d) for c, j in ((ca, i), (cb, i + 1)))
             ta, tb, sa, sb = ca + 0.25, cb + 0.25, back_face[0] + 0.25, back_face[1] + 0.25
-        if not any(c0 - 1e-6 <= mid <= c1 + 1e-6 for c0, c1 in so["hidden"]):
+        shown = not any(c0 - 1e-6 <= mid <= c1 + 1e-6 for c0, c1 in so["hidden"])
+        if split:
+            # The body's face and back stop under the capping course, which has a face and a back of its own; between
+            # them, its underside where it stands out from the face, and behind it the body's top where the cap is
+            # shallower, or the cap's underside where it reaches past the body.
+            under = (top[i] - cap, top[i + 1] - cap)
+            fa, fb = (u + rate[k] * float((cap_front[j] - pts[j]) @ d) for u, j in ((ua, i), (ub, i + 1)))
+            cap_face = tuple(c + each * float((cap_front[j] - pts[j]) @ d) for c, j in ((ca, i), (cb, i + 1))) if caps else None
+            fa_u, fb_u = (cap_face[0] + 0.25, cap_face[1] + 0.25) if caps else (fa, fb)
+            if shown:
+                panel(pts[i], pts[i + 1], ua, ub, bot, under, np.array([*-back, 0.0]), bare=True)
+                panel(cap_front[i], cap_front[i + 1], fa, fb, under, head, np.array([*-back, 0.0]), cap_face)
+                if overhang > 1e-9:
+                    quad([(*cap_front[i], under[0], fa_u, 0.0), (*cap_front[i + 1], under[1], fb_u, 0.0),
+                          (*pts[i + 1], under[1], tb, overhang), (*pts[i], under[0], ta, overhang)], np.array([0.0, 0.0, -1.0]))
+            panel(behind[i], behind[i + 1], va, vb, bot, under, np.array([*back, 0.0]), bare=True)
+            cva, cvb = (u + rate[k] * float((cap_behind[j] - pts[j]) @ d) for u, j in ((ua, i), (ub, i + 1)))
+            cap_back = tuple(c + each * float((cap_behind[j] - pts[j]) @ d) for c, j in ((ca, i), (cb, i + 1))) if caps else None
+            panel(cap_behind[i], cap_behind[i + 1], cva, cvb, under, head, np.array([*back, 0.0]), cap_back)
+            ra, rb = (min(float((cap_behind[j] - cap_front[j]) @ back), UNIT_TOP_M) for j in (i, i + 1))
+            ca_u, cb_u = (cap_back[0] + 0.25, cap_back[1] + 0.25) if caps else (cva, cvb)
+            quad([(*cap_behind[i], under[0], ca_u, ra), (*cap_behind[i + 1], under[1], cb_u, rb),
+                  (*behind[i + 1], under[1], sb, wb), (*behind[i], under[0], sa, wa)],
+                 np.array([0.0, 0.0, 1.0 if cap_depth(wall) < body_depth(wall) else -1.0]))
+            quad([(*cap_front[i], top[i], fa_u, 0.0), (*cap_front[i + 1], top[i + 1], fb_u, 0.0),
+                  (*cap_behind[i + 1], top[i + 1], cb_u, rb), (*cap_behind[i], top[i], ca_u, ra)], np.array([0.0, 0.0, 1.0]))
+            continue
+        if shown:
             panel(pts[i], pts[i + 1], ua, ub, bot, head, np.array([*-back, 0.0]), face)             # the face
         panel(behind[i], behind[i + 1], va, vb, bot, head, np.array([*back, 0.0]), back_face)       # the back
         quad([(*pts[i], top[i], ta, 0.0), (*pts[i + 1], top[i + 1], tb, 0.0),
@@ -718,6 +787,12 @@ def unit_mesh(wall, pts, chain, top, bottom):
             continue
         out = pts[i] - far[0 if i == 0 else -1]
         ue = u0[k] + rate[k] * (chain[i] - cuts[k]) + turn
+        if split:           # the body's end under the cap, and the cap's own
+            panel(pts[i], behind[i], ue, ue + math.copysign(across(i), turn), (bottom[i],) * 2, (top[i] - cap,) * 2,
+                  np.array([*out, 0.0]), bare=True)
+            panel(cap_front[i], cap_behind[i], ue, ue + math.copysign(across(i, cap_behind, cap_front), turn),
+                  (top[i] - cap,) * 2, (top[i],) * 2, np.array([*out, 0.0]), end_cap(i, cap_behind, cap_front))
+            continue
         panel(pts[i], behind[i], ue, ue + math.copysign(across(i), turn), (bottom[i],) * 2, (top[i],) * 2, np.array([*out, 0.0]),
               end_cap(i))
     m = Mesh(np.vstack(xyz), faces)
@@ -731,7 +806,7 @@ def mesh(wall, ground=None):
     image is a bay between posts (timber) gets the posts as blocks standing out from its boards. A wall of named
     blocks is set out block by block (set_out, unit_mesh): on its own, unless its `set_out` is already there."""
     pts, _, chain, toe, top = wall_levels(wall, ground)
-    bottom = toe - 0.15  # bury the footing a little so the wall meets the ground cleanly
+    bottom = foot(wall, chain, toe)         # its first course's embedment, or a little so it meets the ground cleanly
     info = {
         "length_m": float(chain[-1]),
         "height_min_m": float(np.nanmin(top - toe)),
@@ -747,7 +822,7 @@ def mesh(wall, ground=None):
             set_out([wall])
         if "set_out" in wall:
             return unit_mesh(wall, pts, chain, top, bottom), info
-    m = wall_strip(pts, top, bottom, wall["thickness"], wall["side"], wall.get("batter", 0.0), toe, chain)
+    m = wall_strip(pts, top, bottom, body_depth(wall), wall["side"], wall.get("batter", 0.0), toe, chain)
     if texture_size(wall):
         (tu, tv), bays = texture_size(wall)
         u = texture_u(wall, m.uv[:, 0])
