@@ -18,7 +18,7 @@ import sys
 
 from .errors import deprecated
 
-__version__ = "2026.11.50"
+__version__ = "2026.11.51"
 
 MOVED = {
     "buildcache": "build.cache",

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.51
 
 - **For site projects:** every change to a site's data goes one way ([docs/changes.md](docs/changes.md)). It's said
   as an intent, a small JSON object such as `{"kind": "move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5,
