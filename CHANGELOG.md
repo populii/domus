@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.45
 
 - **For site projects:** every command is a call into the public API, so a site's tools can do what the commands do.
   `api.create()`, `api.new()` and `api.demo()` start a site; a site's `fetch()`, `map_canopy()`, `fetch_marks()`,
