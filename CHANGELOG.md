@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** the house's IFC changes through the change route ([docs/changes.md](docs/changes.md#the-houses-ifc)),
+  with intents on its elements, each named by its GlobalId or its Domus id: `ifc-move` and `ifc-rotate` an element
+  (its parts go with it), `ifc-storey` sets a storey's elevation (what stands on it goes with it), `ifc-attribute` and
+  `ifc-property` set an attribute or a property set's value, `ifc-add` adds an element made from a box or an outline
+  extruded up, in its colour and layer, and `ifc-delete` deletes one. IfcOpenShell's API applies them and writes the
+  file whole; what's written is checked to have changed only what was named. `domus site edit` and `site.edit()` take
+  them as they take the others. The edit keeps the file as it was in `.domus/edits/` and records both SHA-256s, and
+  `domus site undo` puts that copy back byte for byte, only while the file still has the SHA-256 the edit left it
+  with. A proposal on the house rests on the elements it names, and is accepted only while they're as they were.
+  An edit's record can be named by a kind with a hyphen in it (`0003-ifc-move.json`).
+- **For site projects:** writing the house's IFC (`domus house ifc`, `site.write_house_ifc()`) is an edit on the
+  change route too, recorded with who, when and why (`--why` and `--who`, or `why=` and `who=`), and `domus site
+  undo` undoes it: it puts back the file it wrote over, or takes away the one the first write made. `--force` still
+  writes it again over one that's there; the copy of that one is the edit's, in `.domus/edits/`, and no longer a
+  separate one in `.domus/house-ifc/`.
+- **For site projects:** with `[house] source = "ifc"`, a skillion or gable roof's tiles lie as the drawn roof lays
+  them too, as a hipped roof's did, so choosing it changes nothing you can see
+  ([docs/site-format.md](docs/site-format.md#the-house-as-an-ifc-file)).
+
 ## 2026.11.55
 
 - **For site projects:** a terrace in an option written by hand whose outline crosses or touches itself still builds,

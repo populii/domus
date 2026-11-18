@@ -1,9 +1,11 @@
 """The house kept as an IFC file, data/house.ifc: the master of the house's shape when [house] source = "ifc".
 
 `write` writes the house as house.geojson and [house] draw it today (domus.model.house) to an IFC4 file, with
-IfcOpenShell and the export's writer (domus.export.ifc). The file holds one site, georeferenced as an export is, with a
-building on it and a storey at each of the house's floor levels: fl_upper, and fl_lower where it's another level. Each
-element stands on the highest storey whose floor is at or below its lowest point, or on the lowest. The elements are:
+IfcOpenShell and the export's writer (domus.export.ifc), as an edit on the change route (domus.project.changes), so
+writing it again is recorded and undone as any edit is; `draft` gives the file's text. The file holds one site,
+georeferenced as an export is, with a building on it and a storey at each of the house's floor levels: fl_upper, and
+fl_lower where it's another level. Each element stands on the highest storey whose floor is at or below its lowest
+point, or on the lowest. The elements are:
 
     each wall face        IfcWall, placed at the face's left end seen from outside, its x axis along the face
     the eaves             IfcCovering (EAVES): the fascia and the soffit
@@ -28,12 +30,9 @@ Everything here needs IfcOpenShell (the ifc extra), which it imports only when i
 builds without it.
 """
 
-import datetime
 import hashlib
 import itertools
 import math
-import os
-import shutil
 import uuid
 from dataclasses import dataclass, field
 
@@ -49,6 +48,7 @@ SOURCES = ("drawn", "ifc")
 # The house's GlobalIds: uuid5s of each thing's key under this namespace, the same for every site and every write.
 NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/populii/domus/house.ifc")
 REQUIRED = ("fl_upper", "roof_pitch_deg", "roof_plane_at_wall", "eaves_overhang_m")
+WHY = "The house written to IFC as house.geojson and [house] draw it."     # the reason recorded unless one's given
 ROOFS = {"hip": "HIP_ROOF", "skillion": "SHED_ROOF", "gable": "GABLE_ROOF"}
 # Each kind of part (house.PARTS) as IFC has it: its class and predefined type.
 CLASSES = {"bay": ("IfcBuildingElementProxy", "BAY"), "porch": ("IfcBuildingElementProxy", "PORCH"),
@@ -63,6 +63,11 @@ LAYERS = {"IfcWall": "walls", "IfcCovering": "eaves", "IfcRoof": "roof", "IfcSta
 def path(site):
     """The house's IFC file in the site's folder: data/house.ifc."""
     return site.path / FILE
+
+
+def global_id(key):
+    """The GlobalId `key` gives under the house's namespace: a uuid5, compressed as IFC writes it."""
+    return modules().guid.compress(uuid.uuid5(NAMESPACE, key).hex)
 
 
 def source(site):
@@ -237,18 +242,31 @@ def settle_ids(w):
         w.same_id(entity, key)
 
 
-def write(site, force=False, say=print):
+def write(site, force=False, say=print, why=None, who=None):
     """Writes the site's house, as house.geojson and [house] draw it today, to data/house.ifc (`domus house ifc`), and
-    gives the file's path. A file that's there already is written again only with `force`, and kept first in
-    .domus/house-ifc/. Says what it wrote to `say`."""
-    from ..build import site_origin
-    from ..export import ifc
-    from . import terrain
+    gives the file's path. It's an edit on the change route (domus.project.changes): recorded in .domus/edits/ with
+    `who`, when and `why` (a reason of its own unless given), the file as it was kept beside the record and both
+    SHA-256s, so `domus site undo` puts the file back as it was, or takes away one it started. A file that's there
+    already is written again only with `force`. Says what it wrote to `say`."""
+    from ..project import changes
 
     target = path(site)
     if target.exists() and not force:
         raise DomusError(f"{FILE} is there already: domus house ifc --force writes it again from house.geojson and "
-                         "[house], keeping the one there in .domus/house-ifc/")
+                         "[house], as an edit domus site undo can undo")
+    changes.apply(site, [{"kind": "ifc-write"}], why or WHY, who, say=say)
+    if source(site) != "ifc":
+        say('[house] source = "ifc" in data/site.toml has the build draw the house from it.')
+    return target
+
+
+def draft(site, say=print):
+    """The house, as house.geojson and [house] draw it today, as the text of an IFC4 file (bytes): what `write` puts
+    in data/house.ifc. Says what it holds to `say`."""
+    from ..build import site_origin
+    from ..export import ifc
+    from . import terrain
+
     features = geojson.read_optional(site.path / "data" / "site" / "house.geojson")
     if not any(f["properties"].get("id") == "house-walls" for f in features):
         raise DomusError("This site has no house to write: data/site/house.geojson has no house-walls")
@@ -268,7 +286,7 @@ def write(site, force=False, say=print):
     title = cfg.get("site", {}).get("title", "Site model")
     georef = {"origin": origin, "domus": __version__,
               "crs": {"epsg": site.grid.epsg, "name": site.grid.label, "vertical": cfg.get("crs", {}).get("vertical") or None}}
-    w = ifc.Writer(target.name, title, georef, site.grid.to_lonlat(e0, n0), NAMESPACE)
+    w = ifc.Writer(path(site).name, title, georef, site.grid.to_lonlat(e0, n0), NAMESPACE)
     building = w.spatial("IfcBuilding", "House", "building", w.site)
     building.ElevationOfRefHeight = h0
     floors = []
@@ -297,27 +315,9 @@ def write(site, force=False, say=print):
                       parent=element, matrix=face.matrix)
             count += 1
     settle_ids(w)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temp = target.with_name(f".{target.stem}.part{target.suffix}")
-    try:
-        w.f.write(str(temp))
-        open_file(temp)
-        if target.exists():
-            stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
-            kept = site.path / ".domus" / "house-ifc" / f"{stamp}-{target.name}"
-            kept.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(target, kept)
-            if kept.read_bytes() != target.read_bytes():
-                raise DomusError(f"The copy of {FILE} in {kept} doesn't read back the same: nothing written")
-            say(f"{FILE} as it was is in {kept.relative_to(site.path).as_posix()}")
-        os.replace(temp, target)
-    finally:
-        temp.unlink(missing_ok=True)
-    say(f"Wrote {FILE}: the house as house.geojson and [house] draw it, {count} elements on "
-        f"{len(floors)} {'storey' if len(floors) == 1 else 'storeys'}.")
-    if source(site) != "ifc":
-        say('[house] source = "ifc" in data/site.toml has the build draw the house from it.')
-    return target
+    say(f"   {FILE}: the house as house.geojson and [house] draw it, {count} elements on {len(floors)} "
+        f"{'storey' if len(floors) == 1 else 'storeys'}")
+    return w.f.to_string().encode("utf-8")
 
 
 # --------------------------------------------------------------------------- reading

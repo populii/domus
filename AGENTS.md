@@ -706,7 +706,9 @@ domus site edit move-w1.json --why "Measured from the boundary peg with a tape."
 
 where `move-w1.json` holds `{"kind": "move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5, 0]}`, or a list of
 intents applied as one edit. The kinds move features, set their vertices (`coords`) or a vertex's height (`level`), set
-and drop properties (`props`), add and delete features, and set settings (`setting`). Without `--apply` it says what
+and drop properties (`props`), add and delete features, set settings (`setting`), and change the house's IFC
+(`ifc-move`, `ifc-rotate`, `ifc-storey`, `ifc-attribute`, `ifc-property`, `ifc-add`, `ifc-delete`, on
+`data/house.ifc`'s elements by GlobalId or Domus id). Without `--apply` it says what
 would change and writes nothing; with it, each file is copied, written, read back and checked to have changed only as
 asked, and the edit is recorded in `.domus/edits/` with who, when and why. `domus site edits` lists the edits, and
 `domus site undo N` puts one back, as long as nothing has changed its files since. From Python, `site.edit(intent, why)`

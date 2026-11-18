@@ -20,7 +20,6 @@ options/*.toml            one per option
 viewer/data/              the built model (set DOMUS_OUTPUT to move it; docs/model-format.md)
 .domus/viewer.db          saved sketches (set DOMUS_DB to move it)
 .domus/build-cache/       what the next build can reuse
-.domus/house-ifc/         data/house.ifc as it was before `domus house ifc --force` wrote it again
 .domus/edits/             each change made to the site's data, and the files as they were (docs/changes.md)
 .domus/proposals/         changes proposed for a person to accept or reject (docs/changes.md)
 .gitignore                what git leaves out of the site: what Domus makes again (`domus new` writes it)
@@ -292,7 +291,10 @@ The layers are `bay`, `porch`, `steps`, `outdoor` (blocks, walls and balustrades
 `[house]` draw it today to `data/house.ifc`, an IFC4 file written with IfcOpenShell. With `[house] source = "ifc"` in
 `data/site.toml`, the build draws the house's layers from that file instead, so the file is the house's master: what
 a designer's software or IfcOpenShell changes in it is what the model shows. Without the setting the file changes
-nothing. `--force` writes it again over one that's there, keeping that one in `.domus/house-ifc/`.
+nothing. Writing it is an edit on the change route ([changes.md](changes.md#the-houses-ifc)), recorded with who,
+when and why, the file as it was kept, and undone with `domus site undo`; `--force` writes it again over one that's
+there. Its elements change through that route too: moved, turned, a storey raised, attributes and property values
+set, elements added and deleted, each undoable.
 
 The file holds one site, georeferenced as `domus export` does it (an IfcMapConversion from the model's origin to the
 site's grid), a building on it, and a storey at each of the house's floor levels: `fl_upper`, and `fl_lower` where
@@ -321,7 +323,8 @@ parts, a proxy's `BAY` or `PORCH` its own); IfcOpenShell triangulates it in the 
 own map conversion puts it on the site's grid. Each piece takes its style's colour. A wall that still carries the id
 of a face `house.geojson` draws (`face`) keeps that face's picture, its photo where one covers it (`data/house/`) and
 its drawn boards and windows elsewhere, laid on it by the wall's own coordinates, so the picture moves with the wall;
-any other wall takes its colour. The roof's tiles lie up each triangle's slope. A missing file, or one IfcOpenShell
+any other wall takes its colour. The roof's tiles lie as the drawn roof's do, by `[house]`'s form, in the roof's own
+coordinates. A missing file, or one IfcOpenShell
 can't read, stops the build and says how to make it. `house.geojson` and `[house]` still give the house's outline
 and its numbers to everything else: the wall options' regrade area and checks, the walk route, placing videos and the
 house's numbers in `summary.json`, which also names the file (`source`).

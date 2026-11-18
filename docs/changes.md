@@ -6,8 +6,9 @@ it to the file it changes, records it in `.domus/edits/` with who made it, when 
 Every edit can be undone. A check's or a tool's findings come as **proposals**, which a person accepts or rejects:
 nothing applies itself.
 
-The files it changes are a site's layers (`data/site/*.geojson`) and its settings (`data/site.toml` and
-`options/_site.toml`). The examples here are on the made-up demo (`domus demo`).
+The files it changes are a site's layers (`data/site/*.geojson`), its settings (`data/site.toml` and
+`options/_site.toml`), and the house kept as an IFC file (`data/house.ifc`, [below](#the-houses-ifc)). The examples
+here are on the made-up demo (`domus demo`).
 
 This route is provisional for now ([api.md](api.md#provisional-the-change-route)): it may still change from one release
 to the next without a deprecation.
@@ -97,7 +98,7 @@ Each edit is recorded in `.domus/edits/<sequence>-<kind>.json`, with the files a
 | `undoes` | For an undo, the edit it undoes |
 | `intents`, `summary` | What was asked, and a line for each, for people |
 | `files` | Each file it changed: its path, its SHA-256 before (`null` when the edit started it) and after, and its copy as it was |
-| `inverse` | The intents that put back exactly what it changed: each feature whole, where it was in its layer, and each setting as the file wrote it |
+| `inverse` | The intents that put back exactly what it changed: each feature whole, where it was in its layer, each setting as the file wrote it, and the house's IFC as it was (`ifc-restore`, with its SHA-256, or `null` to take away one the edit started) |
 | `rebuild` | What in the model is drawn from the files it changed |
 
 `domus site edits` lists them, oldest first, and `site.edits()` gives them, each with `in_effect` and, once undone,
@@ -114,6 +115,37 @@ SHA-256: otherwise it could undo more than the edit did, and it says which later
 was changed outside this route. It gives each file back byte for byte, takes away a layer the edit started, and is
 recorded as an edit of its own, so undoing the undo makes the change again. `--build` builds the model afterwards.
 `site.undo(edit, who=None, why=None)` does the same.
+
+## The house's IFC
+
+A site whose house is kept as an IFC file (`data/house.ifc`, [site-format.md](site-format.md#the-house-as-an-ifc-file))
+changes it on this route too, with intents on its elements. Each names an element by its GlobalId or its Domus id
+(`ref` in its `Domus` property set, which is its Tag too: a part's id in `house.geojson`, a wall face's, `roof` or
+`eaves`), and a storey the same way (`floor`, or `lower` and `upper`). IfcOpenShell's API applies them, and the file is
+written whole.
+
+| Kind | What it does | Example |
+|---|---|---|
+| `ifc-move` | Moves an element by `[dE, dN]` or `[dE, dN, dH]`, metres on the site's grid; its parts move with it | `{"kind": "ifc-move", "element": "chimney", "by": [0.5, 0, 0]}` |
+| `ifc-rotate` | Turns an element `degrees` anticlockwise, seen from above, about the upright through its own origin, or through `about`, `[E, N]` | `{"kind": "ifc-rotate", "element": "tank", "degrees": 90}` |
+| `ifc-storey` | Sets a storey's elevation, a height on the site's datum; what stands on it moves with it | `{"kind": "ifc-storey", "storey": "floor", "elevation": 43.6}` |
+| `ifc-attribute` | Sets an element's `Name`, `Description`, `ObjectType` or `Tag` (`null` clears it) | `{"kind": "ifc-attribute", "element": "chimney", "attribute": "Name", "value": "Brick chimney"}` |
+| `ifc-property` | Sets a value in one of an element's property sets, made if it isn't there; `"drop": true` takes it out | `{"kind": "ifc-property", "element": "chimney", "pset": "Domus", "property": "source", "value": "measured"}` |
+| `ifc-add` | Adds an element of a `class`, made from a `box` (`centre` `[E, N]`, `size` along, across and up, `base` height, `degrees` turned) or an `extrusion` (`outline` `[[E, N], ...]`, `base`, `height`), with a `name`, a `layer` (its class's unless given) and a `colour` (a palette key, one of the site's own or hex), on the highest storey whose floor is at or below its base. Its GlobalId comes from its `id`, as the house's own elements' do | `{"kind": "ifc-add", "id": "shed", "class": "IfcBuildingElementProxy", "name": "Garden shed", "colour": "timber-grey", "box": {"centre": [1500002.0, 5500026.0], "size": [2.0, 1.5, 2.1], "base": 41.0}}` |
+| `ifc-delete` | Deletes an element, and its parts | `{"kind": "ifc-delete", "element": "tank"}` |
+| `ifc-write` | Writes the file whole, the house as `house.geojson` and `[house]` draw it today: what `domus house ifc` does | `{"kind": "ifc-write"}` |
+
+Each is checked against the file before anything is written: the element or storey it names is there, and only one
+is called that. What's written is checked against the file as it was: every element and storey the intents didn't
+name, nor move with one they did, is as it was, and a moved element moved by the vector asked.
+
+IfcOpenShell writes the file whole, so the edit's copy of the file as it was
+(`.domus/edits/<sequence>-<kind>/data/house.ifc`) is what puts it back: an edit's `inverse` is
+`[{"kind": "ifc-restore", "sha": "<its SHA-256>"}]`, and an undo puts that copy back byte for byte, only while the
+file still has the SHA-256 the edit left it with. Writing the file with `domus house ifc` is an edit too
+(`ifc-write`), so writing it again over one that's there (`--force`) is undone the same way, and undoing the first
+write takes the file away. A proposal on the house rests on a SHA-256 of each element it names, and is accepted only
+while they're as they were.
 
 ## Proposals
 

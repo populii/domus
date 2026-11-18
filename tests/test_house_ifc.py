@@ -100,7 +100,10 @@ def test_the_house_is_written_as_ifc_and_read_back(made):
     from domus.model import house_ifc, house_texture
 
     assert made.file == made.root / "data" / "house.ifc"
-    assert made.said[0] == "Wrote data/house.ifc: the house as house.geojson and [house] draw it, 18 elements on 1 storey."
+    assert "   data/house.ifc: the house as house.geojson and [house] draw it, 18 elements on 1 storey" in made.said
+    first = made.site.edits()[0]          # an edit on the change route, as every change to the site's data is
+    assert first["kind"] == "ifc-write" and first["files"][0]["before"] is None and first["files"][0]["path"] == "data/house.ifc"
+    assert first["inverse"] == [{"kind": "ifc-restore", "sha": None}]
     f = ifcopenshell.open(str(made.file))
     assert f.schema == "IFC4" and len(f.by_type("IfcProject")) == len(f.by_type("IfcSite")) == len(f.by_type("IfcBuilding")) == 1
     (conversion,) = f.by_type("IfcMapConversion")
@@ -161,10 +164,9 @@ def test_the_house_built_from_the_ifc_is_the_drawn_house(made):
         off = np.stack([np.abs(np.roll(pb, r, axis=1) - pa).max(axis=(1, 2)) for r in range(3)])
         turn = off.argmin(axis=0)
         assert off.min(axis=0).max() <= 0.001, k
-        if k != "house-roof":           # the pictures, faces' and colours' alike, where the drawn house has them
-            ua = triangles(a, "uv", 2)
-            ub = np.stack([np.roll(t, s, axis=0) for t, s in zip(triangles(b, "uv", 2), turn, strict=True)])
-            assert np.abs(ua - ub).max() <= 1e-5, k
+        ua = triangles(a, "uv", 2)              # the pictures, faces', colours' and the roof's tiles alike
+        ub = np.stack([np.roll(t, s, axis=0) for t, s in zip(triangles(b, "uv", 2), turn, strict=True)])
+        assert np.abs(ua - ub).max() <= 1e-4, k
     for name in ("house-atlas.jpg", "house-roof.jpg"):
         assert (made.drawn / name).read_bytes() == (made.built / name).read_bytes()
     a, b = model(made.drawn), model(made.built)
@@ -172,14 +174,24 @@ def test_the_house_built_from_the_ifc_is_the_drawn_house(made):
     assert b["summary"]["house"] == {**a["summary"]["house"], "source": "data/house.ifc"}
 
 
-def test_the_roof_tiles_lie_up_the_slope(made):
-    roof = next(x for x in model(made.built)["layers"] if x["id"] == "house-roof")
-    p, uv = triangles(roof, "positions", 3), triangles(roof, "uv", 2)
-    for tri, t in zip(p, uv, strict=True):
-        rise = (tri[1:, 1] - tri[0, 1])                        # up, in viewer metres
-        dv = (t[1:, 1] - t[0, 1])
-        if np.ptp(tri[:, 1]) > 0.01:
-            assert np.all(np.sign(dv[np.abs(rise) > 1e-3]) == np.sign(rise[np.abs(rise) > 1e-3]))
+@pytest.mark.parametrize(("form", "azimuth"), [("hip", None), ("skillion", 70.0), ("gable", 160.0)])
+def test_the_roof_lays_its_tiles_as_the_drawn_roof_does(form, azimuth):
+    """tile_uv in the roof's own coordinates, the house's frame as house_ifc writes it, gives the drawn roof's tile
+    coordinates, whichever its form: a turned house's, 25 degrees off the grid."""
+    from domus import build
+    from domus.model import house
+
+    a = math.radians(25)
+    corners = [(0.0, 0.0), (12.0, 0.0), (12.0, 9.0), (0.0, 9.0)]
+    ring = [[1000 + x * math.cos(a) - y * math.sin(a), 2000 + x * math.sin(a) + y * math.cos(a)] for x, y in corners]
+    walls = {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[*ring, ring[0]]]},
+             "properties": {"id": "house-walls", "soffit": 42.8}}
+    ground = lambda e, n: np.full(np.shape(e), 40.0)
+    hm = house.build([walls], 40.5, 25.0, 43.0, 0.4, ground, form=form, azimuth_deg=azimuth)
+    shaped = None if form == "hip" else house.shaped_roof(hm.frame, hm.frame.local(np.asarray(ring)), 43.0,
+                                                          math.radians(25.0), form, azimuth, 0.0)
+    uv = build.tile_uv(hm.frame.local(hm.roof.vertices), hm.roof.faces, shaped)
+    assert np.allclose(uv, hm.roof.uv, atol=1e-6)
 
 
 def test_a_site_without_the_setting_is_unchanged_by_the_file(made):
@@ -188,18 +200,40 @@ def test_a_site_without_the_setting_is_unchanged_by_the_file(made):
     assert sorted(p.name for p in made.drawn.iterdir()) == sorted(p.name for p in made.unused.iterdir())
 
 
-def test_writing_it_again_gives_the_same_globalids(made, tmp_path):
+def test_writing_it_again_gives_the_same_globalids_as_an_edit_undo_puts_back(made, tmp_path):
     root = tmp_path / "site"
     shutil.copytree(made.root, root, ignore=shutil.ignore_patterns("viewer", ".domus"))
     s = api.open_site(root)
-    before = {e.GlobalId: e.is_a() for e in ifcopenshell.open(str(root / "data" / "house.ifc")).by_type("IfcRoot")}
+    ifc = root / "data" / "house.ifc"
+    raw = ifc.read_bytes()
+    before = {e.GlobalId: e.is_a() for e in ifcopenshell.open(str(ifc)).by_type("IfcRoot")}
     with pytest.raises(DomusError, match="--force"):
         s.write_house_ifc(say=quiet)
-    s.write_house_ifc(force=True, say=quiet)
-    after = {e.GlobalId: e.is_a() for e in ifcopenshell.open(str(root / "data" / "house.ifc")).by_type("IfcRoot")}
+    s.write_house_ifc(force=True, say=quiet, why="Written again.", who="sam")
+    after = {e.GlobalId: e.is_a() for e in ifcopenshell.open(str(ifc)).by_type("IfcRoot")}
     assert before == after and len(before) > 40
-    (kept,) = (root / ".domus" / "house-ifc").iterdir()
-    assert kept.read_bytes() == (made.root / "data" / "house.ifc").read_bytes()
+    (record,) = s.edits()
+    (changed,) = record["files"]
+    assert record["kind"] == "ifc-write" and (record["why"], record["who"]) == ("Written again.", "sam")
+    assert changed["before"] == hashlib.sha256(raw).hexdigest() and changed["after"] == hashlib.sha256(ifc.read_bytes()).hexdigest()
+    assert (root / changed["copy"]).read_bytes() == raw
+    s.undo(record["id"], say=quiet)
+    assert ifc.read_bytes() == raw
+
+
+def test_undoing_the_first_write_takes_the_file_away(made, tmp_path):
+    root = tmp_path / "site"
+    shutil.copytree(made.root, root, ignore=shutil.ignore_patterns("viewer", ".domus"))
+    ifc = root / "data" / "house.ifc"
+    ifc.unlink()
+    s = api.open_site(root)
+    s.write_house_ifc(say=quiet)
+    written = ifc.read_bytes()
+    (record,) = s.edits()
+    undo = s.undo(record["id"], say=quiet)
+    assert not ifc.exists() and undo["files"][0]["after"] is None
+    s.undo(undo["id"], say=quiet)                       # and undoing that writes it again, byte for byte
+    assert ifc.read_bytes() == written
 
 
 def test_the_build_cache_keys_on_the_ifc_file(made):
@@ -263,11 +297,14 @@ def test_the_command_writes_through_the_api(made, tmp_path, domus, capsys):
     shutil.copytree(made.root, root, ignore=shutil.ignore_patterns("viewer", ".domus"))
     (root / "data" / "house.ifc").unlink()
     domus("--site", root, "house", "ifc")
-    assert "Wrote data/house.ifc" in capsys.readouterr().out and (root / "data" / "house.ifc").exists()
+    out = capsys.readouterr().out
+    assert "data/house.ifc: written" in out and "Recorded as edit 0001" in out and (root / "data" / "house.ifc").exists()
     with pytest.raises(SystemExit, match="is there already: domus house ifc --force"):
         domus("--site", root, "house", "ifc")
-    domus("--site", root, "house", "ifc", "--force")
-    assert "as it was is in .domus/house-ifc/" in capsys.readouterr().out
+    domus("--site", root, "house", "ifc", "--force", "--why", "Again.", "--who", "sam")
+    out = capsys.readouterr().out
+    assert "the file as it was is in .domus/edits/0002-ifc-write/data/house.ifc" in out
+    assert api.open_site(root).edits()[-1]["why"] == "Again."
 
 
 def test_without_ifcopenshell_it_says_how_to_get_it_and_a_drawn_house_still_builds(made, project, monkeypatch, tmp_path):

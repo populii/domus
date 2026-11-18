@@ -192,6 +192,7 @@ HEADERS = {
 GZIP_TYPES = {".css", ".geojson", ".html", ".js", ".json", ".mjs", ".svg", ".wasm"}
 GZIP_MIN = 1024
 SCAN_NAME = re.compile(r"^[A-Za-z0-9-]{1,40}\.(webm|mp4|json)$")
+EDIT_RECORD = r"\d+-[a-z][a-z-]*\.json"        # an edit's record in .domus/edits/: its number and kind, such as 0003-ifc-move.json
 CHANGE_PATH = re.compile(r"^/api/(?:proposals/(\d{1,6})/(accept|reject)|edits/(\d{1,6})/(undo))$")
 MAX_WHY = 500
 EDITS_SHOWN = 50
@@ -402,7 +403,7 @@ def changes(root):
     root = Path(root)
     keep = ("id", "made", "source", "why", "summary", "state", "accepted", "rejected")
     proposals = [{k: p[k] for k in keep if k in p} for p in _json_files(root / ".domus" / "proposals", r"\d+\.json")]
-    records = sorted(_json_files(root / ".domus" / "edits", r"\d+-[a-z]+\.json"), key=lambda r: int(r.get("id", 0)))
+    records = sorted(_json_files(root / ".domus" / "edits", EDIT_RECORD), key=lambda r: int(r.get("id", 0)))
     undone = {}
     for r in reversed(records):          # an undo comes after what it undoes, so its own state is known first
         r["in_effect"] = r.get("id") not in undone
@@ -782,7 +783,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if state != "open":
                 return self.send_json({"error": f"That proposal was {state} already."}, 409)
         elif not any(str(r.get("id")).isdigit() and int(r["id"]) == int(number)
-                     for r in _json_files(root / ".domus" / "edits", r"\d+-[a-z]+\.json")):
+                     for r in _json_files(root / ".domus" / "edits", EDIT_RECORD)):
             return self.send_json({"error": "There's no such edit."}, 404)
         who = ["--who", (self.user() or "the viewer")[:80]]
         args = {"accept": ["accept", number, *who, "--build"], "undo": ["undo", number, *who, "--build"],

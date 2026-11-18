@@ -147,7 +147,12 @@ change from one release to the next without a deprecation until it's declared st
 
 | | What it does |
 |---|---|
-| `site.write_house_ifc(force=False)` | Writes the house as `house.geojson` and `[house]` draw it today to `data/house.ifc`, as `domus house ifc` does, and gives the file's path. It needs IfcOpenShell (the `ifc` extra). A file that's there already is written again only with `force`, which keeps it first in `.domus/house-ifc/`. It takes `say` |
+| `site.write_house_ifc(force=False, why=None, who=None)` | Writes the house as `house.geojson` and `[house]` draw it today to `data/house.ifc`, as `domus house ifc` does, and gives the file's path. It needs IfcOpenShell (the `ifc` extra). It's an edit on the change route, recorded with `why` (a reason of its own unless given) and `who`, the file as it was kept, so `site.undo()` puts it back; a file that's there already is written again only with `force`. It takes `say` |
+
+Its elements are changed the one way every change goes, with `site.edit()` and intents such as `{"kind": "ifc-move",
+"element": "chimney", "by": [0.5, 0]}`: moved, turned, a storey raised, attributes and property values set, elements
+added from a box or an extrusion and deleted, each recorded with the file as it was, undone and proposed as the
+others are ([changes.md](changes.md#the-houses-ifc)).
 
 ## Helpers
 

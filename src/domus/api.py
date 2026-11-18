@@ -367,17 +367,17 @@ class Site:
             return edits.regrade(self._project, [clouds] if isinstance(clouds, str) else list(clouds), _spec(spec), backup,
                                  apply, say, why, who)
 
-    def write_house_ifc(self, force=False, say=print):
+    def write_house_ifc(self, force=False, say=print, why=None, who=None):
         """Writes the site's house, as house.geojson and [house] draw it today, to data/house.ifc, an IFC4 file, as
         domus house ifc does, and gives the file's path: a building with a storey at each floor level and an element
         for each wall face and part, each in its colours and with a Domus property set, and the same GlobalIds each
-        time. It needs IfcOpenShell (the ifc extra). A file that's there already is written again only with `force`,
-        which keeps it first in .domus/house-ifc/. With [house] source = "ifc", the build draws the house from it
-        (docs/site-format.md). Provisional (docs/api.md)."""
+        time. It needs IfcOpenShell (the ifc extra). It's an edit on the change route, recorded with `why` and `who`
+        and undone with undo(); a file that's there already is written again only with `force`. With [house] source =
+        "ifc", the build draws the house from it (docs/site-format.md). Provisional (docs/api.md)."""
         from .model import house_ifc
 
         with self._writing():
-            return house_ifc.write(self._project, force, say)
+            return house_ifc.write(self._project, force, say, why, who)
 
     def undo(self, edit, who=None, why=None, say=print):
         """Undoes an edit, by its number as edits() gives it: what puts it back is applied, but only while each file it

@@ -115,8 +115,10 @@ def parser():
     hi = command(houses, "ifc", _house_ifc, "Write the house as house.geojson and [house] draw it today to data/house.ifc, "
                  "an IFC4 file, with IfcOpenShell (the ifc extra). [house] source = \"ifc\" in data/site.toml then has "
                  "the build draw the house from it.", "write the house as it's drawn today to data/house.ifc")
-    hi.add_argument("--force", action="store_true", help="write it again over the one there, keeping that one in "
-                                                         ".domus/house-ifc/")
+    hi.add_argument("--force", action="store_true", help="write it again over the one there: domus site undo puts that one "
+                                                         "back")
+    hi.add_argument("--why", help="why: recorded with the change (default: that it's the house as it's drawn)")
+    hi.add_argument("--who", help="who's making it, recorded with it (default: this computer's user)")
 
     sub = command(commands, "video", video.listed, "Site videos into 3D point clouds on the site's grid. See docs/video.md.",
                   "turn site videos into point clouds")
@@ -152,7 +154,7 @@ def parser():
                  "let this machine's builds run the site's extensions, as they are now")
     tr.add_argument("--revoke", action="store_true", help="stop trusting them")
     for action, what in (("shift", "move named features of the site's layers by one vector, saying so in their basis"),
-                         ("edit", "change the site's data: its layers' features, or its settings"),
+                         ("edit", "change the site's data: its layers' features, its settings, or the house's IFC"),
                          ("regrade", "give ground-fix points the levels a placed cloud shows")):
         ed = command(actions, action, _edit, f"{what[0].upper()}{what[1:]}. Each change is recorded in .domus/edits/, "
                      "and domus site undo undoes it.", what)
@@ -303,7 +305,7 @@ def _export(args, site, named):
 
 
 def _house_ifc(args, site, named):
-    opened(site).write_house_ifc(args.force)
+    opened(site).write_house_ifc(args.force, why=args.why, who=args.who)
 
 
 def _scan(args, site, named):

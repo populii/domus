@@ -25,6 +25,10 @@ An intent on a layer names it by `layer`, its file's name in data/site/ without 
 
 `move`, `coords` and `level` can also give a "basis": a sentence added to each feature they change's own basis.
 
+An intent on the house kept as an IFC file, data/house.ifc, names its element or storey by its GlobalId or Domus id,
+and IfcOpenShell applies it (domus.project.ifc_intents): ifc-move, ifc-rotate, ifc-storey, ifc-attribute,
+ifc-property, ifc-add and ifc-delete.
+
 An intent on a setting names its key as docs/site-format.md does:
 
     {"kind": "setting", "key": "house.fl_upper", "value": 45.0}
@@ -42,9 +46,9 @@ import re
 from pathlib import Path
 
 from ..errors import DomusError
-from . import schema
+from . import ifc_intents, schema
 
-KINDS = ("move", "coords", "level", "props", "add", "delete", "put", "setting")
+KINDS = ("move", "coords", "level", "props", "add", "delete", "put", "setting", *ifc_intents.KINDS)
 LAYER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 SETTINGS = {"data/site.toml": schema.SITE, "options/_site.toml": schema.OPTIONS_SITE}
 COORDS = ("so", "soz", "en", "enz", "geometry")
@@ -116,6 +120,8 @@ def checked(intent):
     kind = intent.get("kind")
     if kind not in KINDS:
         raise DomusError(f"{kind!r} isn't a kind of change: the kinds are {', '.join(KINDS)}")
+    if kind in ifc_intents.KINDS:
+        return ifc_intents.checked(intent)
     i = copy.deepcopy(intent)
     what = f"a {kind} intent"
     if kind == "setting":
@@ -187,6 +193,8 @@ def checked(intent):
 
 def file_of(intent):
     """The file an intent changes, as a path relative to the site's folder (with / between its parts)."""
+    if intent["kind"] in ifc_intents.KINDS:
+        return ifc_intents.FILE
     return intent["file"] if intent["kind"] == "setting" else f"data/site/{intent['layer']}.geojson"
 
 
@@ -499,6 +507,8 @@ def apply_setting(doc, intent, say=print):
 def describe(intent):
     """One line saying what an intent does, for people."""
     kind = intent["kind"]
+    if kind in ifc_intents.KINDS:
+        return ifc_intents.describe(intent)
     if kind == "setting":
         return f"{intent['file']}: {intent['key']} " + ("dropped" if intent.get("drop") else f"= {intent['value']!r}")
     layer = intent["layer"]

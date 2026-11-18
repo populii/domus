@@ -739,10 +739,13 @@ def add_house(b):
                 b.plinths.setdefault(f.id, float(f.spec["plinth_top"]))
 
 
-def tile_uv(local, faces):
+def tile_uv(local, faces, shaped=None):
     """The roof's tile coordinates in metres for triangles given in the roof's own coordinates (the house's frame, as
-    house_ifc writes it): u along the eave and v up the slope, from each triangle's own slope, as the drawn hipped
-    roof lays them (house.roof_mesh). A flat triangle takes plan metres."""
+    house_ifc writes it), laid as the drawn roof lays them: a skillion's or a gable's by its own planes (`shaped`,
+    house.shaped_roof's, whose uv() the drawn roof takes), and a hipped roof's u along the eave and v up the slope,
+    from each triangle's own slope (house.roof_mesh). A flat triangle takes plan metres."""
+    if shaped is not None:
+        return shaped.uv(np.asarray(local, float)[:, :2])
     tri = local[faces]
     n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
     n /= np.maximum(np.linalg.norm(n, axis=1), 1e-12)[:, None]
@@ -764,7 +767,8 @@ def add_ifc_house(b, hfc, hcfg):
     (else its IFC class's) and in its own colours. A wall that still carries the id of a face house.geojson draws
     keeps that face's picture (its photo where one covers it, else its drawn boards and windows), laid on it by the
     wall's own coordinates, so the picture moves with the wall; every other piece is its colour, and the roof's tiles
-    lie up each triangle's slope. The house's numbers in summary.json are the drawn house's, and say the file."""
+    lie as the drawn roof's do (tile_uv), in the roof's own coordinates. The house's numbers in summary.json are the
+    drawn house's, and say the file."""
     frame, layers, summary = b.frame, b.layers, b.summary
     elements = house_ifc.read(b.site, b.say)
     hm = None
@@ -772,6 +776,13 @@ def add_ifc_house(b, hfc, hcfg):
         hm = house.build(hfc, hcfg["fl_upper"], hcfg["roof_pitch_deg"], hcfg["roof_plane_at_wall"],
                          hcfg["eaves_overhang_m"], b.ground, **house.roof_options(hcfg))
     looks = house_texture.Looks(hcfg, b.site.path / "data" / "house")
+    shaped = None                       # a skillion's or a gable's planes, which lay its tiles as the drawn roof's
+    if hm is not None and hcfg.get("roof_form", "hip") != "hip":
+        walls_f = next(f for f in hfc if f["properties"].get("id") == "house-walls")
+        opts = house.roof_options(hcfg)
+        shaped = house.shaped_roof(hm.frame, hm.frame.local(np.asarray(walls_f["geometry"]["coordinates"][0], float)[:-1]),
+                                   hcfg["roof_plane_at_wall"], np.radians(hcfg["roof_pitch_deg"]), opts["form"],
+                                   opts["azimuth_deg"], opts["ridge_offset_m"])
     drawn = {f.id: f for f in hm.faces} if hm else {}
     carried = {e.face for e in elements if e.face in drawn}
     faces = [f for f in hm.faces if f.id in carried] if hm else []
@@ -796,7 +807,7 @@ def add_ifc_house(b, hfc, hcfg):
             face = drawn.get(e.face)
             for colour, v, t, local in e.pieces:
                 if k == "roof":
-                    uv = tile_uv(local, t) / tile_m
+                    uv = tile_uv(local, t, shaped) / tile_m
                 elif face is not None:
                     uv = atlas.face_uv(face.spec.get("group", face.id), local[:, 0] + float(face.spec.get("u0", 0.0)),
                                        local[:, 2] + e.datum)
