@@ -481,6 +481,29 @@ def test_an_option_keeps_the_lawns_it_leaves_alone(built, project):
 BLOCK = {"material": "segmental", "unit_m": [0.457, 0.2], "cap_m": 0.1, "thickness_m": 0.27}
 
 
+def test_the_soil_behind_a_block_wall_covers_its_body_behind_a_shallower_cap(site, project):
+    """Units 0.3 m deep under capping units 0.26 m deep standing 25 mm out: behind the cap's back the body's top is
+    under the soil, which is graded to the cap's top (`soil_over`, `soil_over_m`, which the through check reads). A
+    wall whose cap is as deep as its body has none."""
+    from domus.model import walls
+    from domus.options import design
+
+    low = round(ground_at(8.0, 10.0), 2)
+    cfg = {**BLOCK, "id": "W", "line_so": [[10.0, 6.0], [10.0, 12.0]], "retained_side": "left", "top": low + 1.0,
+           "depth_m": 0.3, "cap_depth_m": 0.26, "cap_overhang_m": 0.025}
+    fr = design.frame(project)
+    for given, deep in ((cfg, True), ({**cfg, "cap_depth_m": 0.3, "cap_overhang_m": 0.0}, False)):
+        w = design.Design({"walls": [given]}, site=project).wall_levels()[0]
+        walls.set_out([w])
+        m, _ = walls.mesh(w)
+        assert bool(len(m.soil_over)) == deep
+        if deep:
+            v = m.vertices[np.asarray(m.faces)[m.soil_over].ravel()]
+            back = np.abs(fr.so(v[:, :2])[:, 0] - 10.0)
+            assert m.soil_over_m == pytest.approx(0.1) and np.allclose(v[:, 2], w["top"].max() - 0.1)
+            assert back.min() == pytest.approx(0.26 - 0.025) and back.max() == pytest.approx(0.3)
+
+
 def cornered(first, second, last=1.0):
     """A wall of named blocks that runs `first` metres, turns a corner, runs `second` metres, turns the same way
     again and runs `last` metres more, with the side given that makes both of them outside corners."""

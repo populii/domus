@@ -275,8 +275,8 @@ build paints.
   paved terrace the soil is `paving_m` below its level.
   An existing wall isn't soil either, so taking one out and filling where it stood fills from its toe, and an
   option that keeps one, or leaves its ground alone, moves no soil there.
-- Flat lawn: ground in the regrade area no steeper than 1:20 over 1 m, away from the walls, before and
-  after.
+- Flat lawn: ground in the regrade area no steeper than 1:20 over 1 m, away from the walls (0.3 m past
+  each wall's body, `depth_m` deep), before and after.
 - What it takes to build, to order from: its materials list (below).
 - What to look at: cover over the drains after a cut and walls crossing drains; footings near posts,
   poles, marks and lids; ground lowered next to the house, or raised against it.

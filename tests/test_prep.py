@@ -142,6 +142,31 @@ def test_ground_through_a_wall_or_over_a_tread_is_found(site, tmp_path, monkeypa
     assert check.check_through(there, findings) == 0 and findings[0][1] == "info"
 
 
+def test_the_soil_over_a_walls_body_behind_its_cap_is_how_it_is_built(site, tmp_path, at_site):
+    """A wall whose units are deeper than its capping units: behind the cap's back (z 0 to 1) the body's top is 0.1 m
+    under the cap's top, and the soil behind the wall is graded flush with the cap's top over it, as a maker's manual
+    has it. The layer says so (`soil_over`, `soil_over_m`), so the check doesn't take that soil for ground coming
+    through; ground over the cap's top there still is."""
+    from domus.checks import model as check
+
+    cap = box(-1, -1, 1, 0, 1.0)                                       # the cap's top, then the body's top behind it
+    body = box(-1, 0, 1, 1, 0.9)
+    wall = {"id": "option-x-W1", "type": "mesh", "option": "x", "soil_over": [2, 3], "soil_over_m": 0.1,
+            "positions": cap["positions"] + body["positions"], "indices": cap["indices"] + [i + 4 for i in body["indices"]]}
+    for level, found in ((1.0, 0), (1.05, 1)):
+        model = {"origin": [100.0, 200.0, 40.0], "summary": {"options": [{"id": "x", "keep_existing": []}]},
+                 "layers": [{"id": "option-x-ground", "type": "mesh", "role": "ground", "option": "x", **box(-5, 0.2, 5, 5, level)},
+                            wall]}
+        (tmp_path / "model.json").write_text(json.dumps(model), encoding="utf-8")
+        findings = []
+        assert check.check_through(at_site(site, output=tmp_path), findings) == found, findings
+    wall.pop("soil_over")                                              # without it, that soil is ground through the wall
+    (tmp_path / "model.json").write_text(json.dumps({**model, "layers": [model["layers"][0] | {**box(-5, 0.2, 5, 5, 1.0)}, wall]}),
+                                         encoding="utf-8")
+    findings = []
+    assert check.check_through(at_site(site, output=tmp_path), findings) == 1
+
+
 def block(x0, z0, x1, z1, y0, y1):
     """A closed box from y0 up to y1 over a rectangle, in viewer metres: positions and indices."""
     positions = [c for y in (y0, y1) for c in (x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1)]

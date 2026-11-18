@@ -527,7 +527,9 @@ def _where(model, point):
 
 def check_through(site, findings, tol=TOL_THROUGH):
     """Ground that comes through an option's walls and flights, or stands over a tread's edge, in the built model. A
-    top inside another of the option's walls and flights, under that one's top, is hidden, so it isn't checked."""
+    top inside another of the option's walls and flights, under that one's top, is hidden, so it isn't checked. Over a
+    wall's faces the soil covers as it's built (a layer's `soil_over`: the body's top behind a shallower capping
+    course), the ground may come up `soil_over_m`, to the cap's top."""
     path = site.output / "model.json"
     if not path.exists():
         findings.append(("through", "info", "model", "no model built yet: run domus build first"))
@@ -547,16 +549,22 @@ def check_through(site, findings, tol=TOL_THROUGH):
         tops = [_level_faces(t) for _, t in solid]
         every_top = np.vstack(tops) if tops else np.zeros((0, 3, 3))
         for i, (name, t) in enumerate(solid):
-            p = _top_points(t)
+            buried = np.zeros(len(t), bool)                            # the faces the soil covers as the wall is built
+            buried[solids[i].get("soil_over", [])] = True
+            p, cover = _top_points(t[~buried]), _top_points(t[buried])
+            allow = np.concatenate([np.zeros(len(p)), np.full(len(cover), float(solids[i].get("soil_over_m", 0.0)))])
+            p = np.vstack([p, cover])
             if not len(p):
                 continue
-            p = p[p[:, 1] >= _height(_level_faces(t), p[:, 0], p[:, 2]) - 1e-6]      # its top, not an underside
+            keep = p[:, 1] >= _height(_level_faces(t), p[:, 0], p[:, 2]) - 1e-6         # its top, not an underside
+            p, allow = p[keep], allow[keep]
             # Less what's inside another of the option's walls and flights, under its top, as a wall's end tucked into
             # a thicker wall at a corner: nothing of it shows, and the ground there is checked against that one's top.
             others = np.vstack([top for j, top in enumerate(tops) if j != i] or [np.zeros((0, 3, 3))])
-            p = p[_height(others, p[:, 0], p[:, 2]) <= p[:, 1] + 1e-6]
+            keep = _height(others, p[:, 0], p[:, 2]) <= p[:, 1] + 1e-6
+            p, allow = p[keep], allow[keep]
             for gname, g in ground:
-                over = _height(g, p[:, 0], p[:, 2]) - p[:, 1]
+                over = _height(g, p[:, 0], p[:, 2]) - p[:, 1] - allow
                 bad = over > tol
                 if bad.any():
                     k = int(np.argmax(over))

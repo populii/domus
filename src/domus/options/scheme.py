@@ -686,13 +686,14 @@ def retained(w):
 
 
 def wall_checks(w, points=()):
-    """The most a wall retains, and what its footing comes close to. `points` are (name, E, N) of things a footing must not hit (posts, poles, lids)."""
+    """The most a wall retains, and what its footing comes close to. `points` are (name, E, N) of things a footing must
+    not hit (posts, poles, lids): within the wall's body, `depth` deep (its `thickness` unless it says), and 0.3 m."""
     flags = []
     hmax = float(np.nanmax(np.maximum(retained(w), 0.0)))
     line = LineString(w["line"])
     for name, pe, pn in points:
         dd = line.distance(shapely.Point(pe, pn))
-        if dd < w["thickness"] + 0.3:
+        if dd < w["depth"] + 0.3:
             flags.append(f"its footing comes within {dd:.1f} m of the {name}")
     return hmax, flags
 
@@ -792,7 +793,8 @@ def evaluate(opt, site, existing=None, step=0.1):
     walls = d.wall_levels()
     walls_mod.set_out(walls, site.ground)        # the walls of named blocks, set out together: their courses and their bond
     garden = d.garden
-    built = [LineString(w["line"]).buffer(w["thickness"] + 0.3) for w in walls] + [st.poly.buffer(0.1) for st in d.stairs]
+    # Round each new wall, its body `depth` deep (its `thickness` unless it says) and 0.3 m, and each flight of steps
+    built = [LineString(w["line"]).buffer(w["depth"] + 0.3) for w in walls] + [st.poly.buffer(0.1) for st in d.stairs]
     wall_zone = unary_union(built) if built else None
 
     # Cut and fill over the regrade area: soil, from the ground as it is (soil_moved).

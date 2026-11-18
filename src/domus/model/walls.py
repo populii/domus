@@ -881,7 +881,8 @@ def unit_mesh(wall, pts, chain, top, bottom):
     and the back in upright pieces, each with the capping course along its top and the courses under it on the
     wall's grid; the top; the two ends; and the end of the higher bay where the top steps. The capping course and
     the top take their joints from the wall's capping units. It carries `uv` in copies of the wall's picture
-    (unit_image)."""
+    (unit_image), and `soil_over`, the faces the soil behind the wall covers as it's built, the body's top behind a
+    capping course shallower than it, with `soil_over_m`, how far the soil comes up over them: to the cap's top."""
     length, height, cap, _ = units(wall)
     (_, tv), _ = texture_size(wall)
     so = wall["set_out"]
@@ -916,6 +917,7 @@ def unit_mesh(wall, pts, chain, top, bottom):
     # odd and even courses stay the ones the grid makes them.
     shift = 2 * height * math.floor((datum - (float(top.max()) - cap)) / (2 * height) + 1e-6)
     xyz, uv, faces = [], [], []
+    buried = []             # the faces of the body's top behind a shallower capping course, which the soil covers
 
     def quad(corners, out):
         """A flat piece: its four corners in turn, each (E, N, height, u, v), drawn to face the way `out` points."""
@@ -1093,9 +1095,12 @@ def unit_mesh(wall, pts, chain, top, bottom):
             panel(cap_behind[i], cap_behind[i + 1], cva, cvb, under, head, np.array([*back, 0.0]), cap_back)
             ra, rb = (min(float((cap_behind[j] - cap_front[j]) @ back), UNIT_TOP_M) for j in (i, i + 1))
             ca_u, cb_u = (cap_back[0] + 0.25, cap_back[1] + 0.25) if caps else (cva, cvb)
+            up = cap_depth(wall) - overhang < body_depth(wall)       # the body's top behind the cap, or its underside
+            if up:
+                buried += [len(faces), len(faces) + 1]
             quad([(*cap_behind[i], under[0], ca_u, ra), (*cap_behind[i + 1], under[1], cb_u, rb),
                   (*behind[i + 1], under[1], sb, wb), (*behind[i], under[0], sa, wa)],
-                 np.array([0.0, 0.0, 1.0 if cap_depth(wall) < body_depth(wall) else -1.0]))
+                 np.array([0.0, 0.0, 1.0 if up else -1.0]))
             quad([(*cap_front[i], top[i], fa_u, 0.0), (*cap_front[i + 1], top[i + 1], fb_u, 0.0),
                   (*cap_behind[i + 1], top[i + 1], cb_u, rb), (*cap_behind[i], top[i], ca_u, ra)], np.array([0.0, 0.0, 1.0]))
             continue
@@ -1126,6 +1131,8 @@ def unit_mesh(wall, pts, chain, top, bottom):
     m = Mesh(np.vstack(xyz), faces)
     m.uv = np.vstack(uv) / [UNIT_BLOCKS, tv]
     m.cap = np.zeros(len(m.vertices), bool)
+    # As a maker's manual has it, the fill behind such a wall is graded flush with the top back of the capping units.
+    m.soil_over, m.soil_over_m = np.asarray(buried, int), float(cap)
     return m
 
 

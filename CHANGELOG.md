@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** a wall of a named block whose units are deeper than its capping units (`depth_m` over
+  `cap_depth_m` less `cap_overhang_m`) passes `domus prep check through` where the soil behind it covers the units'
+  top behind the cap, up to the cap's top: the fill behind such a wall is graded flush with the top back of the
+  capping units, as makers' manuals say, so that's how it's built, not ground through it. Ground over the cap's top
+  still fails. The model's wall layers say which faces those are (`soil_over`, `soil_over_m`,
+  [docs/model-format.md](docs/model-format.md)). The flat lawn after an option is counted 0.3 m away from each wall's
+  body, and a wall's footing is flagged near a post, pole, mark or lid, by the body's depth (`depth_m`) where they
+  went by `thickness_m`, so a wall deeper than its set-out has less flat lawn beside it than before.
+
 ## 2026.11.50
 
 - **For site projects:** no block of a wall of a named block (`unit_m`) is cut shorter than `cut_min_m`, 0.15 m

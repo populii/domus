@@ -867,7 +867,7 @@ check roof plumb` runs just those.
 | `roof` | The roof against the LiDAR inside the eaves, and a better plan shift if there is one |
 | `plumb` | Placed clips' tilt, from the frames' upright edges |
 | `clouds` | Placed clouds against the ground, cell by cell |
-| `through` | An option's ground coming through a wall or a flight of steps |
+| `through` | An option's ground coming through a wall or a flight of steps. Behind a block wall's capping units, the soil over its deeper units, up to the cap's top, is how it's built |
 | `fixes` | Ground-fix points inside an option's wall, at or over its top |
 | `blocks` | Block walls not set out in whole units: cut pieces and cut caps |
 

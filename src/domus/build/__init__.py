@@ -504,10 +504,12 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
         info = {k: w[k] for k in ("id", "name", "material", "length_m", "height_min_m", "height_max_m",
                                   "retained_max_m", "face_area_m2", "top_min", "top_max", "toe_min", "toe_max")}
         info["checks"] = "; ".join(w["flags"]) or "none"
+        buried = getattr(w["mesh"], "soil_over", ())                  # the soil's, as the wall is built (walls.unit_mesh)
         out.append({**mesh_json(w["mesh"], frame, walls.MATERIAL_COLOURS.get(w["material"], "#999"),
                                 f"{w['id']} {w['name']} ({w['material']})"),
                     "id": f"option-{oid}-{w['id']}", **tag,
-                    **wall_texture(site, w["mesh"], w["def"], w["def"]["properties"].get("picture") == "painted"), "info": info})
+                    **wall_texture(site, w["mesh"], w["def"], w["def"]["properties"].get("picture") == "painted"), "info": info,
+                    **({"soil_over": [int(i) for i in buried], "soil_over_m": round(w["mesh"].soil_over_m, 3)} if len(buried) else {})})
     # Steps.
     stair_keys = ("id", "name", "material", "risers", "riser_m", "going_m", "rise_m", "width_m", "length_m", "foot", "head")
     for st in res["stairs"]:

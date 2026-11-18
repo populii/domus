@@ -152,3 +152,17 @@ def test_what_a_wall_is_built_on_and_with_isnt_soil():
     assert (sealed["volumes"]["cut_m3"], sealed["volumes"]["fill_m3"]) == (2.2, 28.0)
     plain = wall_and_lawn(0.2)
     assert (plain["volumes"]["cut_m3"], plain["volumes"]["fill_m3"]) == (0.1, 30.4)    # unless it says, its body only
+
+
+def test_a_walls_body_keeps_flat_lawn_and_posts_away_as_deep_as_it_is():
+    """The flat lawn after an option is counted away from its walls, and a wall's footing is flagged near a post, by
+    the wall's body: `depth_m` deep where it says, not its `thickness_m` (the set-out's)."""
+    plain, deep = wall_and_lawn(0.2), wall_and_lawn(0.2, depth_m=0.5)
+    assert deep["flat"]["after_m2"] < plain["flat"]["after_m2"]
+    w = deep["walls"][0]["def"]
+    a, b = np.asarray(w["line"], float)[:2]
+    along = (b - a) / np.hypot(*(b - a))
+    post = (a + b) / 2 + np.array([-along[1], along[0]]) * 0.6           # 0.6 m from its face
+    assert scheme.wall_checks(w, [("post", *post)])[1] == ["its footing comes within 0.6 m of the post"]
+    assert scheme.wall_checks(plain["walls"][0]["def"], [("post", *post)])[1] == []
+
