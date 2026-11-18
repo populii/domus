@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.49
 
 - A wall option's paved terrace (`kind = "paving"`, what a path sketched in the viewer becomes) is drawn as pavers,
   concrete pavers in stretcher bond in the colour the viewer sketches a path or paving in, where it was drawn as a
@@ -68,11 +68,6 @@
   `say` for what each prints. They're provisional: public and documented, but they may change between releases
   without a deprecation until they're declared stable ([docs/api.md](docs/api.md)). The steps' options are the command
   line's own now, and each step's usage names it as `domus video <step>` or `domus prep <step>`.
-- **For site projects:** a site's `video` runs the steps of `domus video` the same way: `site.video.place("walk")`,
-  `site.video.reconstruct(...)` and the rest, with the command's options as arguments and `say` for what each prints.
-  They're provisional: public and documented, but they may change between releases without a deprecation until
-  they're declared stable ([docs/api.md](docs/api.md)). The video steps' options are the command line's own now, and
-  each step's usage names it as `domus video <step>`.
 - A wall option's solids (`domus.options.solids`) measure what the build's rule does on two kinds of site they got
   wrong. Where a terrace's batters were steep (a batter under about 2), their cones could reach below the ground's
   block, and then the solids raised the ground over each cone's whole reach: hundreds of cubic metres where the rule
