@@ -15,7 +15,8 @@ from ..project.site import given
 # How a wall is built, below and behind its face (docs/options.md), which goes with its block when a restyle gives it
 # another material.
 CONSTRUCTION = ("depth_m", "cap_depth_m", "cap_overhang_m", "embed_m", "embed_per_m", "embed_courses", "bedding_m",
-                "base_m", "trench_m", "seal_m")
+                "base_m", "trench_m", "seal_m", "pins_per_unit", "pins_per_box", "core_void_m3", "pipe_m",
+                "outlet_spacing_m", "geotextile", "post_spacing_m")
 
 
 def options_dir(site):

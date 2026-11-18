@@ -609,6 +609,148 @@ def set_out(walls, ground=None):
     return {w["id"]: w["set_out"]["notes"] for w in named}
 
 
+UNIT_WHOLE = 0.011      # blocks: a piece this near a whole or half block is one (as `domus prep check blocks` takes it)
+UNIT_CUT_MIN_M = 0.15   # no unit is cut shorter than this: a narrower piece won't stay in the wall
+COUNT_STEP_M = 0.01     # how finely the courses are followed along a wall to count its units
+
+
+def unit_count(wall, ground=None):
+    """The units a wall of named blocks takes, counted course by course from its set-out (set_out) as unit_mesh draws
+    it and `domus prep check blocks` sees it, or None for a wall that isn't set out in named blocks:
+
+    - `straight` and `corner`: (whole, cut) units. Each course of each straight stretch is laid in the bond its
+      set-out gives, from the course its first course stands on (foot, on its grid) up to under its capping course.
+      A corner unit stands at every exposed end of a course: one at each outside corner, which shows its length on
+      one face and its end on the other, one at each end of the wall, and one at the end of each course where the
+      top steps down. It's whole where it shows a whole or half block as the drawing does (a whole one where the top
+      steps), and cut otherwise. In an inside corner a piece that's a whole or half block (the other half behind the
+      other face) is a whole unit. Where the wall's foot steps down a course with the ground, the course it steps
+      under is counted in whole units, the step at a joint. A length of face that lies in another wall's (`hidden`)
+      is that wall's, so a unit that runs into it is counted for the part of it that's this wall's. Any other piece
+      is a unit cut to fit, as is every unit of a course the top cuts short.
+    - `caps`: (whole, cut) capping units, as its set-out lays them, with the one stacked at each step of a course
+      along a straight stretch where two capping units make a course.
+    - `top`: how many of its units are in the course under its capping units, along its length.
+    - `cut_m`: the length of each piece cut to fit, in metres."""
+    unit, so = units(wall), wall.get("set_out")
+    if not unit or not so:
+        return None
+    length, height, cap, _ = unit
+    datum, cuts, u0, rate = so["datum"], np.asarray(so["cuts"], float), so["u0"], so["rate"]
+    hidden = [tuple(h) for h in so.get("hidden", [])]
+    _, _, chain, toe, top = wall_levels(wall, ground)
+    _, _, corners = stretches(wall)
+    steps = [float(chain[i]) for i in range(len(chain) - 1)
+             if abs(chain[i + 1] - chain[i]) < 1e-9 and abs(top[i + 1] - top[i]) > 1e-9]
+    straight, corner, cut_m = [0.0, 0], [0, 0], []
+    at_corner = {}                          # (corner, course): the pieces either side of an outside corner
+
+    def classify(x, kind, where):
+        """A piece `x` blocks long at an end of `kind` of a course's run: count it, and where it's at an outside
+        corner, keep it to count that corner's unit once."""
+        whole = abs(x - 1.0) < UNIT_WHOLE or (abs(x - 0.5) < UNIT_WHOLE and kind != "top")
+        if kind == "out":
+            at_corner.setdefault(where, []).append(x)
+        elif kind in ("end", "top"):
+            corner[0 if whole else 1] += 1
+            if not whole:
+                cut_m.append(x * length)
+        elif kind == "hidden":
+            straight[0] += x
+        elif kind == "foot" or (kind == "in" and whole):
+            straight[0] += 1
+        else:
+            straight[1] += 1
+            cut_m.append(x * length)
+
+    def level(c):
+        """The course lines at distances `c` along the wall: the bottom of its first course and the top of its
+        highest whole course."""
+        t = np.interp(c, chain, top)
+        bottom = foot(wall, c, np.interp(c, chain, toe), clear=0.0)
+        bottom = datum - np.ceil((datum - bottom) / height - 1e-9) * height        # on its grid
+        return bottom, t - cap
+
+    for k in range(len(cuts) - 1):
+        c0, c1 = float(cuts[k]), float(cuts[k + 1])
+        if c1 - c0 < 1e-6:
+            continue
+        n = max(1, math.ceil((c1 - c0) / COUNT_STEP_M))
+        c = c0 + (np.arange(n) + 0.5) * (c1 - c0) / n
+        bottom, head = level(c)
+        lowest = np.round((datum - bottom) / height).astype(int) - 1      # the first course's index (its top datum - j h)
+        highest = np.ceil((datum - head - UNIT_OFF_M) / height).astype(int)   # the highest whole course's
+        short = (datum - highest * height) < head - UNIT_OFF_M                  # a course the top cuts short, over it
+        mine = np.ones(n, bool)
+        for h0, h1 in hidden:
+            mine &= ~((c > h0) & (c < h1))
+        ends = sorted({c0, c1} | {h for span in hidden for h in span if c0 < h < c1} | {s for s in steps if c0 < s < c1})
+        start = "end" if k == 0 else ("out" if corners[k - 1] > 0 else "in")
+        stop = "end" if k == len(cuts) - 2 else ("out" if corners[k] > 0 else "in")
+        for j in range(int(highest.min()) - 1, int(lowest.max()) + 1):
+            full = (j >= highest) & (j <= lowest)
+            part = (j == highest - 1) & short & (j <= lowest)
+            for there, cut_short in ((full & mine, False), (part & mine, True)):
+                if not there.any():
+                    continue
+                edges = np.flatnonzero(np.diff(np.concatenate([[0], there.astype(int), [0]])))
+                for a, b in zip(edges[::2], edges[1::2], strict=True):
+                    # The run's ends: a stretch's ends, a hidden span's or a step's exactly, else where the foot steps.
+                    ca = min(ends, key=lambda e: abs(e - (c[a] - 0.5 * (c1 - c0) / n)))
+                    cb = min(ends, key=lambda e: abs(e - (c[b - 1] + 0.5 * (c1 - c0) / n)))
+                    ka = kb = "foot"
+                    if abs(ca - (c[a] - 0.5 * (c1 - c0) / n)) < 0.75 * COUNT_STEP_M:
+                        ka = start if abs(ca - c0) < 1e-9 else "hidden" if any(abs(ca - h) < 1e-9 for s in hidden for h in s) else "top"
+                    else:
+                        ca = c[a] - 0.5 * (c1 - c0) / n
+                    if abs(cb - (c[b - 1] + 0.5 * (c1 - c0) / n)) < 0.75 * COUNT_STEP_M:
+                        kb = stop if abs(cb - c1) < 1e-9 else "hidden" if any(abs(cb - h) < 1e-9 for s in hidden for h in s) else "top"
+                    else:
+                        cb = c[b - 1] + 0.5 * (c1 - c0) / n
+                    if ka == "top" and not (head[max(a - 1, 0)] < datum - j * height - 1e-6):
+                        ka = "foot"                                       # the top steps up here: this course runs on under it
+                    if kb == "top" and not (head[min(b, n - 1)] < datum - j * height - 1e-6):
+                        kb = "foot"
+                    ua, ub = (u0[k] + rate[k] * (x - c0) for x in (ca, cb))
+                    (lo, klo, wlo), (hi, khi, whi) = sorted(((ua, ka, (k - 1, j)), (ub, kb, (k, j))))
+                    if cut_short:
+                        pieces = math.ceil(hi - lo - UNIT_WHOLE) + 1
+                        straight[1] += pieces
+                        cut_m.extend([length] * pieces)
+                        continue
+                    shift = 0.5 * (j % 2)
+                    first = math.ceil(lo - shift - UNIT_WHOLE) + shift            # the first joint after its start
+                    last = math.floor(hi - shift + UNIT_WHOLE) + shift            # the last before its end
+                    if first > last + 1e-9:                                       # all in one unit
+                        classify(hi - lo, klo if klo != "foot" else khi, wlo if klo != "foot" else whi)
+                        continue
+                    inside = round(last - first)                                  # whole units between them
+                    for x, kind, where in ((first - lo, klo, wlo), (hi - last, khi, whi)):
+                        if x > UNIT_WHOLE:
+                            classify(x, kind, where)
+                        elif kind in ("out", "end", "top") and inside > 0:    # a joint at the end: its unit is the end's
+                            inside -= 1
+                            classify(1.0, kind, where)
+                    straight[0] += inside
+    for pieces in at_corner.values():        # one face's only, where the top steps at the corner: an end
+        halves = [round(2 * x) / 2 for x in pieces]
+        whole = all(abs(x - h) < UNIT_WHOLE for x, h in zip(pieces, halves, strict=True)) and (
+            sorted(halves) == [0.5, 1.0] if len(pieces) == 2 else halves[0] in (0.5, 1.0))
+        corner[0 if whole else 1] += 1
+        if not whole:
+            cut_m.extend(x * length for x in pieces if abs(x - 1.0) >= UNIT_WHOLE and abs(x - 0.5) >= UNIT_WHOLE)
+    caps = [0, 0]
+    for _, _, joints in so.get("caps") or []:
+        for size in np.diff(joints):
+            caps[0 if abs(size - length) <= 0.01 * length else 1] += 1
+    if cap and abs(2 * cap - height) < 1e-6:            # a step of one course along a straight stretch: one more stacked
+        caps[0] += sum(1 for i in range(len(chain) - 1) if abs(chain[i + 1] - chain[i]) < 1e-9
+                       and abs(abs(top[i + 1] - top[i]) - height) < 1e-6 and np.abs(cuts - chain[i]).min() > 1e-6)
+    whole_straight = math.ceil(straight[0] - 1e-6)
+    return {"straight": (whole_straight, straight[1]), "corner": tuple(corner), "caps": tuple(caps),
+            "top": math.ceil(float(chain[-1]) / length - 1e-6), "cut_m": [round(float(x), 3) for x in cut_m]}
+
+
 def unit_mesh(wall, pts, chain, top, bottom):
     """The mesh of a wall of named blocks, set out as its `set_out` says. Every flat piece has points of its own,
     so the bond can start afresh at a corner and the courses keep their levels under a top that steps: the face

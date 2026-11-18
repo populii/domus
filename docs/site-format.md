@@ -195,6 +195,19 @@ gives them in `[datums.<datum>]` and `[house]` reads with them there, and `domus
 | `defaults.base_m` | `0.0` | A base course under the bedding, compacted |
 | `defaults.trench_m` | worked out | Its trench's width from its face, filled from the bottom of the base course with what's brought in (the base, the bedding, the wall and any drainage aggregate behind it): depth_m, unless given |
 | `defaults.seal_m` | `0.0` | Soil over the drainage aggregate behind it, at the top of its trench under the finished ground: soil brought back in, counted as fill |
+| `defaults.pins_per_unit` |  | Pins for each unit under another course, in a wall of named blocks |
+| `defaults.pins_per_box` |  | Pins in a box, to count the boxes |
+| `defaults.core_void_m3` |  | The voids in each unit, filled with drainage aggregate |
+| `defaults.pipe_m` |  | A perforated drainage pipe along a wall's foot, this wide |
+| `defaults.outlet_spacing_m` | `15.0` | An outlet from that pipe for each this much of it, or part of it |
+| `defaults.geotextile` | `false` | Filter fabric over a wall's face, its length by its height |
+| `defaults.post_spacing_m` |  | A timber wall's posts this far apart, with one at each end |
+| `defaults.paving_bedding_m` | `0.0` | The bedding sand under a paved terrace's pavers, a part of paving_m |
+| `defaults.paving_base_m` | `0.0` | The basecourse under that bedding, a part of paving_m |
+| `[materials]` | | What the options' materials lists take besides what they build (docs/options.md) |
+| `materials.allowance_pct` | `0.0` | What's added to each quantity to order, in per cent: the list gives the net beside it |
+| `materials.density_t_m3.<volume>` |  | A volume's density in tonnes a cubic metre, which gives its weight: base, bedding, drainage, paving_bedding or paving_base |
+| `materials.sleeper_m` |  | A sleeper's length, to count the sleepers a flight of sleeper steps takes |
 | `[rules]` | | Checks every option is held to |
 | `rules.drain_cover_m` | `0.3` | Least cover over a drain under lawn after a cut |
 | `local.<key>` |  | Anything a site keeps for its own tools or records: Domus doesn't read it or warn about it |

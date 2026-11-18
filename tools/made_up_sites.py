@@ -92,12 +92,18 @@ embed_per_m = 0.125
 bedding_m = 0.03
 base_m = 0.15
 trench_m = 0.6
-seal_m = 0.2"""
+seal_m = 0.2
+pins_per_unit = 2
+pins_per_box = 40
+core_void_m3 = 0.01
+pipe_m = 0.1
+outlet_spacing_m = 12.0
+geotextile = true"""
 
 # The demo's option B in walls of a named block (made up), built as a maker might say: units 0.3 m deep set out on half a
 # block's thickness, capping units 0.26 m deep standing 25 mm out from the face, the first course at least 0.1 m into the
 # ground, on bedding and a base course, in a trench 0.6 m wide with drainage aggregate behind the units under 0.2 m of
-# soil.
+# soil; and for its materials list, two pins a unit, the units' cores, a drainage pipe along its foot and filter fabric.
 BLOCK_TIERS = f"""name = "D. Two tiers of blocks"
 short = "D. Blocks"
 description = "B's two tiers in walls of a named block, three courses apart, built in a trench with a base course, bedding and drainage."
@@ -190,6 +196,8 @@ def enrich(root):
     # The bed as option B's, and the lawn three 0.2 m courses above it, so the two walls' tops are whole courses apart.
     (root / "options" / "d-block-tiers.toml").write_text(BLOCK_TIERS.format(bed=level(5) + 0.2, lawn=round(level(5) + 0.8, 1)),
                                                          encoding="utf-8", newline="\n")
+    # The options' materials lists with an allowance to order, and the weights of two aggregates.
+    append(root / "options" / "_site.toml", "\n[materials]\nallowance_pct = 10.0\ndensity_t_m3 = { base = 2.0, drainage = 1.6 }\n")
 
 
 # Two made-up trees over the drive east of the lot, which the demo's aerial photo shows as paving from x0 + 22 on: each

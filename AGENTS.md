@@ -787,7 +787,7 @@ for option in site.options():
 | `site.layer(name)` | The features of `data/site/<name>.geojson`, or none |
 | `site.ground()` | The ground model, LiDAR with the fixes, as `ground(e, n)` |
 | `site.options()`, `site.frame()` | The wall options, and their frame: `frame.en(so)` and `frame.so(en)` |
-| `site.evaluate(option)` | What an option comes to: `walls`, `volumes`, `flat`, `terraces`, `stairs`, `drains`, `edge` |
+| `site.evaluate(option)` | What an option comes to: `walls`, `volumes`, `flat`, `terraces`, `stairs`, `drains`, `edge`, and `materials`, what it takes to build |
 | `site.build(fresh=False)`, `site.output` | Build the model, and the folder it's in |
 | `site.export(path, format=None, option=None)` | The built model, or it with a scheme shown, as glTF (`.glb`) or IFC (`.ifc`) |
 | `site.check(checks, tags, plots)` | The checks, as `domus prep check` runs them, and their report |
@@ -805,7 +805,7 @@ nothing from the build cache in `.domus/build-cache/`; proofs use it.
 
 | File | Read it for |
 |---|---|
-| `summary.json` | The house's fitted numbers, the existing walls' heights, and every option's walls, volumes, flat lawn and flags. The quickest way to read results without the viewer |
+| `summary.json` | The house's fitted numbers, the existing walls' heights, and every option's walls, volumes, flat lawn, flags and materials list. The quickest way to read results without the viewer |
 | `model.json` | Everything the viewer draws, in viewer metres (x east, y up, z south of the origin): [docs/model-format.md](docs/model-format.md) |
 | `build.json` | Which Domus built it, when, and which extensions ran |
 

@@ -42,6 +42,7 @@ from ..geo.mesh import Mesh, offset_behind, prism, resample_line
 from ..model import walls as walls_mod
 from ..model.house import COMPASS
 from ..model.walls import bay_levels, line_normals
+from . import materials
 
 LIDAR_TOLERANCE_M = 0.15     # height uncertainty of the existing ground, for the range on cut and fill
 BATTER_REACH_M = 6.0         # how far a batter reaches from a terrace's free edge
@@ -183,6 +184,9 @@ def option_wall(cfg, defaults, frame):
         "bedding": float(cfg.get("bedding_m", defaults.get("bedding_m", 0.0))),
         "base": float(cfg.get("base_m", defaults.get("base_m", 0.0))),
         "trench": float(cfg.get("trench_m", defaults.get("trench_m") or depth)),
+        # What it takes besides, for its materials (domus.options.materials): its units' pins and their cores, its
+        # drainage pipe and filter fabric, and a timber wall's posts. None unless it says.
+        **{k: cfg.get(k, defaults.get(k)) for k in MATERIAL_KEYS},
         "side": None if side is None else (1 if side == "left" else -1),
         "line": line[:, :2],
         "fixed_top": line[:, 2] if line.shape[1] == 3 else (float(cfg["top"]) if "top" in cfg else None),
@@ -193,6 +197,10 @@ def option_wall(cfg, defaults, frame):
         "properties": cfg,
     }
 
+
+# A wall's settings for its materials alone (domus.options.materials), which its option or [defaults] can give.
+MATERIAL_KEYS = ("pins_per_unit", "pins_per_box", "core_void_m3", "pipe_m", "outlet_spacing_m", "geotextile",
+                 "post_spacing_m")
 
 STAIR_RISER_M = 0.17         # the riser a flight aims for
 # How a flight is drawn, by its material: its colour, and for some a picture with the metres one copy covers.
@@ -898,12 +906,14 @@ def evaluate(opt, site, existing=None, step=0.1):
 
     kept = set(d.keep_existing)
     removed_m = sum(float(np.hypot(*np.diff(w["line"], axis=0).T).sum()) for w in site.existing_walls if w["id"] not in kept)
+    volumes = {k: round(v, 1 if k.endswith(("m3", "m2")) else 2) for k, v in vol.items()}
     return {
         "design": d,
         "walls": winfo,
         "stairs": stairs,
         "terraces": terr,
-        "volumes": {k: round(v, 1 if k.endswith(("m3", "m2")) else 2) for k, v in vol.items()},
+        "volumes": volumes,
+        "materials": materials.listed(winfo, d, volumes, site.settings),
         "flat": {"before_m2": round(flat_before, 1), "after_m2": round(flat_after, 1),
                  "gain_m2": round(flat_after - flat_before, 1), "points": (fe, fn)},
         "areas": {k: round(v, 1) for k, v in areas.items()},

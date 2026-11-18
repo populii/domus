@@ -256,6 +256,22 @@ OPTIONS_SITE = Table("options/_site.toml", {
                         COMPUTED),
         "seal_m": Key("Soil over the drainage aggregate behind it, at the top of its trench under the finished ground: "
                       "soil brought back in, counted as fill", 0.0),
+        # What a wall or a paved terrace takes besides, for the materials list alone (docs/options.md): none unless given
+        "pins_per_unit": Key("Pins for each unit under another course, in a wall of named blocks"),
+        "pins_per_box": Key("Pins in a box, to count the boxes"),
+        "core_void_m3": Key("The voids in each unit, filled with drainage aggregate"),
+        "pipe_m": Key("A perforated drainage pipe along a wall's foot, this wide"),
+        "outlet_spacing_m": Key("An outlet from that pipe for each this much of it, or part of it", 15.0),
+        "geotextile": Key("Filter fabric over a wall's face, its length by its height", False),
+        "post_spacing_m": Key("A timber wall's posts this far apart, with one at each end"),
+        "paving_bedding_m": Key("The bedding sand under a paved terrace's pavers, a part of paving_m", 0.0),
+        "paving_base_m": Key("The basecourse under that bedding, a part of paving_m", 0.0),
+    }),
+    "materials": Table("What the options' materials lists take besides what they build (docs/options.md)", {
+        "allowance_pct": Key("What's added to each quantity to order, in per cent: the list gives the net beside it", 0.0),
+        "density_t_m3": Map("A volume's density in tonnes a cubic metre, which gives its weight: base, bedding, drainage, "
+                            "paving_bedding or paving_base", Key("Tonnes a cubic metre"), "volume"),
+        "sleeper_m": Key("A sleeper's length, to count the sleepers a flight of sleeper steps takes"),
     }),
     "rules": Table("Checks every option is held to", {
         "drain_cover_m": Key("Least cover over a drain under lawn after a cut", 0.3),

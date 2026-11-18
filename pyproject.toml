@@ -78,7 +78,7 @@ name = "The model's pure parts read no site and know nothing of the app"
 type = "forbidden"
 source_modules = ["domus.model.house", "domus.model.house_texture", "domus.geo.mesh", "domus.model.wall_looks",
                   "domus.model.walls", "domus.model.features", "domus.model.drains", "domus.model.tin",
-                  "domus.model.vegetation", "domus.options.scheme", "domus.options.solids"]
+                  "domus.model.vegetation", "domus.options.scheme", "domus.options.solids", "domus.options.materials"]
 forbidden_modules = ["domus.geo.crs", "domus.api", "domus.build", "domus.app", "domus.create",
                      "domus.options.design", "domus.options.sketch", "domus.project"]
 
@@ -87,7 +87,7 @@ name = "The pure layers read no site: geo, the model's pure parts and the option
 type = "forbidden"
 source_modules = ["domus.geo", "domus.model.house", "domus.model.house_texture", "domus.model.wall_looks", "domus.model.walls",
                   "domus.model.features", "domus.model.drains", "domus.model.tin", "domus.model.vegetation",
-                  "domus.options.scheme", "domus.options.solids"]
+                  "domus.options.scheme", "domus.options.solids", "domus.options.materials"]
 forbidden_modules = ["domus.project", "domus.api", "domus.testing", "domus.build", "domus.app", "domus.create",
                      "domus.shots", "domus.export", "domus.model.terrain", "domus.model.canopy", "domus.options.design",
                      "domus.options.sketch", "domus.checks", "domus.capture", "domus.prep", "domus.importers"]

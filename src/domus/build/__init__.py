@@ -545,6 +545,7 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
                                     "retained_max_m", "face_area_m2", "top_min", "top_max", "line_so", "flags")} for w in res["walls"]]
     summ = {"id": oid, "name": opt["name"], "short": opt["short"], "description": opt["description"].replace("\n", " "),
             "file": opt["path"], "walls": walls_out, "terraces": res["terraces"], "volumes": res["volumes"],
+            "materials": res["materials"],
             "flat": {k: v for k, v in res["flat"].items() if k != "points"}, "areas": res["areas"],
             "edge": res["edge"],
             "drains": [x for x in res["drains"] if "flag" in x],

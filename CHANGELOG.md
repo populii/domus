@@ -15,6 +15,20 @@
   as it was, and a restyle to another material drops them with the block. An option's closed solids
   (`domus.options.solids`) follow the same rule. `tools/made_up_sites.py`'s richer site has an option in such walls
   ([docs/options.md](docs/options.md)).
+- **For site projects:** each wall option has a list of what it takes to build, to order from: `materials` in
+  `summary.json` and in what `site.evaluate()` gives, and in the viewer a small table for each option under the
+  options' comparison. A wall of a named block's straight, corner and capping units are counted course by course from
+  its set-out, whole and cut, as it's drawn and as `domus prep check blocks` sees it, with the units its face takes by
+  area beside them as a check; where it says how it's built, the base course, bedding and drainage aggregate along its
+  trench in cubic metres, and the soil over the aggregate as low-permeability soil. Its pins, the aggregate in its
+  units' cores, a drainage pipe and its outlets, and filter fabric are listed where a wall or `[defaults]` gives
+  them (`pins_per_unit`, `pins_per_box`, `core_void_m3`, `pipe_m`, `outlet_spacing_m`, `geotextile`). Other walls
+  give their length and face by material, and a timber wall its posts (`post_spacing_m`); a concrete flight its
+  concrete and a flight of sleepers its sleepers; paving its area, and its bedding sand and basecourse
+  (`paving_bedding_m`, `paving_base_m`); and the soil its cut, fill and net. Quantities are net, with the quantity to
+  order beside them: `[materials] allowance_pct` in `options/_site.toml` adds that much (none unless given), and
+  `density_t_m3` gives volumes' weights. No costs ([docs/options.md](docs/options.md#what-an-option-takes-its-materials-list)).
+- `domus prep check blocks` says when a cut piece is under 150 mm, too narrow to cut a unit to.
 
 ## 2026.11.47
 

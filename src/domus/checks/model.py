@@ -628,7 +628,9 @@ def _cut(x):
 
 
 def _cut_piece(findings, where, metres, at):
-    findings.append(("blocks", "fail", where, f"a course has a cut piece {metres * 1000:.0f} mm long {at}"))
+    narrow = (f", under the {walls.UNIT_CUT_MIN_M * 1000:.0f} mm a unit can be cut to"
+              if metres < walls.UNIT_CUT_MIN_M - 1e-9 else "")
+    findings.append(("blocks", "fail", where, f"a course has a cut piece {metres * 1000:.0f} mm long {at}{narrow}"))
     return 1
 
 

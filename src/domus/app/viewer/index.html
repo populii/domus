@@ -144,6 +144,13 @@ td.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; whit
 .opt-table .on { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .opt-table td:first-child { color: var(--muted); white-space: nowrap; }
 .opt-table td.num { padding-right: 6px; }
+.materials { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 4px; }
+.mat-table { font-size: 12px; border-collapse: collapse; }
+.mat-table caption { text-align: left; font-weight: 600; padding: 2px 0; }
+.mat-table th { text-align: left; font-weight: 500; color: var(--muted); padding: 5px 8px 1px 0; }
+.mat-table td { padding: 1px 8px 1px 0; vertical-align: top; }
+.mat-table td.num { text-align: right; white-space: nowrap; padding-right: 0; }
+.mat-table.on caption { color: var(--accent); }
 .flags { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.45; }
 .flags li + li { margin-top: 2px; }
 .check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; cursor: pointer; }
@@ -438,6 +445,11 @@ details > summary { cursor: pointer; font-size: 13px; color: var(--accent); marg
       <div class="feature" id="optionCard"></div>
       <div style="overflow-x:auto"><table class="opt-table" id="optionsTable"></table></div>
       <div class="hint">Cut and fill are soil, measured from the ground as the model draws it today. A new wall itself and paving don't count.</div>
+      <div id="materialsBox" hidden>
+        <h2>Materials</h2>
+        <div class="materials" id="materials"></div>
+        <div class="hint" id="materialsHint"></div>
+      </div>
     </section>
         <section id="sketchPanel">
           <h2>Your sketch</h2>
@@ -1184,6 +1196,7 @@ function showOption(id) {
   $("siteState").textContent = activeOption ? activeOption.short : "Existing site";
   renderOptionCard();
   for (const c of $("optionsTable").querySelectorAll("[data-col]")) c.classList.toggle("on", c.dataset.col === (id || ""));
+  for (const t of $("materials").querySelectorAll("[data-col]")) t.classList.toggle("on", t.dataset.col === (id || ""));
   for (const b of $("optionBar").children) b.setAttribute("aria-checked", String(b.dataset.opt === (id || "")));
   if (profile) openProfile(profile.rec);
 }
@@ -1265,6 +1278,31 @@ if (OPTS.length) {
   });
   renderOptionCard();
   for (const c of $("optionsTable").querySelectorAll('[data-col=""]')) c.classList.add("on");
+  renderMaterials();
+}
+
+// Each option's materials (summary.json's `materials`): a small table for each, side by side where they fit, of the
+// quantities to order, with the allowance the site gives; the net and how each is counted on hover.
+function renderMaterials() {
+  const withList = OPTS.filter((o) => o.materials && o.materials.rows.length);
+  $("materialsBox").hidden = !withList.length;
+  if (!withList.length) return;
+  const unit = (u) => u.replace(/^m3$/, "m³").replace(/^m2$/, "m²");
+  const qty = (r) => r.order === null || r.order === undefined ? r.unit : `${r.order} ${unit(r.unit)}`;
+  const tip = (r) => [r.net === null || r.net === undefined ? "" : `net ${r.net} ${unit(r.unit)}`,
+                      r.tonnes ? `${r.tonnes} t` : "", r.note || ""].filter(Boolean).join(" · ");
+  $("materials").innerHTML = withList.map((o) => {
+    let group = "";
+    const rows = o.materials.rows.map((r) => {
+      const head = r.group !== group ? `<tr><th colspan="2">${esc(r.group)}</th></tr>` : "";
+      group = r.group;
+      return `${head}<tr title="${esc(tip(r))}"><td>${esc(r.item)}</td><td class="num">${esc(qty(r))}${r.tonnes ? `<br>${esc(String(r.tonnes))} t` : ""}</td></tr>`;
+    }).join("");
+    return `<table class="mat-table" data-col="${esc(o.id)}"><caption>${esc(o.short)}</caption><tbody>${rows}</tbody></table>`;
+  }).join("");
+  const pct = withList[0].materials.allowance_pct;
+  $("materialsHint").textContent = (pct ? `Quantities to order, with ${pct}% added to the net as the site says. ` : "Net quantities, with nothing added. ")
+    + "Soil is as measured. Hover over a line for its net quantity and how it's counted. No costs.";
 }
 
 $("lotArea").textContent = model.lot.area_m2.toFixed(0);

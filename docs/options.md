@@ -157,6 +157,52 @@ behind an outside corner, isn't counted.
 
 Heights are in the site's vertical datum, NZVD2016 by default.
 
+## What an option takes: its materials list
+
+Each option has a list of what it takes to build, in `summary.json` (`materials`) and in the viewer under the
+options' comparison, a small table for each option. It's worked out from the option as the build works it out, and
+gives net quantities, and beside each the quantity to order: the net with `allowance_pct` per cent added, as
+`[materials]` in `_site.toml` says (none unless it does). There are no costs.
+
+- **Units**, for a wall of a named block (`unit_m`): straight, corner and capping units, whole and cut, counted
+  course by course from its set-out, as it's drawn and as `domus prep check blocks` sees it. A corner unit stands at
+  each exposed end of a course: at an outside corner (its length on one face, its end on the other), at the wall's
+  ends, and where the top steps down. In an inside corner a whole or half block's piece is a whole unit, half of it
+  behind the other face. Where the wall's foot steps down a course, the course under the step is counted in whole
+  units, the step at a joint. Any other piece is a unit cut to fit. Beside them, as a check, the units the face takes
+  by area, from the first course up to the capping units.
+- **Pins** (`pins_per_unit` for each unit under another course) and their boxes (`pins_per_box`), and the drainage
+  aggregate in the units' **cores** (`core_void_m3` a unit): only where they're given. Adhesive for the capping,
+  corner and cut units, as needed.
+- **Aggregate**, where a wall says how it's built: the base course and the bedding along its trench (`trench_m` wide,
+  its length long); the drainage aggregate behind its units, from its body's back to its trench's and from its first
+  course up to the soil over it (`seal_m`), which is listed as low-permeability soil. All of it in cubic metres,
+  compacted, and in tonnes where `[materials] density_t_m3` gives a density (`base`, `bedding`, `drainage`,
+  `paving_bedding`, `paving_base`).
+- **Drainage**, where a wall gives it: a perforated pipe along its foot (`pipe_m` wide), in a filter sock, with an
+  outlet for each `outlet_spacing_m` (15 m unless it says) of it or part of it, at least one a wall: put them at the
+  low points. Filter fabric over its face (`geotextile = true`), its length by its height from its first course.
+- **Other walls**: their length and face by material, and a timber wall's posts where it gives their spacing
+  (`post_spacing_m`): one at each end and each point of its line, as it's drawn, and between them no further apart
+  than the spacing.
+- **Steps**: a concrete flight's concrete as it's drawn, each tread down to 0.3 m under the one before; a flight of
+  sleepers' two sleepers across each tread, and how many sleepers where `[materials] sleeper_m` gives one's length.
+- **Paving**: the paved terraces' area, and the bedding sand and basecourse under it where a terrace or `[defaults]`
+  gives their depths (`paving_bedding_m`, `paving_base_m`, parts of `paving_m`).
+- **Soil**: the cut, the fill and the fill less the cut, as the option counts them over the regrade area. The soil
+  over the drainage aggregate is part of the fill.
+
+The units' and the aggregates' settings go with the wall, as how it's built does: on a wall, or for every wall in
+`[defaults]`, and a restyle to another material drops them with the block.
+
+```toml
+# options/_site.toml
+[materials]
+allowance_pct = 10                          # added to what's ordered; the list gives the net beside it
+density_t_m3 = { base = 2.0, drainage = 1.6 }
+sleeper_m = 2.4                             # to count the sleepers of sleeper steps
+```
+
 ## The same scheme in another style
 
 To compare how a scheme looks in different walls, base one option on another and restyle it:
@@ -182,7 +228,8 @@ material = "sleepers"
 A `restyle` entry sets anything a wall takes (`material`, `thickness_m`, `upstand_m`, `picture`, `unit_m`), and later
 entries win. One that changes `material` drops the block the base named (`unit_m`, `cap_m`, `colour`) and how it's
 built (`depth_m`, `cap_depth_m`, `cap_overhang_m`, `embed_m`, `embed_per_m`, `embed_courses`, `bedding_m`,
-`base_m`, `trench_m`, `seal_m`). A
+`base_m`, `trench_m`, `seal_m`, and for its materials `pins_per_unit`, `pins_per_box`, `core_void_m3`, `pipe_m`,
+`outlet_spacing_m`, `geotextile`, `post_spacing_m`). A
 `restyle_stairs` entry does the same for the steps. Change the scheme itself in the file it is based on, and every
 style of it follows.
 
@@ -221,5 +268,6 @@ build paints.
   option that keeps one, or leaves its ground alone, moves no soil there.
 - Flat lawn: ground in the regrade area no steeper than 1:20 over 1 m, away from the walls, before and
   after.
+- What it takes to build, to order from: its materials list (below).
 - What to look at: cover over the drains after a cut and walls crossing drains; footings near posts,
   poles, marks and lids; ground lowered next to the house, or raised against it.
