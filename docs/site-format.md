@@ -12,6 +12,7 @@ data/aerial/nir.tif       near-infrared photo, red and near-infrared bands (opti
 data/survey/control.csv   survey marks (optional)
 data/georef/<sheet>.json  georeferenced scanned plans, for [[drapes]] (optional)
 data/features/, data/walls/, data/house/   textures (optional; plain colours without them)
+data/house.ifc            the house as an IFC file, its master when [house] source = "ifc" (optional; `domus house ifc`)
 data/layers/*.json        the site's own layers, drawn by its tools (optional; docs/model-format.md)
 data/observations.json    readings from videos, each checking an element of the model by its id (optional; docs/observations.md)
 options/_site.toml        what wall options share
@@ -19,6 +20,7 @@ options/*.toml            one per option
 viewer/data/              the built model (set DOMUS_OUTPUT to move it; docs/model-format.md)
 .domus/viewer.db          saved sketches (set DOMUS_DB to move it)
 .domus/build-cache/       what the next build can reuse
+.domus/house-ifc/         data/house.ifc as it was before `domus house ifc --force` wrote it again
 .domus/edits/             each change made to the site's data, and the files as they were (docs/changes.md)
 .domus/proposals/         changes proposed for a person to accept or reject (docs/changes.md)
 .gitignore                what git leaves out of the site: what Domus makes again (`domus new` writes it)
@@ -123,6 +125,7 @@ readings and two placements of a clip side by side are observations, in `data/ob
 | `house.roof_source` | `"the house's outline and [house] in data/site.toml"` | Where the roof's shape came from |
 | `house.walls_source_note` | `""` | Words after the walls' source |
 | `house.roof_at_wall_above_fl` | worked out | The roof plane at the wall, above fl_upper, for placing videos on the house: optional, roof_plane_at_wall less fl_upper, unless given |
+| `house.source` | `"drawn"` | Where the build draws the house from: drawn, from house.geojson and these settings, or ifc, from data/house.ifc, which domus house ifc writes from them |
 | `[services]` | | Drains (services.geojson) |
 | `services.assumed_depth_m.<drain>` |  | A depth to draw a drain at, below the ground, when it has no levels |
 | `services.colours.<drain>` | `"#2f2f2f"` | A drain's colour |
@@ -282,3 +285,43 @@ Each is a feature in `house.geojson` with a `part`, in addition to its `id`. Hei
 
 The layers are `bay`, `porch`, `steps`, `outdoor` (blocks, walls and balustrades), `chimney` and `fixtures` (tanks).
 `[house.layers.<key>]` with `name` and `colour` names any layer, including ones a part makes up with `layer`.
+
+## The house as an IFC file
+
+`domus house ifc` (`site.write_house_ifc()`, which needs the `ifc` extra) writes the house as `house.geojson` and
+`[house]` draw it today to `data/house.ifc`, an IFC4 file written with IfcOpenShell. With `[house] source = "ifc"` in
+`data/site.toml`, the build draws the house's layers from that file instead, so the file is the house's master: what
+a designer's software or IfcOpenShell changes in it is what the model shows. Without the setting the file changes
+nothing. `--force` writes it again over one that's there, keeping that one in `.domus/house-ifc/`.
+
+The file holds one site, georeferenced as `domus export` does it (an IfcMapConversion from the model's origin to the
+site's grid), a building on it, and a storey at each of the house's floor levels: `fl_upper`, and `fl_lower` where
+it's another level. Each element stands on the highest storey whose floor is at or below its lowest point.
+
+| Element | IFC |
+|---|---|
+| Each wall face of `house-walls` | `IfcWall`, placed at the face's left end seen from outside, its x axis along the face |
+| The eaves: fascia and soffit | `IfcCovering`, `EAVES` |
+| The roof | `IfcRoof`: `HIP_ROOF`, `SHED_ROOF` (a skillion) or `GABLE_ROOF` |
+| `steps`, `block`, `wall`, `balustrade` | `IfcStair` (`STRAIGHT_RUN_STAIR`), `IfcSlab`, `IfcWall`, `IfcRailing` (`BALUSTRADE`) |
+| `chimney`, `tank` | `IfcChimney`, `IfcTank` (`STORAGE`) |
+| `bay`, `porch` | `IfcBuildingElementProxy` (`BAY`, `PORCH`), with its wall faces as `IfcWall`s that are its parts |
+
+Each element's body is its triangles as the house draws them, each piece an `IfcTriangulatedFaceSet` in a surface
+style named for its colour (its palette key, or its hex) and shaded in it. Its property set, `Domus`, holds its id
+(`ref`, which is its `Tag` too: a part's id in `house.geojson`, a face's own id, `roof` or `eaves`), the layer it's
+drawn in (`layer`), what it is (`part`), the feature of `house.geojson` it comes from (`feature`) and that feature's
+`source`, and on a wall face, the face it is (`face`). Its GlobalId is a uuid5 of its id under a fixed namespace, as
+are the project's, the site's, the building's and the storeys', and every relationship's comes from what it relates,
+so writing the house again gives the same ids throughout.
+
+Drawn from the file, each element goes in the house layer its `layer` names, or, without one, the layer its IFC class
+says (`IfcWall` the walls, `IfcCovering` the eaves, `IfcStair` the steps, `IfcSlab` and `IfcRailing` the outdoor
+parts, a proxy's `BAY` or `PORCH` its own); IfcOpenShell triangulates it in the model's coordinates, and the file's
+own map conversion puts it on the site's grid. Each piece takes its style's colour. A wall that still carries the id
+of a face `house.geojson` draws (`face`) keeps that face's picture, its photo where one covers it (`data/house/`) and
+its drawn boards and windows elsewhere, laid on it by the wall's own coordinates, so the picture moves with the wall;
+any other wall takes its colour. The roof's tiles lie up each triangle's slope. A missing file, or one IfcOpenShell
+can't read, stops the build and says how to make it. `house.geojson` and `[house]` still give the house's outline
+and its numbers to everything else: the wall options' regrade area and checks, the walk route, placing videos and the
+house's numbers in `summary.json`, which also names the file (`source`).

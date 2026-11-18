@@ -65,6 +65,10 @@ IFC4, written with IfcOpenShell, Domus's `ifc` extra: `uv sync --extra ifc` in a
 
 - **The project:** an IfcProject in metres, with one IfcSite. The house is an IfcBuilding on it, with one
   IfcBuildingStorey at its floor level holding its parts. Everything else stands on the site.
+- **A house kept as an IFC file:** a site whose house is drawn from `data/house.ifc` (`[house] source = "ifc"`,
+  [site-format.md](site-format.md#the-house-as-an-ifc-file)) has that file's building, storeys and elements copied
+  in as they are, in place of the house's layers: each element with its GlobalId, its own geometry and placement, its
+  styles and its property sets, where it stands on the grid.
 - **Georeferenced:** the site's IfcMapConversion takes the model's coordinates to an IfcProjectedCRS named
   `EPSG:<code>` (the site's grid), with its name, height datum and metres as its unit. Its Eastings, Northings and
   OrthogonalHeight are the model's origin, with no rotation and a scale of 1. The model's x is east, y north and z up

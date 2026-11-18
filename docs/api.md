@@ -139,6 +139,16 @@ documented, but they may change from one release to the next without a deprecati
 
 `edit`, `undo`, `propose`, `propose_observation`, `accept` and `reject` take `say`, as the commands' calls do.
 
+## Provisional: the house as an IFC file
+
+The house can be kept as an IFC file, `data/house.ifc`, which the build draws it from when `[house] source = "ifc"`
+([site-format.md](site-format.md#the-house-as-an-ifc-file)). This is **provisional**, as the change route is: it may
+change from one release to the next without a deprecation until it's declared stable.
+
+| | What it does |
+|---|---|
+| `site.write_house_ifc(force=False)` | Writes the house as `house.geojson` and `[house]` draw it today to `data/house.ifc`, as `domus house ifc` does, and gives the file's path. It needs IfcOpenShell (the `ifc` extra). A file that's there already is written again only with `force`, which keeps it first in `.domus/house-ifc/`. It takes `say` |
+
 ## Helpers
 
 | | What it does |

@@ -9,7 +9,9 @@ knows what they are). With a wall option, its designed ground, walls (IfcWall), 
 and beds (geographic elements) stand in for what they replace. Each is an IfcTriangulatedFaceSet in the colour the
 viewer gives it, and carries a property set, Domus, with the model's numbers for it: its id (`ref`, which is its Tag
 too), name and material, its levels, heights and length for a wall, its risers for steps, the option's volumes on its
-designed ground. Plants, lines and labels are left out.
+designed ground. Plants, lines and labels are left out. A site whose house is kept as an IFC file
+(domus.model.house_ifc) has that file's building, storeys and elements copied in as they are, in place of the
+house's layers; its writer, Writer, writes that file too.
 """
 
 import uuid
@@ -160,62 +162,135 @@ def local(positions):
     return np.column_stack([p[:, 0], -p[:, 2], p[:, 1]])
 
 
-def write(parts, model, path, georef, lonlat, name=None):
+class Writer:
+    """An IFC4 file being written with IfcOpenShell (`f`): its project, its units in metres, its body context (`body`)
+    and one site (`site`), georeferenced as the export's are. Every GlobalId it gives comes from a key under the uuid5
+    namespace `space`, so the same things written again get the same ids; `keyed` holds the STEP ids of those given
+    one so far."""
+
+    def __init__(self, name, title, georef, lonlat, space):
+        ifcopenshell = self.ifc = ifcopenshell_modules()
+        api, util = ifcopenshell.api, ifcopenshell.util
+        self.space, self.keyed = space, set()
+        E0, N0, H0 = (float(v) for v in georef["origin"])
+        f = self.f = api.project.create_file(version="IFC4")
+        f.header.file_name.name = name
+        f.header.file_name.originating_system = f"Domus {georef['domus']}"
+        f.header.file_name.authorization = ""
+        f.header.file_description.description = ("ViewDefinition [ReferenceView_V1.2]",)
+        self.project = self.same_id(api.root.create_entity(f, ifc_class="IfcProject", name=title), "project")
+        metre = api.unit.add_si_unit(f, unit_type="LENGTHUNIT")
+        api.unit.assign_unit(f, units=[metre, api.unit.add_si_unit(f, unit_type="AREAUNIT"),
+                                       api.unit.add_si_unit(f, unit_type="VOLUMEUNIT"),
+                                       api.unit.add_si_unit(f, unit_type="PLANEANGLEUNIT")])
+        model3d = api.context.add_context(f, context_type="Model")
+        self.body = api.context.add_context(f, context_type="Model", context_identifier="Body", target_view="MODEL_VIEW",
+                                            parent=model3d)
+        api.georeference.add_georeferencing(f, ifc_class="IfcMapConversion", name=f"EPSG:{georef['crs']['epsg']}")
+        api.georeference.edit_georeferencing(
+            f, projected_crs={"Name": f"EPSG:{georef['crs']['epsg']}", "Description": georef["crs"].get("name"),
+                              "VerticalDatum": georef["crs"].get("vertical") or None, "MapUnit": metre},
+            coordinate_operation={"Eastings": E0, "Northings": N0, "OrthogonalHeight": H0, "XAxisAbscissa": 1.0,
+                                  "XAxisOrdinate": 0.0, "Scale": 1.0})
+        self.site = site = self.same_id(api.root.create_entity(f, ifc_class="IfcSite", name=title), "site")
+        site.RefLatitude = util.geolocation.dd2dms(lonlat[1], use_us=True)
+        site.RefLongitude = util.geolocation.dd2dms(lonlat[0], use_us=True)
+        site.RefElevation = H0
+        api.aggregate.assign_object(f, products=[site], relating_object=self.project)
+        api.geometry.edit_object_placement(f, product=site)
+        self.builder = util.shape_builder.ShapeBuilder(f)
+        self.styles, self.materials = {}, {}
+
+    def same_id(self, element, key):
+        """`element` with the GlobalId `key` gives it: the same thing in the same file gets the same id each time."""
+        element.GlobalId = self.ifc.guid.compress(uuid.uuid5(self.space, key).hex)
+        self.keyed.add(element.id())
+        return element
+
+    def spatial(self, ifc_class, name, key, parent, matrix=None):
+        """A building or a storey, `ifc_class`, in `parent`, placed by `matrix` (the identity unless given)."""
+        api = self.ifc.api
+        element = self.same_id(api.root.create_entity(self.f, ifc_class=ifc_class, name=name), key)
+        api.aggregate.assign_object(self.f, products=[element], relating_object=parent)
+        api.geometry.edit_object_placement(self.f, product=element, matrix=matrix)
+        return element
+
+    def style(self, name, colour):
+        """The surface style `name`, shaded in `colour` ("#rrggbb"): made the first time it's asked for."""
+        if name not in self.styles:
+            api = self.ifc.api
+            style = api.style.add_style(self.f, name=name)
+            rgb = hex_rgb(colour)
+            api.style.add_surface_style(self.f, style=style, ifc_class="IfcSurfaceStyleShading", attributes={
+                "SurfaceColour": {"Name": None, "Red": rgb[0], "Green": rgb[1], "Blue": rgb[2]}, "Transparency": 0.0})
+            self.styles[name] = style
+        return self.styles[name]
+
+    def element(self, ifc_class, predefined, name, key, items, props, container=None, parent=None, matrix=None):
+        """An element of `ifc_class` (with its `predefined` type, which IfcOpenShell makes USERDEFINED with it as the
+        object type where the class has no such type), its GlobalId from `key`: contained in `container` or a part of
+        `parent`, placed by `matrix` (4 by 4 in the model's coordinates, the identity unless given), its body
+        `items`, each (positions in its own coordinates, triangles, style name, colour) a triangulated face set in its
+        style, and its Domus property set `props`, whose `ref` is its Tag too and whose `material` names its
+        material."""
+        api, f = self.ifc.api, self.f
+        element = self.same_id(api.root.create_entity(f, ifc_class=ifc_class, predefined_type=predefined, name=name), key)
+        if container is not None:
+            api.spatial.assign_container(f, products=[element], relating_structure=container)
+        else:
+            api.aggregate.assign_object(f, products=[element], relating_object=parent)
+        api.geometry.edit_object_placement(f, product=element, matrix=matrix)
+        if items:
+            facesets = [self.builder.triangulated_face_set(np.asarray(v, float).tolist(), np.asarray(t).tolist())
+                        for v, t, _, _ in items]
+            rep = f.create_entity("IfcShapeRepresentation", ContextOfItems=self.body, RepresentationIdentifier="Body",
+                                  RepresentationType="Tessellation", Items=facesets)
+            api.geometry.assign_representation(f, product=element, representation=rep)
+            api.style.assign_representation_styles(f, shape_representation=rep,
+                                                   styles=[self.style(s, c) for _, _, s, c in items])
+        if props.get("ref") is not None:
+            element.Tag = str(props["ref"])
+        self.properties(element, props)
+        if isinstance(props.get("material"), str) and props["material"]:
+            material = props["material"]
+            if material not in self.materials:
+                self.materials[material] = api.material.add_material(f, name=material)
+            api.material.assign_material(f, products=[element], material=self.materials[material])
+        return element
+
+    def properties(self, element, props):
+        """`element`'s Domus property set: `props`, each typed as measure() types it."""
+        api, f = self.ifc.api, self.f
+        typed = {k: m for k, val in props.items() if (m := measure(f, k, val)) is not None}
+        pset = api.pset.add_pset(f, product=element, name=PSET)
+        api.pset.edit_pset(f, pset=pset, properties=typed)
+        return pset
+
+
+def write(parts, model, path, georef, lonlat, name=None, house=None):
     """Writes `parts` (domus.export.scene.parts) as an IFC4 file at `path`, which its header names `name` (the path's
     own name unless given). `georef` holds the site's grid, heights and origin, and `lonlat` the origin's longitude
-    and latitude, for the site's reference point."""
-    ifcopenshell = ifcopenshell_modules()
-    api, util = ifcopenshell.api, ifcopenshell.util
+    and latitude, for the site's reference point. `house`, the path of the site's house kept as an IFC file
+    (domus.model.house_ifc), takes the place of the model's house: its building, storeys and elements are copied in
+    as they are."""
     title = model.get("title") or "Site model"
     E0, N0, H0 = (float(v) for v in georef["origin"])
     space = uuid.uuid5(uuid.NAMESPACE_URL, f"domus:{georef['crs']['epsg']}:{E0:.3f}:{N0:.3f}:{H0:.3f}")
-
-    def same_id(element, key):          # the same thing in the same site gets the same GlobalId each export
-        element.GlobalId = ifcopenshell.guid.compress(uuid.uuid5(space, key).hex)
-        return element
-
-    f = api.project.create_file(version="IFC4")
-    f.header.file_name.name = name or path.name
-    f.header.file_name.originating_system = f"Domus {georef['domus']}"
-    f.header.file_name.authorization = ""
-    f.header.file_description.description = ("ViewDefinition [ReferenceView_V1.2]",)
-    project = same_id(api.root.create_entity(f, ifc_class="IfcProject", name=title), "project")
-    metre = api.unit.add_si_unit(f, unit_type="LENGTHUNIT")
-    api.unit.assign_unit(f, units=[metre, api.unit.add_si_unit(f, unit_type="AREAUNIT"),
-                                   api.unit.add_si_unit(f, unit_type="VOLUMEUNIT"),
-                                   api.unit.add_si_unit(f, unit_type="PLANEANGLEUNIT")])
-    model3d = api.context.add_context(f, context_type="Model")
-    body = api.context.add_context(f, context_type="Model", context_identifier="Body", target_view="MODEL_VIEW",
-                                   parent=model3d)
-    api.georeference.add_georeferencing(f, ifc_class="IfcMapConversion", name=f"EPSG:{georef['crs']['epsg']}")
-    api.georeference.edit_georeferencing(
-        f, projected_crs={"Name": f"EPSG:{georef['crs']['epsg']}", "Description": georef["crs"].get("name"),
-                          "VerticalDatum": georef["crs"].get("vertical") or None, "MapUnit": metre},
-        coordinate_operation={"Eastings": E0, "Northings": N0, "OrthogonalHeight": H0, "XAxisAbscissa": 1.0,
-                              "XAxisOrdinate": 0.0, "Scale": 1.0})
-
+    w = Writer(name or path.name, title, georef, lonlat, space)
     shown = georef.get("option")
-    site = same_id(api.root.create_entity(f, ifc_class="IfcSite", name=title), "site")
-    site.Description = f"With {shown['name']}" if shown else "As it is"
-    site.RefLatitude = util.geolocation.dd2dms(lonlat[1], use_us=True)
-    site.RefLongitude = util.geolocation.dd2dms(lonlat[0], use_us=True)
-    site.RefElevation = H0
-    api.aggregate.assign_object(f, products=[site], relating_object=project)
-    api.geometry.edit_object_placement(f, product=site)
+    w.site.Description = f"With {shown['name']}" if shown else "As it is"
     storey = None
-    if any((k := kind(p, model)) and k[2] == "house" for p in parts):
-        house = same_id(api.root.create_entity(f, ifc_class="IfcBuilding", name="House"), "house")
-        house.ElevationOfRefHeight = H0
-        api.aggregate.assign_object(f, products=[house], relating_object=site)
-        api.geometry.edit_object_placement(f, product=house)
-        floor = model.get("summary", {}).get("house", {}).get("fl_upper")
-        storey = same_id(api.root.create_entity(f, ifc_class="IfcBuildingStorey", name="Floor"), "storey")
-        storey.Elevation = round(float(floor) - H0, 3) if floor is not None else 0.0
-        api.aggregate.assign_object(f, products=[storey], relating_object=house)
-        api.geometry.edit_object_placement(f, product=storey)
+    if house is not None:
+        from ..model import house_ifc
 
-    builder = util.shape_builder.ShapeBuilder(f)
-    styles, materials = {}, {}
+        house_ifc.copy_into(w, house)
+        parts = [p for p in parts if not ((k := kind(p, model)) and k[2] == "house")]
+    elif any((k := kind(p, model)) and k[2] == "house" for p in parts):
+        building = w.spatial("IfcBuilding", "House", "house", w.site)
+        building.ElevationOfRefHeight = H0
+        floor = model.get("summary", {}).get("house", {}).get("fl_upper")
+        storey = w.spatial("IfcBuildingStorey", "Floor", "storey", building)
+        storey.Elevation = round(float(floor) - H0, 3) if floor is not None else 0.0
     for part in parts:
         what = kind(part, model)
         if what is None:
@@ -224,30 +299,6 @@ def write(parts, model, path, georef, lonlat, name=None):
         if not len(faces):
             continue
         ifc_class, predefined, where = what
-        element = same_id(api.root.create_entity(f, ifc_class=ifc_class, predefined_type=predefined, name=part.name),
-                          f"layer:{part.id}")
-        api.spatial.assign_container(f, products=[element], relating_structure=storey if where == "house" else site)
-        api.geometry.edit_object_placement(f, product=element)
-        faceset = builder.triangulated_face_set(local(v).tolist(), faces.tolist())
-        rep = f.create_entity("IfcShapeRepresentation", ContextOfItems=body, RepresentationIdentifier="Body",
-                              RepresentationType="Tessellation", Items=[faceset])
-        api.geometry.assign_representation(f, product=element, representation=rep)
-        if part.colour not in styles:
-            style = api.style.add_style(f, name=part.colour)
-            rgb = hex_rgb(part.colour)
-            api.style.add_surface_style(f, style=style, ifc_class="IfcSurfaceStyleShading", attributes={
-                "SurfaceColour": {"Name": None, "Red": rgb[0], "Green": rgb[1], "Blue": rgb[2]}, "Transparency": 0.0})
-            styles[part.colour] = style
-        api.style.assign_representation_styles(f, shape_representation=rep, styles=[styles[part.colour]])
-        props = properties(part, model, shown and shown["id"])
-        if props.get("ref") is not None:
-            element.Tag = str(props["ref"])
-        typed = {k: m for k, val in props.items() if (m := measure(f, k, val)) is not None}
-        pset = api.pset.add_pset(f, product=element, name=PSET)
-        api.pset.edit_pset(f, pset=pset, properties=typed)
-        if isinstance(props.get("material"), str) and props["material"]:
-            name = props["material"]
-            if name not in materials:
-                materials[name] = api.material.add_material(f, name=name)
-            api.material.assign_material(f, products=[element], material=materials[name])
-    f.write(str(path))
+        w.element(ifc_class, predefined, part.name, f"layer:{part.id}", [(local(v), faces, part.colour, part.colour)],
+                  properties(part, model, shown and shown["id"]), container=storey if where == "house" else w.site)
+    w.f.write(str(path))

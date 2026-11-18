@@ -29,7 +29,7 @@ from ..errors import DomusError
 from ..geo import geojson, mesh
 from ..geo.georef import invert_affine
 from ..importers.nz import title
-from ..model import canopy, features, house, house_texture, terrain, vegetation, walls
+from ..model import canopy, features, house, house_ifc, house_texture, terrain, vegetation, walls
 from ..options import design, scheme, sketch
 from ..project import rasters
 from ..project.site import given
@@ -680,7 +680,9 @@ def add_house(b):
     cfg, frame, ground, layers, summary = b.cfg, b.frame, b.ground, b.layers, b.summary
     hfc = geojson.read_optional(b.site.path / "data" / "site" / "house.geojson")
     hcfg = cfg.get("house", {})
-    if hfc:
+    if house_ifc.source(b.site) == "ifc":
+        add_ifc_house(b, hfc, hcfg)
+    elif hfc:
         hm = house.build(hfc, hcfg["fl_upper"], hcfg["roof_pitch_deg"], hcfg["roof_plane_at_wall"],
                          hcfg["eaves_overhang_m"], ground, **house.roof_options(hcfg))
         extra = [k for parts in hm.solids.values() for _, k in parts if k.startswith("#")]
@@ -735,6 +737,104 @@ def add_house(b):
         for f in hm.faces:
             if "plinth_top" in f.spec:
                 b.plinths.setdefault(f.id, float(f.spec["plinth_top"]))
+
+
+def tile_uv(local, faces):
+    """The roof's tile coordinates in metres for triangles given in the roof's own coordinates (the house's frame, as
+    house_ifc writes it): u along the eave and v up the slope, from each triangle's own slope, as the drawn hipped
+    roof lays them (house.roof_mesh). A flat triangle takes plan metres."""
+    tri = local[faces]
+    n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    n /= np.maximum(np.linalg.norm(n, axis=1), 1e-12)[:, None]
+    n *= np.where(n[:, 2] < 0, -1.0, 1.0)[:, None]
+    flat = np.hypot(n[:, 0], n[:, 1]) < 1e-9
+    up = np.where(flat[:, None], (0.0, 1.0), -n[:, :2] / np.maximum(np.hypot(n[:, 0], n[:, 1]), 1e-12)[:, None])
+    along = np.column_stack([up[:, 1], -up[:, 0]])
+    slope = np.where(flat, 1.0, np.maximum(n[:, 2], 1e-9))
+    uv = np.zeros((len(local), 2))
+    for k in range(3):
+        p = tri[:, k, :2]
+        uv[faces[:, k]] = np.column_stack([(p * along).sum(axis=1), (p * up).sum(axis=1) / slope])
+    return uv
+
+
+def add_ifc_house(b, hfc, hcfg):
+    """The house drawn from its IFC file ([house] source = "ifc", domus.model.house_ifc): the layers the drawn house
+    makes, from the file's elements as IfcOpenShell triangulates them, each in the layer its Domus property set names
+    (else its IFC class's) and in its own colours. A wall that still carries the id of a face house.geojson draws
+    keeps that face's picture (its photo where one covers it, else its drawn boards and windows), laid on it by the
+    wall's own coordinates, so the picture moves with the wall; every other piece is its colour, and the roof's tiles
+    lie up each triangle's slope. The house's numbers in summary.json are the drawn house's, and say the file."""
+    frame, layers, summary = b.frame, b.layers, b.summary
+    elements = house_ifc.read(b.site, b.say)
+    hm = None
+    if any(f["properties"].get("id") == "house-walls" for f in hfc):
+        hm = house.build(hfc, hcfg["fl_upper"], hcfg["roof_pitch_deg"], hcfg["roof_plane_at_wall"],
+                         hcfg["eaves_overhang_m"], b.ground, **house.roof_options(hcfg))
+    looks = house_texture.Looks(hcfg, b.site.path / "data" / "house")
+    drawn = {f.id: f for f in hm.faces} if hm else {}
+    carried = {e.face for e in elements if e.face in drawn}
+    faces = [f for f in hm.faces if f.id in carried] if hm else []
+    named_colours = {}
+    for key in looks.colours():                       # each colour by its first name, so the drawn house's swatches serve
+        named_colours.setdefault("#" + "".join(f"{v:02x}" for v in looks.rgb(key)), key)
+    key_of = lambda colour: named_colours.get(colour, colour)
+    extra = list(dict.fromkeys(key_of(c) for e in elements for c, *_ in e.pieces if key_of(c).startswith("#")))
+    atlas = house_texture.pack_atlas(faces, b.site.output / "house-atlas.jpg", looks, extra=extra)
+    roof_colours = [key_of(c) for e in elements if e.layer == "roof" for c, *_ in e.pieces]
+    roof_looks = house_texture.Looks({**hcfg, "roof_colour": roof_colours[0]} if roof_colours else hcfg,
+                                     b.site.path / "data" / "house")
+    tile_m = house_texture.roof_texture(b.site.output / "house-roof.jpg", roof_looks)
+    # The layers in the drawn house's order: walls and eaves, those with wall faces, then the rest; and in each, its
+    # wall faces before its other pieces.
+    order = ["walls", "eaves", *[e.layer for e in elements if e.face], *[e.layer for e in elements]]
+    parts, first, sources = {}, {}, {}
+    for k in dict.fromkeys(order):
+        for e in [e for e in elements if e.layer == k and e.face] + [e for e in elements if e.layer == k and not e.face]:
+            if e.source:
+                sources.setdefault(k, []).append(e.source)
+            face = drawn.get(e.face)
+            for colour, v, t, local in e.pieces:
+                if k == "roof":
+                    uv = tile_uv(local, t) / tile_m
+                elif face is not None:
+                    uv = atlas.face_uv(face.spec.get("group", face.id), local[:, 0] + float(face.spec.get("u0", 0.0)),
+                                       local[:, 2] + e.datum)
+                else:
+                    uv = np.tile(atlas.swatches[key_of(colour)], (len(v), 1))
+                    if not e.face:
+                        first.setdefault(k, key_of(colour))
+                parts.setdefault(k, house.UVMesh()).add(v, t, uv)
+    named = hcfg.get("layers", {})
+    roof_hex = "#" + "".join(f"{v:02x}" for v in roof_looks.rgb(roof_looks.roof_colour()))
+    roof_layer = None
+    if "roof" in parts:
+        roof = parts.pop("roof")
+        roof_layer = {**mesh_json(roof, frame, roof_hex, f"House: roof ({ROOF_NAMES[hcfg.get('roof_form', 'hip')]}, "
+                                  f"{hcfg['roof_pitch_deg']:g} degrees" + hcfg.get("roof_name_note", "") + ")"),
+                      "id": "house-roof", "group": "House", "uv": r(roof.uv, 4), "texture": "house-roof.jpg",
+                      "repeat": True,
+                      "info": {"source": hcfg.get("roof_source", "the house's outline and [house] in data/site.toml")}}
+    for k, m in parts.items():
+        if not len(m):
+            continue
+        name, colour = HOUSE_LAYERS.get(k, (k, None))
+        name = named.get(k, {}).get("name", name)
+        colour = named.get(k, {}).get("colour") or colour or "#" + "".join(f"{v:02x}" for v in looks.rgb(first.get(k, "concrete")))
+        src = "; ".join(dict.fromkeys(sources.get(k, [])))
+        if k == "walls":
+            src += hcfg.get("walls_source_note", "")
+        label = "walls (drawn, no photos yet)" if k == "walls" and not atlas.photos else name
+        layers.append({**mesh_json(m, frame, colour, f"House: {label}"), "id": f"house-{k}", "group": "House",
+                       "uv": r(m.uv, 5), "texture": "house-atlas.jpg", "info": {"source": src}})
+        if k == "walls" and roof_layer:
+            layers.append(roof_layer)
+            roof_layer = None
+    if roof_layer:
+        layers.append(roof_layer)
+    summary["house"] = {**(hm.info if hm else {}), "fl_upper": hcfg["fl_upper"],
+                        "fl_lower": round(hcfg.get("fl_lower", hcfg["fl_upper"]), 3),
+                        "photo_textures": atlas.photos, "source": house_ifc.FILE}
 
 
 def add_ifc(b):
@@ -1184,7 +1284,8 @@ def main(site, fresh=False, say=print):
                         drawn_ground=lambda e, n: terrain.existing(site).sample(np.atleast_1d(e), np.atleast_1d(n)),
                         labels=cfg.get("labels", {}), vertical=cfg.get("crs", {}).get("vertical", ""),
                         wall_defs=[walls.from_feature(f) for f in wall_feats], layers=[], summary={},
-                        cache=buildcache.Cache(site.path, site.output, fresh), extensions=checked, say=say)
+                        cache=buildcache.Cache(site.path, site.output, fresh, also=house_ifc.digest(site)),
+                        extensions=checked, say=say)
     add_ground(b)
     add_contours(b)
     add_boundaries(b)

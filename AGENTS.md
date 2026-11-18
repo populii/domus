@@ -78,7 +78,7 @@ uv sync --all-extras
 ```
 
 That installs Domus and the optional extras: `plans` (reading PDFs, for `domus prep plan-pages` and `plan-trace`), `ifc`
-(for `domus prep ifc`) and `shots` (Playwright, for `domus shots`). Pictures also need Playwright's browser once on each
+(for `domus prep ifc`, `domus house ifc` and IFC exports) and `shots` (Playwright, for `domus shots`). Pictures also need Playwright's browser once on each
 machine: `uv run playwright install chromium` (with `--with-deps` on Linux). Video reconstruction runs on the CPU and
 needs no GPU.
 
@@ -656,6 +656,10 @@ tools read go under `[local]`, which Domus never reads or warns about. The ones 
 site has one of most. `[house]` sets the floor levels, the roof (`roof_pitch_deg`, `roof_plane_at_wall`, `roof_form`,
 `roof_azimuth_deg`, `eaves_overhang_m`), and the look (`roof`, `roof_colour`, `cladding`, `palette`, `trim`,
 `board_m`; `domus prep boards` reads the boards' spacing off a wall's photo).
+
+`domus house ifc` writes the house as it's drawn to `data/house.ifc`, an IFC4 file a designer's software opens, each
+wall face and part an element typed by what it is. With `[house] source = "ifc"` the build draws the house from that
+file, which is then the house's master ([docs/site-format.md](docs/site-format.md#the-house-as-an-ifc-file)).
 
 ### 8.3 Ground the LiDAR gets wrong
 

@@ -10,6 +10,7 @@
     domus points [--ground]                                   get the classified LiDAR point cloud over the site
     domus build                                               build the model
     domus export PATH [--option ID]                           the built model as glTF (.glb) or IFC (.ifc), for other software
+    domus house ifc [--force]                                 write the house as it's drawn today to data/house.ifc
     domus video <step>                                        turn site videos into point clouds
     domus scan FILE                                           bring in a phone LiDAR scan
     domus prep <step>                                         plans, IFC, textures, checks from your documents
@@ -108,6 +109,14 @@ def parser():
     sub.add_argument("--option", help="a wall option's id: its walls, steps, lawns and beds in place of what they replace, "
                                       "as the viewer shows it (default: the site as it is)")
     sub.add_argument("--format", choices=["glb", "ifc"], help="the format, if the path's suffix doesn't say it")
+
+    sub = command(commands, "house", None, "The site's house.", "the site's house: write it as an IFC file")
+    houses = sub.add_subparsers(dest="house_action", required=True)
+    hi = command(houses, "ifc", _house_ifc, "Write the house as house.geojson and [house] draw it today to data/house.ifc, "
+                 "an IFC4 file, with IfcOpenShell (the ifc extra). [house] source = \"ifc\" in data/site.toml then has "
+                 "the build draw the house from it.", "write the house as it's drawn today to data/house.ifc")
+    hi.add_argument("--force", action="store_true", help="write it again over the one there, keeping that one in "
+                                                         ".domus/house-ifc/")
 
     sub = command(commands, "video", video.listed, "Site videos into 3D point clouds on the site's grid. See docs/video.md.",
                   "turn site videos into point clouds")
@@ -291,6 +300,10 @@ def _export(args, site, named):
     docs/export.md."""
     path = opened(site).export(args.path, format=args.format, option=args.option)
     print(f"wrote {path} ({path.stat().st_size / 1e6:.1f} MB)")
+
+
+def _house_ifc(args, site, named):
+    opened(site).write_house_ifc(args.force)
 
 
 def _scan(args, site, named):

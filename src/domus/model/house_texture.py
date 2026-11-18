@@ -11,6 +11,7 @@ shows where no photo covers the face (behind the car, the far side of the deck, 
 import json
 import math
 import zlib
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -296,9 +297,38 @@ def face_image(group, width, z0, z1, spec, looks, ppm=PPM):
 
 # --------------------------------------------------------------------------- atlas
 
+@dataclass
+class Atlas:
+    """The atlas as packed: each colour's swatch (`swatches`, colour -> uv), the face groups that carry a photo
+    (`photos`), and where each face group's picture is (`slots`: group -> (column, row) of its corner, its width and
+    its heights z0 and z1), in an image `size` pixels across and down, at `ppm` pixels a metre."""
+
+    swatches: dict
+    photos: list
+    slots: dict
+    size: tuple
+    ppm: float = PPM
+
+    def face_uv(self, group, u, z):
+        """Where points on a face of `group`, `u` metres from its left end and at heights `z`, are in the atlas: its
+        uv, (n, 2). Points off the group's picture are taken to its nearest edge, so none reaches another's."""
+        (sx, sy), width, z0, z1 = self.slots[group]
+        u = np.clip(np.asarray(u, float), 0.0, width)
+        z = np.clip(np.asarray(z, float), z0, z1)
+        w, h = self.size
+        return np.column_stack([(sx + PAD + u * self.ppm) / w, 1 - (sy + PAD + (z1 - z) * self.ppm) / h])
+
+
 def build_atlas(faces, out_path, looks, ppm=PPM, extra=()):
     """Pack every face group and the palette (with any `extra` hex colours) into one image; set the faces' UVs
     into it. Returns (colour -> uv lookup, list of groups that carry a photo)."""
+    atlas = pack_atlas(faces, out_path, looks, ppm, extra)
+    return atlas.swatches, atlas.photos
+
+
+def pack_atlas(faces, out_path, looks, ppm=PPM, extra=()):
+    """build_atlas's work: packs the faces' groups and the palette into the image `out_path`, sets the faces' UVs
+    into it, and gives the Atlas."""
     groups = {}
     for f in faces:
         key = f.spec.get("group", f.id)
@@ -348,7 +378,8 @@ def build_atlas(faces, out_path, looks, ppm=PPM, extra=()):
             row = sy + PAD + (g["z1"] - z) * ppm
             f.mesh.uv = np.column_stack([col / ATLAS_W, 1 - row / H])
     atlas.save(out_path, quality=86)
-    return pal_uv, sorted(photos)
+    return Atlas(pal_uv, sorted(photos), {key: (slots[key], g["width"], g["z0"], g["z1"]) for key, g in groups.items()},
+                 (ATLAS_W, H), ppm)
 
 
 def roof_texture(out_path, looks, size=512, metres=2.0):

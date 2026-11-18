@@ -76,10 +76,14 @@ def write(site, path, format=None, option=None):
 
             gltf.write(parts, model, folder, temp, georef)
         else:
+            from ..model import house_ifc
             from . import ifc
 
             e0, n0 = georef["origin"][:2]
-            ifc.write(parts, model, temp, georef, site.grid.to_lonlat(e0, n0), name=path.name)
+            house = house_ifc.path(site) if house_ifc.source(site) == "ifc" else None
+            if house is not None and not house.is_file():
+                raise DomusError(f"[house] source = \"ifc\", but there's no {house_ifc.FILE}: domus house ifc writes it")
+            ifc.write(parts, model, temp, georef, site.grid.to_lonlat(e0, n0), name=path.name, house=house)
         os.replace(temp, path)
     finally:
         temp.unlink(missing_ok=True)

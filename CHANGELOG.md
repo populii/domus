@@ -14,6 +14,18 @@
 - `scheme.Design` and `scheme.Context` take `limits`, as far as the footprint of a wall an option takes away joins
   its regrade area (a site's `design.removed_limits`: the lot within `[regrade]`'s limits, `design.regrade_limits`,
   less the house), and `Design.base` is the ground an option starts from. A wall option's solids start from it too.
+- **For site projects:** a site's house can be kept as an IFC file, its master. `domus house ifc` writes the house as
+  `house.geojson` and `[house]` draw it today to `data/house.ifc`, an IFC4 file written with IfcOpenShell (the `ifc`
+  extra): a building with a storey at each floor level, and an element for each wall face and part, typed by what it
+  is (IfcWall, IfcCovering for the eaves, IfcRoof, IfcStair, IfcSlab, IfcRailing, IfcChimney, IfcTank, and a proxy
+  for a bay window or a porch, whose wall faces are its parts), its colours as styles and a `Domus` property set with
+  its id. Its GlobalIds come from those ids, so writing it again gives the same ones; `--force` writes it again over
+  one that's there, keeping that one in `.domus/house-ifc/`. With `[house] source = "ifc"` in `data/site.toml`, the
+  build draws the house's layers from the file as IfcOpenShell triangulates it, in its colours, the walls that still
+  carry a face's id in that face's picture, and `domus export` to IFC copies its elements in as they are. A missing
+  or unreadable file stops the build and says how to make it. A site without the setting builds as before
+  ([docs/site-format.md](docs/site-format.md#the-house-as-an-ifc-file)). In `domus.api`, `site.write_house_ifc()`,
+  provisional for now ([docs/api.md](docs/api.md)).
 
 ## 2026.11.52
 

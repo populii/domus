@@ -156,6 +156,8 @@ SITE = Table("data/site.toml", {
         "walls_source_note": Key("Words after the walls' source", ""),
         "roof_at_wall_above_fl": Key("The roof plane at the wall, above fl_upper, for placing videos on the house: "
                                      "optional, roof_plane_at_wall less fl_upper, unless given", COMPUTED),
+        "source": Key("Where the build draws the house from: drawn, from house.geojson and these settings, or ifc, from "
+                      "data/house.ifc, which domus house ifc writes from them", "drawn"),
     }),
     "services": Table("Drains (services.geojson)", {
         "assumed_depth_m": Map("A depth to draw a drain at, below the ground, when it has no levels",

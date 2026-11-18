@@ -339,13 +339,15 @@ def roof_surface(fr, ring_local, cfg):
 @dataclass
 class Face:
     """A textured, wall-like face. Its mesh's uv is (u metres from the left end seen from
-    outside, height). `spec` tells house_texture how to draw it when no photo covers it."""
+    outside, height). `spec` tells house_texture how to draw it when no photo covers it, and `part` is the id of the
+    feature in house.geojson it belongs to."""
     id: str
     mesh: UVMesh
     width: float
     z0: float
     z1: float
     spec: dict = field(default_factory=dict)
+    part: str | None = None
 
 
 def face_quad(a, b, z0, z1, u0=0.0):
@@ -440,21 +442,21 @@ def _porch(f, p, ring, fr, walls_poly, fl_upper, gmin, put, faces, openings_on, 
         a, b = R([(x1, y1), (x0, y1)])
         m, length = face_quad(a, b, floor, (zr(x1) - under, zr(x0) - under))
         fid = f"{prefix}-{names['y1']}"
-        faces.append(Face(fid, m, length, floor, zr(x0) - under, {**spec("y1"), "openings": openings_on(fid, np.array(a), np.array(b))}))
+        faces.append(Face(fid, m, length, floor, zr(x0) - under, {**spec("y1"), "openings": openings_on(fid, np.array(a), np.array(b))}, p.get("id")))
         nw = R(rect_ring(x0, y1 - th, x1, y1 - 0.002))
         put(block(nw, floor, [zr(rot(np.asarray(q))[0]) - under for q in nw]), wall_colour)
     if "x1" in walled:
         a, b = R([(x1, y0), (x1, y1)])
         m, length = face_quad(a, b, floor, zr(x1) - under)
         fid = f"{prefix}-{names['x1']}"
-        faces.append(Face(fid, m, length, floor, zr(x1) - under, {**spec("x1"), "openings": openings_on(fid, np.array(a), np.array(b))}))
+        faces.append(Face(fid, m, length, floor, zr(x1) - under, {**spec("x1"), "openings": openings_on(fid, np.array(a), np.array(b))}, p.get("id")))
         put(block(R(rect_ring(x1 - th, y0 + (0.1 if post[(x1, y0)] else 0.0), x1 - 0.002,
                               y1 - (0.1 if post[(x1, y1)] else 0.0))), floor, zr(x1) - under), wall_colour)
     if "y0" in walled:
         a, b = R([(x0, y0), (x1, y0)])
         m, length = face_quad(a, b, floor, (zr(x0) - under, zr(x1) - under))
         fid = f"{prefix}-{names['y0']}"
-        faces.append(Face(fid, m, length, floor, zr(x0) - under, {**spec("y0"), "openings": openings_on(fid, np.array(a), np.array(b))}))
+        faces.append(Face(fid, m, length, floor, zr(x0) - under, {**spec("y0"), "openings": openings_on(fid, np.array(a), np.array(b))}, p.get("id")))
         sw = R(rect_ring(x0, y0 + 0.002, x1, y0 + th))
         put(block(sw, floor, [zr(rot(np.asarray(q))[0]) - under for q in sw]), wall_colour)
     if post[(x1, y0)]:
@@ -480,6 +482,8 @@ class HouseModel:
     solids: dict           # layer name -> list of (UVMesh, palette key)
     roof: UVMesh           # tile UVs in metres
     info: dict
+    pieces: list = field(default_factory=list)     # the solids again, in the order they're made: (part id, layer, UVMesh, palette key)
+    frame: HouseFrame | None = None                # the house's own frame, which the roof and eaves are laid out in
 
 
 def _ring(feature):
@@ -528,10 +532,12 @@ def build(features, fl_upper, roof_pitch_deg, roof_plane_at_wall, overhang, grou
                            for t in np.linspace(0, 1, 6)])
         return float(np.nanmin(g(dense[:, 0], dense[:, 1]))) - pad
 
-    faces, solids = [], {}
+    faces, solids, pieces = [], {}, []
+    owner = {"part": walls_f["properties"].get("id")}      # the feature the solids being made belong to
 
     def solid(layer, mesh, key):
         solids.setdefault(layer, []).append((mesh, key))
+        pieces.append((owner["part"], layer, mesh, key))
 
     # Openings grouped by face, in face coordinates (u along the face from its left end).
     openings = {}
@@ -558,7 +564,7 @@ def build(features, fl_upper, roof_pitch_deg, roof_plane_at_wall, overhang, grou
         m, length, top = under_roof(a, b, bottom) if shaped else (*face_quad(a, b, bottom, soffit), soffit)
         faces.append(Face(name, m, length, bottom, top, {
             "kind": "wall", "layer": "walls", "plinth_top": wp.get("plinth_top", {}).get(name, bottom + 0.3),
-            "openings": openings_on(name, a, b), "fl": fl_upper}))
+            "openings": openings_on(name, a, b), "fl": fl_upper}, owner["part"]))
 
     # Roof over the walls plus eaves, its fascia and soffit.
     eaves = walls_poly.buffer(overhang, join_style=2)
@@ -595,6 +601,7 @@ def build(features, fl_upper, roof_pitch_deg, roof_plane_at_wall, overhang, grou
         if PARTS[kind] is None:                            # read by the checks, not drawn here
             continue
         layer = p.get("layer", PARTS[kind])
+        owner["part"] = p.get("id")
         put = lambda mesh, colour, layer=layer: solid(layer, mesh, colour)
 
         if kind == "bay":
@@ -613,7 +620,7 @@ def build(features, fl_upper, roof_pitch_deg, roof_plane_at_wall, overhang, grou
             for j, (a, b) in enumerate(sides):
                 m, length = face_quad(a, b, z_b, z_t, u)
                 faces.append(Face(f"{group}-{j}", m, length, z_b, z_t, {"kind": "bay", "fl": fl_upper, "u0": u,
-                                                                        "group": group, "layer": layer}))
+                                                                        "group": group, "layer": layer}, p.get("id")))
                 u += length
             bay_poly = Polygon(bay)
             put(polygon_mesh(bay_poly, z_b, up=False), p.get("skirt_colour", "trim-tan"))
@@ -669,7 +676,7 @@ def build(features, fl_upper, roof_pitch_deg, roof_plane_at_wall, overhang, grou
             top = p["top"] if "top" in p else fl_upper - p["top_below_fl_m"]
             for ln in f["geometry"]["coordinates"]:
                 line = fr.local(np.asarray(ln, float))[:, :2]
-                _slatted(solids, line, top, p["height_m"], g, walls_poly, layer, p.get("colour", "deck-dark"))
+                _slatted(put, line, top, p["height_m"], g, walls_poly, p.get("colour", "deck-dark"))
 
         elif kind == "chimney":
             # A square stack from the roof, a round flue pot and a cowl.
@@ -701,12 +708,12 @@ def build(features, fl_upper, roof_pitch_deg, roof_plane_at_wall, overhang, grou
             "walls_area_m2": round(walls_poly.area, 2)}
     if shaped:
         info.update(roof_form=form, roof_azimuth_deg=azimuth_deg, roof_eave_edge=round(float(roof.vertices[:, 2].min()), 3))
-    return HouseModel(faces, solids, roof, info)
+    return HouseModel(faces, solids, roof, info, pieces, fr)
 
 
-def _slatted(solids, line, deck_top, height, g, walls_poly, layer, colour, pitch=0.1, width=0.065, thick=0.025):
+def _slatted(put, line, deck_top, height, g, walls_poly, colour, pitch=0.1, width=0.065, thick=0.025):
     """Slatted balustrade above the deck and slatted skirt below it along a polyline, with
-    posts at the corners and every 1.8 m, and a top rail. Slats are single quads (the viewer
+    posts at the corners and every 1.8 m, and a top rail, each `put` in `colour`. Slats are single quads (the viewer
     draws both sides), which keeps the layer small."""
     bal, skirt = UVMesh(), UVMesh()
     for a, b in itertools.pairwise(line):
@@ -732,4 +739,5 @@ def _slatted(solids, line, deck_top, height, g, walls_poly, layer, colour, pitch
             gz = float(g(c[0], c[1])[0])
             ring = rect_ring(c[0] - 0.05, c[1] - 0.05, c[0] + 0.05, c[1] + 0.05)
             bal.extend(block(ring, (gz if np.isfinite(gz) else deck_top - 1) - 0.05, deck_top + height + 0.05))
-    solids.setdefault(layer, []).extend([(bal, colour), (skirt, colour)])
+    put(bal, colour)
+    put(skirt, colour)

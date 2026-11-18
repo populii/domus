@@ -50,7 +50,7 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 | Part | What's in it |
 |---|---|
 | `geo/` | Grids and datums (`crs`: a site's `Grid`, made from its settings), rasters read on their own grids, GeoJSON, meshes, fits: none of it reads a site |
-| `model/` | The model's parts: the ground (`terrain` reads the site's, `tin` triangulates), the house and its looks, walls, small features, plants (`canopy` reads the site's, `vegetation` draws), drains |
+| `model/` | The model's parts: the ground (`terrain` reads the site's, `tin` triangulates), the house and its looks, and the house kept as an IFC file (`house_ifc`, written and read with IfcOpenShell), walls, small features, plants (`canopy` reads the site's, `vegetation` draws), drains |
 | `options/` | The wall options: `scheme` works them out, `design` reads a site's for it, `sketch` turns a drawing into one, `solids` builds one as closed solids with Manifold (its ground, walls, steps, cut and fill), and `preview` works a sketch out as solids from what a built model gives the viewer, the reference the viewer's JavaScript copy is held to |
 | `build/` | The build, and its cache |
 | `export/` | A built model for other software: glTF, and IFC through the optional IfcOpenShell |
@@ -112,19 +112,20 @@ tools that grew in real sites, and the package in folders. Then came five slices
 a value of its own, with `domus.geo.crs` left as the grid maths; each part handed the site it works on; the app in
 `domus/app/`; one route into Domus, every command a call into `domus.api` with its arguments read in one tree and its
 usage printed by `--help`; and a warning wherever site code uses a name that's going, or calls a part without its
-site. Beside them came a newer three.js in the viewer, `domus export` to glTF and IFC, `domus shots`, and one route for
+site. Beside them came a newer three.js in the viewer, `domus export` to glTF and IFC, `domus shots`, one route for
 every change to a site's data: from the viewer, an agent, a site tool or a check, each change is an intent, recorded
 with who, when and why and undoable, and a check's findings are proposals a person accepts or rejects
-([docs/changes.md](docs/changes.md)); and observations, readings from videos kept as data apart from the model, each
-set at every build against the element it checks by its id, and accepted into the model through that route
-([docs/observations.md](docs/observations.md)).
+([docs/changes.md](docs/changes.md)); observations, readings from videos kept as data apart from the model, each set
+at every build against the element it checks by its id, and accepted into the model through that route
+([docs/observations.md](docs/observations.md)); and the house kept as an IFC file, written only by IfcOpenShell,
+which the build draws the house from when the site says so (`[house] source = "ifc"`).
 
 What's next, each step proved the same way:
 
 | Work | What it brings |
 |---|---|
 | The old names | The modules' old names, crs's and raster's names from before and the calls without a site go, once the site code that uses them has moved to the new ones |
-| A house kept as an IFC file | `[house] source = "ifc"`: the house drawn from its IFC and written only by IfcOpenShell |
+| Editing the house's IFC | Changes to the house kept as an IFC file, as intents on its elements through the change route, applied with IfcOpenShell, the file kept as it was before each |
 | Instant previews | One geometry library, Manifold, in the browser and the build, so an option shows as it's drawn while the numbers come from the server |
 
 The repository goes public after all of these.

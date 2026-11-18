@@ -17,8 +17,9 @@ PUBLIC = {"DomusError", "Site", "clip", "create", "demo", "fit_affine", "linz_qu
 SITE_METHODS = {"build", "check", "edit", "evaluate", "export", "fetch", "fetch_marks", "fetch_points", "fetch_title", "frame",
                 "grid", "ground", "house_walls", "layer", "lot", "map_canopy", "options", "output", "path", "regrade", "scan",
                 "settings", "shift", "shots", "title", "trust", "upgrade", "video", "prep"}
-# Provisional, as the video and prep steps are (docs/api.md): the one route for every change to a site's data.
-CHANGE_METHODS = {"accept", "edits", "proposals", "propose", "reject", "undo"}
+# Provisional, as the video and prep steps are (docs/api.md): the one route for every change to a site's data, and the
+# house kept as an IFC file.
+CHANGE_METHODS = {"accept", "edits", "proposals", "propose", "reject", "undo", "write_house_ifc"}
 
 
 def test_the_promised_names_are_all_there():

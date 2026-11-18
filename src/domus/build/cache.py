@@ -62,9 +62,11 @@ def key(*parts):
 
 class Cache:
     """The cache of one site's builds, in `root`/.domus/build-cache. `enabled` is False where it can't be used, and
-    for a `fresh` build, which takes nothing from the last."""
+    for a `fresh` build, which takes nothing from the last. `also` is what else the site's key holds: the SHA-256 of
+    the house's IFC file, when the house is drawn from one (domus.model.house_ifc.digest), so any change to it is a
+    change to the site whatever its size and time say."""
 
-    def __init__(self, root, out, fresh=False):
+    def __init__(self, root, out, fresh=False, also=None):
         self.dir = Path(root) / ".domus" / "build-cache"
         self.out = Path(out)
         self.used = set()
@@ -77,7 +79,7 @@ class Cache:
                 probe.unlink()
             except OSError:
                 self.enabled = False
-        self.site = key(code_key(), site_files(root)) if self.enabled else None
+        self.site = key(code_key(), site_files(root), *([also] if also else [])) if self.enabled else None
 
     def get(self, name, k):
         """The data kept under `name` for key `k`, with its files put back in the output folder, or None."""
