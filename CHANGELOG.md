@@ -10,6 +10,9 @@
   down its slope, where the other would draw a ridge or a gully across it. Options with such terraces can measure and
   draw a little differently there. The viewer's sketch preview now shows such a terrace, where it said it couldn't;
   it still can't where five or more corners lie on one circle.
+- The server with many sites reads a post's body before it turns the post away (a site that isn't there, or a
+  path outside any site), as one site's server already did, so its answer reaches the client: a body left unread
+  when the server closed the connection reset it, and the 404 could be lost on the way.
 
 ## 2026.11.56
 

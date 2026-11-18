@@ -578,6 +578,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def drain(self, cap=65536):
+        """Reads the request's body (up to `cap` bytes) before an answer that doesn't need it: the server closes the
+        connection after answering, and a body left unread then resets it, which can lose the answer on its way."""
+        try:
+            length = int(self.headers.get("Content-Length", "") or 0)
+        except ValueError:
+            return
+        if length > 0:
+            self.rfile.read(min(length, cap))
+
     def data_dir(self):
         return next((d for d in self.data_dirs if (d / "model.json").exists()), None)
 
@@ -972,12 +982,15 @@ class SitesHandler(Handler):
     def do_POST(self):
         entered = self.enter()
         if entered is False:
+            self.drain()
             return self.send_json({"error": "no such site"}, 404)
         if entered:
             if urlsplit(self.path).path == "/api/create" and self.sites.building():
+                self.drain()
                 return self.send_json({"error": "Another model is being built. Try again when it's done."}, 409)
             return super().do_POST()
         if urlsplit(self.path).path != "/api/sites":
+            self.drain()
             return self.send_json({"error": "not found"}, 404)
         try:
             length = int(self.headers.get("Content-Length", ""))
@@ -1001,6 +1014,7 @@ class SitesHandler(Handler):
 
     def do_PUT(self):
         if self.enter() is False:
+            self.drain()
             return self.send_json({"error": "no such site"}, 404)
         return super().do_PUT()
 

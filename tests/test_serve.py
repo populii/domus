@@ -354,6 +354,34 @@ def test_each_site_of_many_has_its_own_changes(tmp_path):
         httpd.server_close()
 
 
+def test_a_post_the_many_site_server_turns_away_still_gets_its_answer(tmp_path):
+    """The server reads a post's body before it answers 404, so a body that arrives after the headers (as http.client
+    sends it, in a second send) isn't left unread when the connection closes, which would reset it and lose the 404."""
+    import socket
+    import time
+
+    (tmp_path / "sites").mkdir()
+    httpd = serve.make_sites_server("127.0.0.1", 0, tmp_path / "sites")
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    port = httpd.server_address[1]
+    head = (b"POST %s HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n"
+            b"Content-Length: 2\r\n\r\n")
+    try:
+        for path in (b"/api/edits/1/undo", b"/s/nowhere/api/edits/1/undo"):
+            with socket.create_connection(("127.0.0.1", port), timeout=10) as s:
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                s.sendall(head % path)
+                time.sleep(0.2)
+                s.sendall(b"{}")
+                got = b""
+                while chunk := s.recv(65536):
+                    got += chunk
+            assert got.split(b"\r\n", 1)[0].endswith(b"404 Not Found"), (path, got[:80])
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
 def test_the_viewer_keeps_the_ground_a_wall_holds_from_crossing_itself(demo_server):
     """The ground a sketched wall holds, its line and the line behind it, can't cross itself: holding it deeper behind
     a narrow V, where it would, is undone, with the message the server gives (sketch.crossings)."""
