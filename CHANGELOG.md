@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.39
 
 - **For site projects:** how sure a datum's offset and the upper floor's level are, `[datums.<datum>] uncertainty_m`
   and `[house] fl_upper_uncertainty_m`, aren't Domus settings any more: nothing in Domus read them. A site keeps them
