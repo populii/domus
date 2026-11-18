@@ -71,12 +71,12 @@ def levels_on(tris, pts, z, e, n):
 
 
 def test_the_preview_levels_a_terrace_as_the_build_does(tmp_path):
-    """A terrace with its own level at each corner is linear on its corners' Delaunay triangles, which scheme.Terrace
-    has from scipy, worked out about its first corner. The viewer's copy finds the same triangles, so the same levels,
-    on corners scattered at random on a site's grid: across 3 to 60 m, many come near four on one circle, where Qhull
-    on the grid itself would cut them as rounding fell. Where four lie on one circle, either way of cutting them is
-    Delaunay: the copy lays them as a fan when their levels lie on one plane, which gives the same levels, and
-    otherwise finds none, so the preview says it can't show that terrace."""
+    """A terrace with its own level at each corner is linear on its corners' triangles, which scheme.Terrace has from
+    geo.mesh.delaunay_by_height: Delaunay's, worked out about its first corner, but where four corners lie within a few
+    millimetres of one circle, cut along the diagonal whose ends are closer in height. The viewer's copy finds the same
+    triangles, so the same levels: on corners scattered at random on a site's grid, across 3 to 60 m, and where four
+    lie on one circle, level, on one plane or on none. Where five or more lie on one circle, which way the build cuts
+    them depends on how Qhull first did, so the copy finds none and the preview says it can't show that terrace."""
     rng = np.random.default_rng(7)
     sets = []
     for k in (3, 4, 5, 6, 8, 12, 20, 30):
@@ -85,10 +85,16 @@ def test_the_preview_levels_a_terrace_as_the_build_does(tmp_path):
                 at = np.array([1500000.0, 5500000.0]) + rng.uniform(-3000.0, 3000.0, 2)
                 sets.append({"pts": (at + rng.uniform(0.0, size, (k, 2))).tolist(), "z": rng.uniform(40.0, 43.0, k).tolist()})
     square = [[1500000.0, 5500000.0], [1500004.0, 5500000.0], [1500004.0, 5500004.0], [1500000.0, 5500004.0], [1500002.0, 5500009.0]]
+    near = [[1500000.0, 5500000.0], [1500004.0, 5500000.0], [1500003.9991, 5500004.0], [1500000.0, 5500004.0], [1500002.0, 5500009.0]]
     sets += [{"pts": square, "z": [41.0, 41.0, 41.0, 41.0, 41.5]},       # four on one circle, level
-             {"pts": square, "z": [41.0, 41.2, 41.2, 41.0, 41.5]}]       # four on one circle, on one plane
-    off_a_plane = {"pts": square, "z": [41.0, 41.2, 41.0, 41.2, 41.5]}   # four on one circle, on no one plane
-    (tmp_path / "sets.json").write_text(json.dumps([*sets, off_a_plane]), encoding="utf-8")
+             {"pts": square, "z": [41.0, 41.2, 41.2, 41.0, 41.5]},       # four on one circle, on one plane
+             {"pts": square, "z": [41.0, 41.2, 41.0, 41.2, 41.5]},       # four on one circle, on no one plane: as close
+             {"pts": square, "z": [41.0, 41.0, 41.3, 41.0, 41.5]},       # and 1-3 closer in height
+             {"pts": near, "z": [41.0, 41.0, 41.3, 41.0, 41.5]}]         # a corner 0.9 mm in from the circle
+    ring = np.radians([90, 162, 234, 306, 18])
+    five = {"pts": (np.array([1500000.0, 5500000.0]) + 3.0 * np.column_stack([np.cos(ring), np.sin(ring)])).tolist(),
+            "z": [41.0, 41.4, 41.1, 41.3, 41.2]}                          # five on one circle, on no one plane
+    (tmp_path / "sets.json").write_text(json.dumps([*sets, five]), encoding="utf-8")
     out = subprocess.run(["node", str(HERE / "delaunay_check.mjs"), str(VIEWER / "sketch-core.js"), str(tmp_path / "sets.json")],
                          capture_output=True, text=True, encoding="utf-8", check=False, timeout=300)
     assert out.returncode == 0, out.stderr
@@ -99,6 +105,7 @@ def test_the_preview_levels_a_terrace_as_the_build_does(tmp_path):
         pts = np.asarray(s["pts"])
         terrace = scheme.Terrace({"id": "t", "polygon": [[*p, z] for p, z in zip(pts.tolist(), s["z"], strict=True)]},
                                  {"batter": 1.0}, None)
+        assert {frozenset(t) for t in tris} == {frozenset(map(int, t)) for t in terrace.triangles}
         x0, y0 = pts.min(axis=0)
         x1, y1 = pts.max(axis=0)
         e, n = (v.ravel() for v in np.meshgrid(np.linspace(x0, x1, 60), np.linspace(y0, y1, 60)))

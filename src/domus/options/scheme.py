@@ -33,12 +33,12 @@ import math
 
 import numpy as np
 import shapely
-from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
+from scipy.interpolate import NearestNDInterpolator
 from shapely.geometry import LineString, Polygon
 from shapely.ops import polygonize, unary_union
 
 from ..errors import DomusError
-from ..geo.mesh import Mesh, offset_behind, prism, resample_line
+from ..geo.mesh import Mesh, Surface, delaunay_by_height, offset_behind, prism, resample_line
 from ..model import walls as walls_mod
 from ..model.house import COMPASS
 from ..model.walls import bay_levels, line_normals
@@ -136,12 +136,13 @@ class Terrace:
         self.poly = Polygon(pts[:, :2]).buffer(0)
         self.crossing = crossing(pts)       # an outline that crosses itself is reshaped by buffer(0): the build says so
         if pts.shape[1] == 3:
-            # its own level at each corner, linear between them on its corners' Delaunay triangles, worked out about
-            # its first corner: Qhull finds them from each corner's squared distance from the origin, which on the
-            # site's grid is too large to keep their shape, so near four corners on one circle it would cut them as
-            # the rounding fell, and could leave a corner out
+            # its own level at each corner, linear between them on its corners' triangles (geo.mesh.delaunay_by_height):
+            # Delaunay's, worked out about its first corner, but where four corners lie on one circle, to the millimetre
+            # they're given, cut along the diagonal whose ends are closer in height
             self._origin = pts[0, :2].copy()
-            self._lin = LinearNDInterpolator(pts[:, :2] - self._origin, pts[:, 2])
+            self.corners, self.levels = pts[:, :2].copy(), pts[:, 2].copy()
+            self.triangles = delaunay_by_height(self.corners, self.levels)
+            self._surface = Surface(np.column_stack([self.corners - self._origin, self.levels]), self.triangles)
             self._near = NearestNDInterpolator(pts[:, :2], pts[:, 2])
             self.plane = None
         else:
@@ -158,19 +159,19 @@ class Terrace:
         if self.plane is not None:
             level, at, grad = self.plane
             return level - ((e - at[0]) * grad[0] + (n - at[1]) * grad[1])
-        z = self._lin(e - self._origin[0], n - self._origin[1])
+        z = np.asarray(self._surface.z(e - self._origin[0], n - self._origin[1]), float)
         bad = ~np.isfinite(z)
         if bad.any():
             z[bad] = self._carried(e[bad], n[bad])
         return z
 
     def _carried(self, e, n):
-        """The level at points (e, n) that the interpolator reads as outside its triangles. Rounding puts a point on
-        an edge of them (a batter's foot, say) on either side of it, the more often the larger the grid's
-        coordinates, so a point within a micrometre of a triangle takes that triangle's level, carried on to it.
-        Only a point further out takes the nearest corner's."""
-        tri = self._lin.tri
-        corners = tri.points[tri.simplices]                                    # (triangles, 3 corners, 2), about _origin
+        """The level at points (e, n) that read as outside its triangles. Rounding puts a point on an edge of them (a
+        batter's foot, say) on either side of it, the more often the larger the grid's coordinates, so a point within
+        a micrometre of a triangle takes that triangle's level, carried on to it. Only a point further out takes the
+        nearest corner's."""
+        local = self.corners - self._origin
+        corners = local[self.triangles]                                        # (triangles, 3 corners, 2), about _origin
         ends = np.roll(corners, -1, axis=1)
         p = np.column_stack([e, n]) - self._origin
         rel = p[:, None, None, :] - corners[None]                              # (points, triangles, 3, 2)
@@ -182,11 +183,13 @@ class Terrace:
         out = self._near(e, n)
         near = gap[np.arange(len(p)), best] < 1e-6
         if near.any():
-            t = tri.transform[best[near]]                                      # each to its triangle's corners' weights
-            w = np.einsum("ijk,ik->ij", t[:, :2], p[near] - t[:, 2])
-            w = np.column_stack([w, 1.0 - w.sum(axis=1)])
-            levels = np.asarray(self._lin.values, float).ravel()[tri.simplices[best[near]]]
-            out[near] = (levels * w).sum(axis=1)
+            a, b, c = (corners[best[near], k] for k in range(3))               # each to its triangle's corners' weights
+            q = p[near]
+            den = (b[:, 1] - c[:, 1]) * (a[:, 0] - c[:, 0]) + (c[:, 0] - b[:, 0]) * (a[:, 1] - c[:, 1])
+            u = ((b[:, 1] - c[:, 1]) * (q[:, 0] - c[:, 0]) + (c[:, 0] - b[:, 0]) * (q[:, 1] - c[:, 1])) / den
+            v = ((c[:, 1] - a[:, 1]) * (q[:, 0] - c[:, 0]) + (a[:, 0] - c[:, 0]) * (q[:, 1] - c[:, 1])) / den
+            levels = self.levels[self.triangles[best[near]]]
+            out[near] = u * levels[:, 0] + v * levels[:, 1] + (1.0 - u - v) * levels[:, 2]
         return out
 
     def slope(self):

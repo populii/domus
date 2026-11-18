@@ -7,8 +7,8 @@
 // with heights as they are, from what the model gives the viewer: model.json's `origin`, `regrade` and ground layer.
 //
 // Only what a sketch makes is here: walls and the ground they hold, and areas, level or falling, with their batters.
-// Where four corners of a terrace lie on one circle with levels on no one plane, either way of cutting them is
-// Delaunay, so a sketch with one says it can't be shown (`unsupported`).
+// Where five or more corners of a terrace lie on one circle, which way the build cuts them depends on how Qhull first
+// did, so a sketch with one says it can't be shown (`unsupported`).
 //
 // No DOM: the viewer runs this in a worker (sketch-worker.js), and node runs it in the tests. Manifold's objects live
 // in the WebAssembly's memory, so each one made is kept in a list and deleted when the work it was for is done.
@@ -379,11 +379,14 @@ function planeOf(ring, z) {
   return [z[0], ge, gn];
 }
 
-// scheme.Terrace's triangles for a terrace with its own level at each corner, the Delaunay triangles of its corners
-// (scipy's, by Qhull), as [i, j, k] counter-clockwise: three corners make one where no other corner is inside their
-// circle. They're unique wherever no four corners lie on one circle. Where four or more do, any way of cutting them
-// is Delaunay: if their levels lie on one plane each gives the same levels, and they're laid as a fan; if not, null,
-// and the terrace isn't previewed.
+// scheme.Terrace's triangles for a terrace with its own level at each corner (geo.mesh.delaunay_by_height), as
+// [i, j, k] counter-clockwise: the Delaunay triangles of its corners (three corners make one where no other corner is
+// inside their circle), but where two triangles' four corners lie within CIRCLE_NEAR_M of one circle, cut along the
+// diagonal whose ends are closer in height, or as close, the one from the corner given first. Corners exactly on one
+// circle are first laid as a fan, where Qhull lays them its own way; the cutting by height ends the same from either
+// for four corners, but five or more on one circle can end either way, and then null: the terrace isn't previewed.
+export const CIRCLE_NEAR_M = 0.005;     // geo.mesh.CIRCLE_NEAR_M
+
 export function delaunay(pts, z) {
   const n = pts.length, [x0, y0] = pts[0];
   const P = pts.map(([x, y]) => [x - x0, y - y0]);
@@ -415,14 +418,57 @@ export function delaunay(pts, z) {
       groups.set(group.join(","), group);
     }
   }
-  for (const group of groups.values()) {         // corners on one circle: a fan, where their levels are one plane
-    const plane = planeOf(group.map((m) => pts[m]), group.map((m) => z[m]));
-    if (!plane && !group.every((m) => z[m] === z[group[0]])) return null;
+  for (const group of groups.values()) {         // corners on one circle: a fan, to be cut by height below
     const cx = group.reduce((t, m) => t + P[m][0], 0) / group.length, cy = group.reduce((t, m) => t + P[m][1], 0) / group.length;
     const round_ = [...group].sort((p, q) => Math.atan2(P[p][1] - cy, P[p][0] - cx) - Math.atan2(P[q][1] - cy, P[q][0] - cx));
     for (let m = 1; m + 1 < round_.length; m++) tris.push([round_[0], round_[m], round_[m + 1]]);
   }
-  return tris.length ? tris : null;
+  if (!tris.length) return null;
+  // mesh._off_circle: how far s lies from the circle through p, q and r
+  const offCircle = (p, q, r, s) => {
+    const [ax, ay] = P[p], [bx, by] = P[q], [cx, cy] = P[r];
+    const den = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+    if (!(Math.abs(den) > 1e-12)) return Infinity;
+    const a2 = ax * ax + ay * ay, b2 = bx * bx + by * by, c2 = cx * cx + cy * cy;
+    const ux = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / den, uy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / den;
+    return Math.abs(Math.hypot(P[s][0] - ux, P[s][1] - uy) - Math.hypot(ax - ux, ay - uy));
+  };
+  const cross = (o, a, b) => (P[a][0] - P[o][0]) * (P[b][1] - P[o][1]) - (P[a][1] - P[o][1]) * (P[b][0] - P[o][0]);
+  const shared = () => {                         // each edge two triangles share, in order of its corners: [a, b, c, d, t1, t2]
+    const seen = new Map();
+    tris.forEach((t, k) => {
+      for (let e = 0; e < 3; e++) {
+        const i = t[e], j = t[(e + 1) % 3], key = i < j ? `${i},${j}` : `${j},${i}`;
+        if (!seen.has(key)) seen.set(key, []);
+        seen.get(key).push([k, t[(e + 2) % 3]]);
+      }
+    });
+    return [...seen.entries()].filter(([, v]) => v.length === 2)
+      .map(([key, v]) => [...key.split(",").map(Number), v[0][1], v[1][1], v[0][0], v[1][0]])
+      .sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+  };
+  const near = ([a, b, c, d]) => Math.min(offCircle(a, b, c, d), offCircle(a, b, d, c)) <= CIRCLE_NEAR_M;
+  for (let pass = 0; pass < 10 * tris.length + 10; pass++) {
+    const used = new Set();
+    let cut = 0;
+    for (const [a, b, c, d, t1, t2] of shared()) {
+      if (used.has(t1) || used.has(t2) || !(cross(c, d, a) * cross(c, d, b) < 0) || !near([a, b, c, d])) continue;
+      const dab = Math.abs(z[a] - z[b]), dcd = Math.abs(z[c] - z[d]);
+      if (!(dcd < dab - 1e-9 || (Math.abs(dcd - dab) <= 1e-9 && Math.min(c, d) < Math.min(a, b)))) continue;
+      tris[t1] = [c, d, a];
+      tris[t2] = [d, c, b];
+      used.add(t1).add(t2);
+      cut++;
+    }
+    if (!cut) break;
+  }
+  // five or more corners on one circle: two such pairs share a triangle
+  const close = shared().filter(near), seen = new Set();
+  for (const [, , , , t1, t2] of close) {
+    if (seen.has(t1) || seen.has(t2)) return null;
+    seen.add(t1).add(t2);
+  }
+  return tris.map(([a, b, c]) => (cross(a, b, c) < 0 ? [a, c, b] : [a, b, c]));
 }
 
 // A terrace's level at (e, n) on its triangles (scheme.Terrace.z): in the one it's in; a micrometre or less outside
@@ -982,7 +1028,7 @@ export function makePreview(wasm, model) {
       if (!opt.walls.length && !opt.terraces.length) return { empty: true };
       const design = makeDesign(opt, defaults, rules, ground, garden);
       if (design.terraces.some((t) => !t.zAt)) {
-        return { unsupported: "a terrace whose corners lie on a circle with levels on no one plane" };
+        return { unsupported: "a terrace with five or more of its corners on one circle" };
       }
       const walls = design.wallLevels();
       const out = solids(design, walls, optionWindow(design, walls), segments, conflictStep);

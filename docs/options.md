@@ -85,7 +85,10 @@ width_m = 1.0
 ```
 
 A terrace polygon with three numbers per corner (`[s, o, level]`) takes its own level at each
-corner, linear between them: a planting strip that rises beside a sloping drive is drawn this way.
+corner, linear between them: a planting strip that rises beside a sloping drive is drawn this way. Between them is
+on the corners' Delaunay triangles, but where four corners lie within 5 mm of one circle, as a rectangle's do, either
+diagonal would be Delaunay, and the terrace is cut along the one whose ends are closer in height (where both are as
+close, the one from the corner given first).
 Draw a terrace's edge on the wall's face line where a wall holds it. A terrace's outline mustn't cross or touch
 itself: the build takes such an outline as shapely's `buffer(0)` reshapes it, which can keep only part of what it
 closes round, and says so in a warning that names the option and the terrace.

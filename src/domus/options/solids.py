@@ -411,13 +411,13 @@ def _is_level(t):
     """Whether terrace `t` is at one level all over: a plane that doesn't fall, or the same level at every corner."""
     if t.plane is not None:
         return not np.any(t.plane[2])
-    values = np.asarray(t._lin.values, float).ravel()
+    values = t.levels
     return bool(np.all(values == values[0]))
 
 
 def _level_of(t):
     """A level terrace's level (_is_level)."""
-    return float(t.plane[0]) if t.plane is not None else float(np.asarray(t._lin.values, float).ravel()[0])
+    return float(t.plane[0]) if t.plane is not None else float(t.levels[0])
 
 
 # --- an option as solids ---------------------------------------------------------------------
@@ -756,9 +756,7 @@ def _straight(t, free):
     pieces = list(free)
     if t.plane is not None or _is_level(t):
         return pieces
-    tri = t._lin.tri                                            # about the terrace's first corner, t._origin
-    edges = shapely.MultiLineString([tri.points[[i, j]] + t._origin
-                                     for s in tri.simplices for i, j in ((s[0], s[1]), (s[1], s[2]), (s[2], s[0]))])
+    edges = shapely.MultiLineString([t.corners[[i, j]] for s in t.triangles for i, j in ((s[0], s[1]), (s[1], s[2]), (s[2], s[0]))])
     out = []
     for p, q in pieces:
         line = shapely.LineString([p, q])
@@ -855,11 +853,8 @@ def _terrace_columns(t, plan_cs, origin, zb, top, paving):
         return split_by_plane(col, (at[0] - origin[0], at[1] - origin[1], level - paving), -np.asarray(grad, float))
     if _is_level(t):                                    # its own level at each corner, the same at every one
         return split_by_plane(col, (0.0, 0.0, _level_of(t) - paving), (0.0, 0.0))
-    # Its own level at each corner, linear between them on the triangles Domus interpolates on (where four corners
-    # lie on a circle there's a choice of diagonal: take the interpolator's).
-    corners = np.asarray(t._lin.tri.points, float) + (t._origin - origin)      # its triangles are about t._origin
-    z = np.asarray(t._lin.values, float).ravel() - paving
-    surface = close_surface(np.column_stack([corners, z]), t._lin.tri.simplices, zb + 0.5)
+    # Its own level at each corner, linear between them on its triangles (Terrace.triangles)
+    surface = close_surface(np.column_stack([t.corners - origin, t.levels - paving]), t.triangles, zb + 0.5)
     return surface ^ col, col - surface
 
 

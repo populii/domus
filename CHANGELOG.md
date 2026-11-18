@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** a terrace that gives its own level at each corner is cut, where four of its corners lie
+  within 5 mm of one circle, along the diagonal whose ends are closer in height, as the ground model cuts its grid's
+  cells. A rectangle's corners lie on one circle, and corners given to the millimetre come that near, so either
+  diagonal is Delaunay there: 2026.11.53 and before took whichever the rounding on the site's grid gave, and could
+  leave a corner out; 2026.11.54 took Delaunay's, by a fraction of a millimetre. Along the closer pair a bank is drawn
+  down its slope, where the other would draw a ridge or a gully across it. Options with such terraces can measure and
+  draw a little differently there. The viewer's sketch preview now shows such a terrace, where it said it couldn't;
+  it still can't where five or more corners lie on one circle.
+
 ## 2026.11.56
 
 - **For site projects:** the house's IFC changes through the change route ([docs/changes.md](docs/changes.md#the-houses-ifc)),

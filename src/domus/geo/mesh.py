@@ -104,6 +104,82 @@ def surface_z(vertices, faces, e, n):
     return Surface(vertices, faces).z(e, n)
 
 
+CIRCLE_NEAR_M = 0.005      # corners this near one circle are on it, to the precision they're given (delaunay_by_height)
+
+
+def _off_circle(p, q, r, s):
+    """How far each point s lies from the circle through p, q and r (arrays of points, (k, 2)), inf where those three
+    are in a line."""
+    ax, ay, bx, by, cx, cy = p[:, 0], p[:, 1], q[:, 0], q[:, 1], r[:, 0], r[:, 1]
+    den = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        a2, b2, c2 = ax * ax + ay * ay, bx * bx + by * by, cx * cx + cy * cy
+        ux = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / den
+        uy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / den
+        gap = np.abs(np.hypot(s[:, 0] - ux, s[:, 1] - uy) - np.hypot(ax - ux, ay - uy))
+    return np.where(np.abs(den) > 1e-12, gap, np.inf)
+
+
+def delaunay_by_height(points, heights, near_m=CIRCLE_NEAR_M, among=None, triangles=None):
+    """Triangles for points with a height each, as (k, 3) index triples into `points` (E, N), counter-clockwise: their
+    Delaunay triangles, worked out about the first point so a grid millions of metres out loses nothing to rounding,
+    but where two triangles' four corners lie within `near_m` of one circle, cut along the diagonal whose ends are
+    closer in height (`heights`). There Delaunay could take either diagonal, to the precision the corners are given,
+    and along the closer pair a bank is drawn down its slope, where the other would draw a ridge or a gully across it,
+    as the ground model cuts its grid's cells (domus.model.tin.cut_cells). Where both pairs are as close, the diagonal
+    from the corner given first. `among` (indices into `points`) cuts only the pairs with one of those among their
+    corners again; None, every pair. Given `triangles` (index triples into `points`, such as a Delaunay of the
+    caller's own), it cuts those again instead of working its own out, leaving each one it doesn't cut as it was given,
+    in its place and its turn.
+
+    The pairs are cut in passes, each over the shared edges in order of their corners, a triangle cut at most once a
+    pass, until none is cut: each cut takes an edge whose ends differ less in height (or, as close, the one from the
+    corner given first), so it ends. Four corners on one circle end the same whichever way Delaunay first cut them;
+    five or more can end either way."""
+    from scipy.spatial import Delaunay
+
+    p = np.asarray(points, float)[:, :2]
+    p = p - p[0]
+    h = np.asarray(heights, float).ravel()
+    given = triangles is not None
+    faces = np.array(triangles if given else Delaunay(p).simplices, np.int64).reshape(-1, 3)
+    recut = np.zeros(len(faces), bool)
+    pick = None if among is None else np.isin(np.arange(len(p)), np.asarray(among, np.int64))
+    for _ in range(10 * len(faces) + 10):
+        edges = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
+        other = np.concatenate([faces[:, 2], faces[:, 0], faces[:, 1]])
+        tri = np.tile(np.arange(len(faces)), 3)
+        key = np.sort(edges, axis=1)
+        order = np.lexsort((key[:, 1], key[:, 0]))
+        key, other, tri = key[order], other[order], tri[order]
+        twin = np.flatnonzero((key[1:] == key[:-1]).all(axis=1))           # an edge two triangles share: k and k + 1
+        a, b, c, d = key[twin, 0], key[twin, 1], other[twin], other[twin + 1]
+        across = cross2(p[d] - p[c], p[a] - p[c]) * cross2(p[d] - p[c], p[b] - p[c]) < 0     # a and b either side of c-d
+        near = np.minimum(_off_circle(p[a], p[b], p[c], p[d]), _off_circle(p[a], p[b], p[d], p[c])) <= near_m
+        dab, dcd = np.abs(h[a] - h[b]), np.abs(h[c] - h[d])
+        better = (dcd < dab - 1e-9) | ((np.abs(dcd - dab) <= 1e-9) & (np.minimum(c, d) < np.minimum(a, b)))
+        go = across & near & better
+        if pick is not None:
+            go &= pick[a] | pick[b] | pick[c] | pick[d]
+        used, cut = set(), 0
+        for k in np.flatnonzero(go):
+            t1, t2 = int(tri[twin[k]]), int(tri[twin[k] + 1])
+            if t1 in used or t2 in used:
+                continue
+            faces[t1] = (c[k], d[k], a[k])
+            faces[t2] = (d[k], c[k], b[k])
+            recut[[t1, t2]] = True
+            used.update((t1, t2))
+            cut += 1
+        if not cut:
+            break
+    turn = cross2(p[faces[:, 1]] - p[faces[:, 0]], p[faces[:, 2]] - p[faces[:, 0]]) < 0
+    if given:
+        turn &= recut
+    faces[turn] = faces[turn][:, [0, 2, 1]]
+    return faces
+
+
 def signed_area(ring):
     x, y = np.asarray(ring, float)[:, :2].T
     return 0.5 * (np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))
