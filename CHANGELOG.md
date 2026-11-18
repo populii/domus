@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.47
 
 - **For site projects:** a site's `video` and `prep` run the steps of `domus video` and `domus prep` the same way:
   `site.video.place("walk")`, `site.prep.profile(...)` and the rest, with the command's options as arguments and
