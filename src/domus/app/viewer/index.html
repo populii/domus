@@ -111,6 +111,16 @@ button:focus-visible, input:focus-visible + span, .seg input:focus-visible + lab
 .enrich-item summary { cursor: pointer; }
 .enrich-item p { margin: 3px 0; }
 .walk-steps { margin: 6px 0; padding-left: 20px; font-size: 13px; line-height: 1.45; }
+.ch-list { display: grid; gap: 6px; }
+#proposalList:empty::before { content: "Nothing waiting."; color: var(--muted); font-size: 13px; }
+#editList:empty::before { content: "None yet."; color: var(--muted); font-size: 13px; }
+.ch-item { border: 1px solid var(--rule); border-radius: 4px; padding: 7px 8px; display: grid; gap: 4px; font-size: 13px; line-height: 1.4; }
+.ch-item .ch-head { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.ch-item .ch-head b { font: 500 12px var(--font-data); }
+.ch-item .ch-meta { color: var(--muted); font-size: 12px; }
+.ch-item ul { margin: 0; padding-left: 16px; font: 11.5px/1.45 var(--font-data); color: var(--muted); overflow-wrap: anywhere; }
+.ch-item.undone { opacity: 0.6; }
+.ch-item input { flex: 1 1 9em; min-width: 0; font: 12.5px var(--font-body); color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; padding: 3px 5px; }
 .group-name { font-family: var(--font-display); font-weight: 600; font-size: 14px; }
 .layer { display: grid; grid-template-columns: 18px 22px minmax(0, 1fr); align-items: center; gap: 6px; cursor: pointer; }
 .layer input { margin: 0; accent-color: var(--accent); }
@@ -495,6 +505,14 @@ details > summary { cursor: pointer; font-size: 13px; color: var(--accent); marg
       <button type="button" id="walkScan" style="margin-top:6px" hidden>Scan with this phone</button>
       <ol class="walk-steps" id="walkSteps"></ol>
       <div class="hint">Keep to your own land. Walk slowly and turn gradually: docs/video.md has more on filming.</div>
+    </section>
+    <section id="changes" hidden>
+      <h2>Proposed changes</h2>
+      <div class="hint">What a check or a tool proposes to change in the site's data. Nothing changes until it's accepted, and then the model is built again.</div>
+      <div class="ch-list" id="proposalList"></div>
+      <h2 style="margin-top:12px">Changes made</h2>
+      <div class="ch-list" id="editList"></div>
+      <div class="hint" id="changeStatus" aria-live="polite"></div>
     </section>
         <section>
           <h2>Grid and heights</h2>
@@ -2365,6 +2383,83 @@ function doHover() {
     $("walkShow").textContent = on ? "Hide the route" : "Show the route";
     setLayerVisible("walk-route", on);
     if (on) { const v = VIEWS.Plan; flyTo(v.pos, v.target); }
+  });
+})();
+
+// Panel: the changes proposed to the site's data, to accept or reject, and the edits made to it, to undo
+// (docs/changes.md). Only where domus serve answers: each runs as its command does, and one that changes the data
+// builds the model again, after which the page reloads.
+(function changesPanel() {
+  let busy = false;
+  const say = (t) => { $("changeStatus").textContent = t; };
+  const when = (t) => (t ? new Date(t).toLocaleString() : "");
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const button = (text, fn) => { const b = el("button", "", text); b.type = "button"; b.disabled = busy; b.addEventListener("click", fn); return b; };
+  const head = (id, meta) => { const h = el("div", "ch-head"); h.append(el("b", "", id), el("span", "ch-meta", meta)); return h; };
+  const lines = (summary) => { const ul = el("ul"); for (const s of summary || []) ul.append(el("li", "", s)); return ul; };
+  async function load() {
+    const r = await fetch("api/changes").catch(() => null);
+    return r?.ok ? r.json() : null;
+  }
+  function render(c) {
+    $("proposalList").replaceChildren();
+    $("editList").replaceChildren();
+    for (const p of c.proposals.filter((q) => q.state === "open")) {
+      const d = el("div", "ch-item"), row = el("div", "rowbtns");
+      const why = el("input");
+      why.maxLength = 500;
+      why.hidden = true;
+      why.placeholder = "Why not?";
+      why.setAttribute("aria-label", `Why proposal ${p.id} is rejected`);
+      const no = button("Reject", () => {
+        if (why.hidden) { why.hidden = false; no.textContent = "Reject it"; why.focus(); return; }
+        if (!why.value.trim()) { why.focus(); return; }
+        act(`api/proposals/${p.id}/reject`, { why: why.value.trim() }, `Rejecting ${p.id}…`);
+      });
+      row.append(button("Accept", () => act(`api/proposals/${p.id}/accept`, {}, `Accepting ${p.id}, then building the model again…`)), no, why);
+      d.append(head(p.id, `${p.source} · ${when(p.made)}`), el("div", "", p.why), lines(p.summary), row);
+      $("proposalList").append(d);
+    }
+    for (const e of c.edits) {
+      const d = el("div", e.in_effect ? "ch-item" : "ch-item undone");
+      const meta = [e.who, when(e.when), e.undoes ? `undoes ${e.undoes}` : "", e.in_effect ? "" : `undone by ${e.undone_by}`];
+      d.append(head(e.id, meta.filter(Boolean).join(" · ")), el("div", "", e.why), lines(e.summary));
+      if (e.in_effect) {
+        const row = el("div", "rowbtns");
+        row.append(button("Undo", () => act(`api/edits/${e.id}/undo`, {}, `Undoing ${e.id}, then building the model again…`)));
+        d.append(row);
+      }
+      $("editList").append(d);
+    }
+  }
+  function wait(rejecting) {
+    load().then((c) => {
+      if (!c || c.job.state === "running") { setTimeout(() => wait(rejecting), 2000); return; }
+      busy = false;
+      if (c.job.state === "done" && !rejecting) { location.reload(); return; }
+      say(c.job.state === "done" ? "Done." : `That didn't work. Its last lines: ${c.job.log}`);
+      render(c);
+    });
+  }
+  async function act(url, body, text) {
+    busy = true;
+    say(text);
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+    if (!r?.ok) {
+      busy = false;
+      say(r ? (await r.json().catch(() => ({}))).error || `HTTP ${r.status}` : "The server didn't answer.");
+      const c = await load();
+      if (c) render(c);
+      return;
+    }
+    wait(url.endsWith("/reject"));
+  }
+  load().then((c) => {
+    if (!c) return;           // no server here, as on a published page: there's nothing to change it through
+    $("changes").hidden = false;
+    busy = c.job.state === "running";
+    render(c);
+    if (busy) { say("A change is being made…"); wait(true); }
   });
 })();
 

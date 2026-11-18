@@ -16,8 +16,10 @@
     domus serve                                               serve the viewer
     domus shots SPEC.json                                     pictures of the viewer, from a spec (docs/shots.md)
     domus site upgrade                                        write an older site's migrations into its files
-    domus site shift|edit SPEC BACKUP [--apply]               change the site's layers, keeping what was there
-    domus site regrade CLOUD SPEC BACKUP [--apply]            give ground fixes the levels a placed cloud shows
+    domus site shift|edit SPEC [BACKUP] [--apply]             change the site's data, recorded so it can be undone
+    domus site regrade CLOUD SPEC [BACKUP] [--apply]          give ground fixes the levels a placed cloud shows
+    domus site edits | undo EDIT                              the changes made to the site's data, and undo one
+    domus site proposals | accept ID | reject ID --why ...    the changes proposed, to accept or reject
 
 Every command but `new` and `demo` works on the site project in the current folder, or the one
 named by --site or the DOMUS_SITE environment variable. The command line reads which, once, and hands
@@ -131,7 +133,7 @@ def parser():
                      help=f"seconds the whole run may take, starting the browser included (default {shots.TIMEOUT_S:g})")
 
     sub = command(commands, "site", None, "The site folder itself.", "the site folder itself: upgrade it, trust its "
-                  "extensions, change its layers")
+                  "extensions, change its data and undo a change, accept or reject a proposed one")
     actions = sub.add_subparsers(dest="action", required=True)
     up = command(actions, "upgrade", _upgrade, "Write the site's migrations into its files, so they say what this Domus reads.",
                  "write the site's migrations into its files, so they say what this Domus reads")
@@ -140,14 +142,41 @@ def parser():
                  "let this machine's builds run the site's extensions, as they are now")
     tr.add_argument("--revoke", action="store_true", help="stop trusting them")
     for action, what in (("shift", "move named features of the site's layers by one vector, saying so in their basis"),
-                         ("edit", "change, add or delete named features of the site's layers"),
+                         ("edit", "change the site's data: its layers' features, or its settings"),
                          ("regrade", "give ground-fix points the levels a placed cloud shows")):
-        ed = command(actions, action, _edit, f"{what[0].upper()}{what[1:]}.", what)
+        ed = command(actions, action, _edit, f"{what[0].upper()}{what[1:]}. Each change is recorded in .domus/edits/, "
+                     "and domus site undo undoes it.", what)
         if action == "regrade":
             ed.add_argument("clouds", help="the cloud: <tag>-dense or <tag>-site in data/video, or several, comma-separated")
-        ed.add_argument("spec", help="what to change: a JSON file (domus.project.edits says what goes in it)")
-        ed.add_argument("backup", help="a fresh folder for the files as they were")
+        ed.add_argument("spec", help="what to change: a JSON file of intents (docs/changes.md)" if action == "edit" else
+                        "what to change: a JSON file (domus.project.edits says what goes in it)")
+        ed.add_argument("backup", nargs="?", help="a fresh folder for the files as they were (default: beside the change's "
+                                                  "record in .domus/edits/)")
         ed.add_argument("--apply", action="store_true", help="write the changes (without it, only say what they'd be)")
+        ed.add_argument("--why", help="why: recorded with the change" + ("" if action == "edit" else
+                                                                         " (default: the spec's basis)"))
+        ed.add_argument("--who", help="who's making it, recorded with it (default: this computer's user)")
+    un = command(actions, "undo", _undo, "Undo an edit: put back what it changed, if nothing has changed those files "
+                 "since. The undo is an edit too, so it can be undone in turn.", "undo an edit, if nothing has changed it since")
+    un.add_argument("edit", help="the edit's number, as domus site edits lists it")
+    un.add_argument("--why", help="why: recorded with the undo (default: that it undoes the edit)")
+    un.add_argument("--who", help="who's undoing it (default: this computer's user)")
+    un.add_argument("--build", action="store_true", help="build the model afterwards, as domus build does")
+    command(actions, "edits", _edits, "List the edits made to the site's data, oldest first.",
+            "list the edits made to the site's data")
+    pr = command(actions, "proposals", _proposals, "List the changes proposed for a person to accept or reject.",
+                 "list the changes proposed for a person to accept or reject")
+    pr.add_argument("--all", action="store_true", help="also those accepted or rejected already")
+    ac = command(actions, "accept", _accept, "Accept a proposed change: apply it, recorded as an edit whose basis is the "
+                 "proposal.", "accept a proposed change")
+    ac.add_argument("proposal", help="the proposal's number, as domus site proposals lists it")
+    ac.add_argument("--who", help="who's accepting it (default: this computer's user)")
+    ac.add_argument("--build", action="store_true", help="build the model afterwards, as domus build does")
+    rj = command(actions, "reject", _reject, "Reject a proposed change, saying why: the site's data stays as it is.",
+                 "reject a proposed change, saying why")
+    rj.add_argument("proposal", help="the proposal's number, as domus site proposals lists it")
+    rj.add_argument("--why", required=True, help="why it's rejected")
+    rj.add_argument("--who", help="who's rejecting it (default: this computer's user)")
 
     command(commands, "sketch-worker", _sketch_worker, "For the server: a sketch from the viewer per line on stdin, and "
             "what it comes to on the site per line on stdout, as JSON.")
@@ -284,12 +313,63 @@ def _trust(args, site, named):
 
 
 def _edit(args, site, named):
-    """`domus site shift|edit SPEC BACKUP [--apply]` and `domus site regrade CLOUDS SPEC BACKUP [--apply]`."""
+    """`domus site shift|edit SPEC [BACKUP] [--apply]` and `domus site regrade CLOUDS SPEC [BACKUP] [--apply]`."""
     s = opened(site)
     if args.action == "regrade":
-        s.regrade(args.clouds.split(","), args.spec, args.backup, args.apply)
+        s.regrade(args.clouds.split(","), args.spec, args.backup, args.apply, why=args.why, who=args.who)
+    elif args.action == "shift":
+        s.shift(args.spec, args.backup, args.apply, why=args.why, who=args.who)
     else:
-        getattr(s, args.action)(args.spec, args.backup, args.apply)
+        s.edit(args.spec, args.why, args.who, backup=args.backup, apply=args.apply)
+
+
+def _when(stamp):
+    return stamp.replace("T", " ").replace("Z", " UTC") if isinstance(stamp, str) else ""
+
+
+def _undo(args, site, named):
+    s = opened(site)
+    s.undo(args.edit, args.who, args.why)
+    if args.build:
+        s.build()
+
+
+def _edits(args, site, named):
+    """`domus site edits`: each edit, oldest first, with who made it, when, why and what it changed."""
+    records = opened(site).edits()
+    if not records:
+        print("No edits have been made to this site's data through its record yet (domus site edit makes one).")
+    for r in records:
+        state = f"  [undone by {r['undone_by']}]" if not r["in_effect"] else ""
+        undoes = f"  [undoes {r['undoes']}]" if r.get("undoes") else ""
+        print(f"{r['id']}  {_when(r['when'])}  {r['who']}  {r['why']}{undoes}{state}")
+        for line in r.get("summary", []):
+            print(f"      {line}")
+
+
+def _proposals(args, site, named):
+    """`domus site proposals [--all]`: the changes waiting for a person, or all of them."""
+    found = opened(site).proposals(None if args.all else "open")
+    if not found:
+        print("No proposed changes" + ("." if args.all else " wait for a person (--all lists those accepted or rejected)."))
+    for p in found:
+        done = p.get(p["state"], {})
+        after = (f" by {done.get('who')}" + (f", edit {done['edit']}" if done.get("edit") else "") +
+                 (f": {done['why']}" if done.get("why") else "")) if done else ""
+        print(f"{p['id']}  {p['state']}{after}  {p['source']}: {p['why']}")
+        for line in p.get("summary", []):
+            print(f"      {line}")
+
+
+def _accept(args, site, named):
+    s = opened(site)
+    s.accept(args.proposal, args.who)
+    if args.build:
+        s.build()
+
+
+def _reject(args, site, named):
+    opened(site).reject(args.proposal, args.why, args.who)
 
 
 def _serve(args, site, named):

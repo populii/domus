@@ -18,6 +18,8 @@ options/*.toml            one per option
 viewer/data/              the built model (set DOMUS_OUTPUT to move it; docs/model-format.md)
 .domus/viewer.db          saved sketches (set DOMUS_DB to move it)
 .domus/build-cache/       what the next build can reuse
+.domus/edits/             each change made to the site's data, and the files as they were (docs/changes.md)
+.domus/proposals/         changes proposed for a person to accept or reject (docs/changes.md)
 .gitignore                what git leaves out of the site: what Domus makes again (`domus new` writes it)
 ```
 
@@ -252,19 +254,23 @@ at the top of each module give the full detail: `model/features.py` for fences, 
 
 ### Changing the layers
 
-The layers are curated by hand, and three commands change them in ways you can check and undo. Each says what it
-would change and writes nothing until you add `--apply`; then it copies each file it changes into a folder you name
-(a fresh one each time), writes the new file, reads it back and checks that only what was named changed, and only then
-puts it in place, keeping the file's own layout.
+The layers are curated by hand, and every change to them, or to the settings, goes one way, so it can be checked and
+undone ([changes.md](changes.md)): it's said as an intent, such as "move wall W1 0.5 m east"; each file it changes is
+copied, written to a temporary file in its own layout, read back and checked to have changed only as asked, and only
+then put in place; and it's recorded in `.domus/edits/` with who, when and why, so `domus site undo` can put it back.
+Each command says what it would change and writes nothing until you add `--apply`.
 
-- `domus site shift SPEC.json BACKUP` moves named features by one vector in plan (and their heights, if you like),
+- `domus site edit SPEC.json [BACKUP]` applies intents (changes.md), or a spec in its older form: named features'
+  vertices (in the wall options' frame or on the grid) and properties set, features added and deleted.
+- `domus site shift SPEC.json [BACKUP]` moves named features by one vector in plan (and their heights, if you like),
   adding a sentence to each one's `basis`: for a set of features placed from a survey that sits off the rest.
-- `domus site edit SPEC.json BACKUP` sets named features' vertices (in the wall options' frame or on the grid) and
-  properties, adds features and deletes them.
-- `domus site regrade CLOUD SPEC.json BACKUP` gives ground-fix points and lines the levels a placed video's cloud
+- `domus site regrade CLOUD SPEC.json [BACKUP]` gives ground-fix points and lines the levels a placed video's cloud
   shows, vertex by vertex; one the cloud doesn't see well moves with the read ones near it.
 
-The docstring of `src/domus/project/edits.py` describes each SPEC.json.
+`BACKUP`, a fresh folder, holds the copies of the files as they were; without it they're kept beside the edit's
+record. The docstring of `src/domus/project/edits.py` describes the older specs. A check or a tool that finds
+something to change proposes it in `.domus/proposals/`, for a person to accept or reject (`domus site proposals`,
+`accept` and `reject`).
 
 ## House parts
 

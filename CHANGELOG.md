@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **For site projects:** every change to a site's data goes one way ([docs/changes.md](docs/changes.md)). It's said
+  as an intent, a small JSON object such as `{"kind": "move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5,
+  0]}`: features moved, their vertices set (`coords`) or a vertex's height (`level`), properties set and dropped
+  (`props`), features added, deleted or set whole (`put`), and settings set (`setting`, keeping the file's comments).
+  It's checked against the site, each file it changes is copied, written in its own layout, read back and checked,
+  all of them or none, and it's recorded in `.domus/edits/<sequence>-<kind>.json` with who, when (UTC), why, each
+  file's SHA-256 before and after, and its inverse. `domus site edit FILE --why "..." --apply` makes one, `domus site
+  edits` lists them, and `domus site undo N` puts one back, byte for byte, as long as nothing has changed its files
+  since; the undo is an edit too. A check or a tool proposes a change instead, in `.domus/proposals/<id>.json`, and a
+  person accepts it (`domus site accept N`, applied as an edit whose basis is the proposal) or rejects it, saying why
+  (`domus site reject N --why "..."`); `domus site proposals` lists them. In `domus.api`, `site.edit(intent, why,
+  who)` with an intent, `site.undo()`, `edits()`, `propose()`, `proposals()`, `accept()` and `reject()`, provisional
+  for now ([docs/api.md](docs/api.md)).
+- **For site projects:** `domus site shift`, `edit` and `regrade` (and `site.shift()`, `edit()` and `regrade()`) are
+  edits on that route: they say what they always said, with two lines more, the record and what to build again, and
+  are recorded, so they can be undone. Their `BACKUP` folder is optional: given, it holds the copies of the files as
+  they were, as before; left out, the copies are kept beside the edit's record. `--why` and `--who` say why and who,
+  else the spec's basis and this computer's user. A shift of several files writes them all or none, and a file is
+  written again in its own layout, its indent, separators and final newline, where a compact one lost the spaces
+  after its commas and colons before. A shift of a whole layer (`"*"`) needs each of its features to have an id of its
+  own, and an older edit's new feature its coordinates.
 - **For site projects:** a wall of a named block whose units are deeper than its capping units (`depth_m` over
   `cap_depth_m` less `cap_overhang_m`) passes `domus prep check through` where the soil behind it covers the units'
   top behind the cap, up to the cap's top: the fill behind such a wall is graded flush with the top back of the
@@ -10,6 +31,10 @@
   [docs/model-format.md](docs/model-format.md)). The flat lawn after an option is counted 0.3 m away from each wall's
   body, and a wall's footing is flagged near a post, pole, mark or lid, by the body's depth (`depth_m`) where they
   went by `thickness_m`, so a wall deeper than its set-out has less flat lawn beside it than before.
+- The viewer's **Site** tab lists the changes proposed, with **Accept** and **Reject**, and the edits made, with
+  **Undo**, where `domus serve` runs. The server has `GET /api/changes`, and `POST /api/proposals/<id>/accept` and
+  `reject` and `/api/edits/<id>/undo`, which run as `domus site accept`, `reject` and `undo` do, one at a time and not
+  while the model is being built, with a build after a change; a sketch isn't saved as an option while one runs.
 
 ## 2026.11.50
 

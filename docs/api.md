@@ -75,11 +75,17 @@ Each of these does what the command does, and writes the site's files; the site 
 | `site.scan(file, tag, control=None, epsg=None, up=None)` | Brings in a phone or tablet LiDAR scan, as `domus scan` does, placed on the grid by `control`, a CSV of points in both (with `up`, `"y"` or `"z"`, the scan's vertical axis taken as true), or by `epsg` for a file already on a grid. Gives the file it wrote, `data/video/<tag>-scan.npz` ([phone-lidar.md](phone-lidar.md)) |
 | `site.upgrade(dry_run=False)` | Writes the site's migrations into its own files, as `domus site upgrade` does, keeping the files as they were in `.domus/upgrade/`; with `dry_run`, only says what would change |
 | `site.trust(revoke=False)` | Lets this machine's builds run the site's extensions as they are now, as `domus site trust` does, or stops them, with `revoke`. Gives each file and its SHA-256 |
-| `site.shift(spec, backup, apply=False)` | Moves named features of the site's layers by one vector, as `domus site shift` does. `spec` is a dict or a JSON file; without `apply` it only says what would change, and with it each file is backed up into `backup`, a fresh folder, written, read back and checked |
-| `site.edit(spec, backup, apply=False)` | Changes, adds and deletes named features of the site's layers, as `domus site edit` does, the same way |
-| `site.regrade(clouds, spec, backup, apply=False)` | Gives ground-fix points and lines the levels a placed cloud (or a list of them) shows, as `domus site regrade` does, the same way |
+| `site.shift(spec, backup=None, apply=False)` | Moves named features of the site's layers by one vector, as `domus site shift` does. `spec` is a dict or a JSON file; without `apply` it only says what would change, and with it the change is an edit as `site.edit()` makes one (below), recorded so it can be undone, its reason `why=` or else the spec's basis, with each file's copy as it was in `backup`, a fresh folder, if it's given |
+| `site.edit(spec, backup=None, apply=False)` | Changes, adds and deletes named features of the site's layers, as `domus site edit` does with a spec in its older form, the same way |
+| `site.regrade(clouds, spec, backup=None, apply=False)` | Gives ground-fix points and lines the levels a placed cloud (or a list of them) shows, as `domus site regrade` does, the same way |
 
 [AGENTS.md](../AGENTS.md) (section 8.6) gives the specs of `shift`, `edit` and `regrade`.
+
+**`site.edit()` takes either of two things, told apart by its first argument.** An intent, a dict with a `kind` such as
+`{"kind": "move", ...}`, or a list of them, or a JSON file holding either, goes the one route every change to a site's
+data takes, `site.edit(intent, why, who=None, dry_run=False)` (below). Anything else is a spec in the older form,
+`{layer file: [changes]}`, and `site.edit(spec, backup=None, apply=False)` works with it as it always has, by position
+or by name: its second argument is then the backup folder and its third whether to apply it.
 
 ## What they say as they go
 
@@ -110,6 +116,26 @@ The prep steps are `plan_pages`, `plan_georef`, `plan_trace`, `ifc`, `feature_te
 `canopy_plot`, their arguments named the same way (`from_`, `min_` and `all_` for `--from`, `--min` and `--all`); a
 box or a line's points can be pairs or the command's text. `domus prep check` is `site.check()`, above. Most read
 what to do from `data/prep.json`, and `profile`, `cloud` and `cloud_plan` give what they found.
+
+## Provisional: the change route
+
+Every change to a site's data goes one way ([changes.md](changes.md)): it's said as an intent, such as `{"kind":
+"move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5, 0]}`, checked against the site, applied to the file it
+changes the safe way, recorded in `.domus/edits/` with who, when and why, and undoable. A check's or a tool's findings
+are proposals a person accepts or rejects. These are **provisional**, as the video and prep steps are: public and
+documented, but they may change from one release to the next without a deprecation until they're declared stable.
+
+| | What it does |
+|---|---|
+| `site.edit(intent, why, who=None, dry_run=False)` | Applies `intent` (an intent, a list of them as one edit, or a JSON file holding either), recorded with `why`, which it needs, and `who` (this computer's user unless given), as `domus site edit FILE --why ... --apply` does. Gives the record; `dry_run` only says what would change |
+| `site.undo(edit, who=None, why=None)` | Undoes an edit by its number, while each file it changed is still as it left it, as `domus site undo` does; the undo is an edit too. Gives its record |
+| `site.edits()` | The records, oldest first, each with `in_effect`, and `undone_by` once undone, as `domus site edits` lists them |
+| `site.propose(intents, why, source)` | Proposes a change for a person to accept or reject, checked against the site now. Gives the proposal |
+| `site.proposals(state=None)` | The proposals, oldest first, or those in `state` (`open`, `accepted` or `rejected`), as `domus site proposals` lists them |
+| `site.accept(proposal, who=None)` | Accepts a proposal by its id, as `domus site accept` does: its intents applied as an edit whose basis is the proposal. Gives the edit's record |
+| `site.reject(proposal, why, who=None)` | Rejects a proposal by its id, recording why, as `domus site reject` does. Gives the proposal |
+
+`edit`, `undo`, `propose`, `accept` and `reject` take `say`, as the commands' calls do.
 
 ## Helpers
 

@@ -1,18 +1,21 @@
 """Edits to a site's curated layers (data/site/*.geojson) that say what they did and keep what was there.
 
-    domus site shift SPEC.json BACKUP_DIR [--apply]
-    domus site edit SPEC.json BACKUP_DIR [--apply]
-    domus site regrade CLOUD[,CLOUD] SPEC.json BACKUP_DIR [--apply]
+    domus site shift SPEC.json [BACKUP_DIR] [--apply]
+    domus site edit SPEC.json [BACKUP_DIR] [--apply]
+    domus site regrade CLOUD[,CLOUD] SPEC.json [BACKUP_DIR] [--apply]
 
-Each prints what it would change and, without --apply, writes nothing. With --apply each file is first copied to
-BACKUP_DIR (a folder of its own: a copy already there stops it) and the copy read back, then written to a temporary
-file in the file's own layout (one-space indent and a final newline, or compact), read back and checked, and only then
-put in place.
+Each prints what it would change and, without --apply, writes nothing. With --apply each is an edit on the route every
+change to a site takes (domus.project.changes): each file is first copied to BACKUP_DIR if it's given (a folder of its
+own: a copy already there stops it), else beside the edit's record in .domus/edits/, and the copy read back; then the
+new file is written to a temporary file in the file's own layout (its indent, separators and final newline), read back
+and checked, and only then put in place, all the files or none. The edit is recorded with who, when and why (--why,
+else the spec's basis), and `domus site undo` undoes it.
 
 `shift` moves named features by one vector in plan, and adds a sentence to each one's basis:
     {"shift": [dE, dN], "dz": 0.06 (optional: their heights too), "basis": "how they're placed now",
      "files": {"walls-existing.geojson": ["W2", "W3"], "boundary.geojson": "*", ...}}
-The check: the same features, the named ones moved by exactly the shift and the others untouched.
+The check: the same features, the named ones moved by exactly the shift and the others untouched. Each file's is a
+`move` intent.
 
 `edit` changes named features' coordinates and properties, adds features and deletes them:
     {"house.geojson": [{"id": "window-3", "so": [[10.0, 4.3], [11.1, 4.3]], "props": {"basis": "..."},
@@ -23,7 +26,8 @@ The check: the same features, the named ones moved by exactly the shift and the 
                        {"id": "old-thing", "delete": true}], ...}
 "so"/"soz" are in the wall options' frame, "en"/"enz" on the site's grid; "so" and "en" keep each vertex's own height
 when the feature has heights and the number of its vertices doesn't change. A polygon's ring is given open or closed
-and written closed. The check: the named features as asked, and every other one untouched.
+and written closed. The check: the named features as asked, and every other one untouched. Each change is a `coords`,
+`props`, `add` or `delete` intent; SPEC.json can also be intents themselves (docs/changes.md).
 
 `regrade` gives ground-fix points and lines (data/site/ground-fixes.geojson) the levels a placed cloud shows today:
     {"features": ["lawn-ground", ...], "radius": 0.3, "min_points": 12, "percentile": 20,
@@ -33,19 +37,17 @@ Each vertex takes the given percentile of the heights of the cloud's points with
 under taller things). A vertex the cloud doesn't see well enough (fewer points, or a reading further than max_rise or
 max_drop from its level: plants, holes) keeps its level plus the median change of the read vertices within
 fallback_radius (all of them, if none is that near), so the surface it belongs to moves as one; one of a feature in
-keep_unseen keeps its level. The check: only the named features' heights changed.
+keep_unseen keeps its level. The check: only the named features' heights changed. Each feature's is a `level` intent.
 """
 
-import copy
 import json
-import os
-import shutil
-from pathlib import Path
 
 import numpy as np
 from scipy.spatial import cKDTree
 
 from ..errors import DomusError
+from . import changes
+from . import intents as kinds
 
 
 def layers_dir(site):
@@ -53,212 +55,88 @@ def layers_dir(site):
     return site.path / "data" / "site"
 
 
-def _read(site, name):
-    path = layers_dir(site) / name
-    if not path.exists():
-        raise DomusError(f"There's no {path}")
-    raw = path.read_text(encoding="utf-8")
-    return path, raw, json.loads(raw), "\n" not in raw.strip()
+def _layer(name):
+    return name.removesuffix(".geojson")
 
 
-def _write(path, data, raw, compact, backup, name, check):
-    """Backs `path` up into `backup` and replaces it with `data`, in its layout, once `check(written)` passes."""
-    backup = Path(backup)
-    backup.mkdir(parents=True, exist_ok=True)
-    copy_path = backup / name
-    if copy_path.exists():
-        raise DomusError(f"{copy_path} is already there: use a fresh backup folder")
-    shutil.copy2(path, copy_path)
-    if copy_path.read_text(encoding="utf-8") != raw:
-        raise DomusError(f"backup of {name} does not read back the same")
-    text = json.dumps(data, separators=(",", ":")) if compact else json.dumps(data, indent=1) + "\n"
-    tmp = Path(f"{path}.tmp")
-    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(text)
-    check(json.loads(tmp.read_text(encoding="utf-8")))
-    os.replace(tmp, path)
-    return copy_path
-
-
-def _with_basis(props, basis):
-    if basis and basis not in props.get("basis", ""):
-        old = props.get("basis", "")
-        props["basis"] = (old + " " if old else "") + basis
+def _why(why, spec, command):
+    """Why an edit from an older spec is made: as given, else the spec's basis, else that nobody said."""
+    for reason in (why, spec.get("basis") if isinstance(spec, dict) else None):
+        if isinstance(reason, str) and reason.strip():
+            return reason
+    return f"domus site {command}, with no reason given"
 
 
 # --------------------------------------------------------------------------- shift
 
-def _first(c):
-    return c if isinstance(c[0], (int, float)) else _first(c[0])
-
-
-def _flat(c, out):
-    if isinstance(c[0], (int, float)):
-        out.append(c)
-    else:
-        for x in c:
-            _flat(x, out)
-    return out
-
-
-def shift(site, spec, backup, apply=False, say=print):
+def shift(site, spec, backup=None, apply=False, say=print, why=None, who=None):
+    """`domus site shift`: the named features of each file moved by one vector, as `move` intents. Gives the edit's
+    record (with apply False, what it would hold)."""
     de, dn = spec["shift"]
-    dz = float(spec.get("dz", 0.0))
+    by = [de, dn, spec["dz"]] if "dz" in spec else [de, dn]
+    basis = {"basis": spec["basis"]} if spec.get("basis") else {}
+    intents = kinds.read([{"kind": "move", "layer": _layer(name), "ids": ids, "by": by, **basis}
+                          for name, ids in spec["files"].items()])
 
-    def moved(c):
-        if isinstance(c[0], (int, float)):
-            return [round(c[0] + de, 3), round(c[1] + dn, 3), *([round(c[2] + dz, 3)] if len(c) > 2 else []), *c[3:]]
-        return [moved(x) for x in c]
+    def written(name, copy_path, data):
+        ids = spec["files"][name]
+        return f"{name}: written ({len(data['features']) if ids == '*' else len(set(ids))} features moved); backup {copy_path}"
 
-    for name, ids in spec["files"].items():
-        path, raw, data, compact = _read(site, name)
-        before = json.loads(raw)
-        found = set()
-        for f in data["features"]:
-            pid = f["properties"].get("id")
-            if ids != "*" and pid not in ids:
-                continue
-            found.add(pid)
-            a = _first(f["geometry"]["coordinates"])
-            f["geometry"]["coordinates"] = moved(f["geometry"]["coordinates"])
-            b = _first(f["geometry"]["coordinates"])
-            _with_basis(f["properties"], spec.get("basis"))
-            say(f"   {name}: {pid}: ({a[0]:.3f}, {a[1]:.3f}) -> ({b[0]:.3f}, {b[1]:.3f})")
-        if ids != "*":
-            missing = set(ids) - found
-            if missing:
-                raise DomusError(f"{name}: no feature {sorted(missing)}")
-        if not apply:
-            continue
-
-        def check(after, name=name, ids=ids, before=before):
-            if len(after["features"]) != len(before["features"]):
-                raise DomusError(f"{name}: feature count changed")
-            for fa, fb in zip(after["features"], before["features"], strict=True):
-                pid = fb["properties"].get("id")
-                ca, cb = _flat(fa["geometry"]["coordinates"], []), _flat(fb["geometry"]["coordinates"], [])
-                named = ids == "*" or pid in ids
-                want, dz_want = ((de, dn), dz) if named else ((0.0, 0.0), 0.0)
-                for pa, pb in zip(ca, cb, strict=False):
-                    if abs(pa[0] - pb[0] - want[0]) > 0.0011 or abs(pa[1] - pb[1] - want[1]) > 0.0011 or \
-                            (len(pa) > 2 and abs(pa[2] - pb[2] - dz_want) > 0.0011) or pa[3:] != pb[3:]:
-                        raise DomusError(f"{name}: {pid} did not move as meant")
-                if len(ca) != len(cb):
-                    raise DomusError(f"{name}: {pid} changed its number of points")
-
-        copy_path = _write(path, data, raw, compact, backup, name, check)
-        say(f"{name}: written ({len(found) if ids != '*' else len(data['features'])} features moved); backup {copy_path}")
-    if not apply:
-        say("dry run: nothing written")
+    return changes.apply(site, intents, _why(why, spec, "shift"), who, backup=backup, dry_run=not apply, say=say,
+                         written=written)
 
 
 # --------------------------------------------------------------------------- edit
 
-def _shape(coords, gtype):
-    if gtype == "Point":
-        return coords
-    if gtype == "Polygon":
-        ring = [list(c) for c in coords]
-        if ring[0] != ring[-1]:
-            ring.append(list(ring[0]))
-        return [ring]
-    return coords
-
-
-def _vertices(geom):
-    c = geom["coordinates"]
-    if geom["type"] == "Point":
-        return [c]
-    if geom["type"] == "Polygon":
-        return c[0]
-    return c
-
-
-def edit(site, spec, backup, apply=False, say=print):
-    from ..options import design
-
-    fr = design.frame(site)
-
-    def to_en(so):
-        a = np.asarray(so, float)
-        one = a.ndim == 1
-        en = fr.en(np.atleast_2d(a)[:, :2])
-        out = [[round(float(e), 3), round(float(n), 3)] + [round(float(z), 3) for z in row[2:]]
-               for (e, n), row in zip(en, np.atleast_2d(a), strict=True)]
-        return out[0] if one else out
-
-    for name, edits in spec.items():
-        path, raw, data, compact = _read(site, name)
-        before = json.loads(raw)
-        by_id = {f["properties"].get("id"): f for f in data["features"]}
-        touched, expect = set(), {}
-        for e in edits:
+def edit_intents(site, spec):
+    """The intents an older `domus site edit` spec ({layer file: [changes]}) comes to, in its order."""
+    frame = changes.frame_of(site)
+    out = []
+    for name, entries in spec.items():
+        layer = _layer(name)
+        for e in entries:
             fid = e["id"]
-            touched.add(fid)
             if e.get("delete"):
-                if fid not in by_id:
-                    raise DomusError(f"{name}: no feature {fid} to delete")
-                data["features"] = [f for f in data["features"] if f["properties"].get("id") != fid]
-                say(f"   {name}: {fid}: deleted")
+                out.append({"kind": "delete", "layer": layer, "id": fid})
                 continue
+            keys = [k for k in ("so", "soz", "en", "enz") if k in e]
             if "new" in e:
-                if fid in by_id:
-                    raise DomusError(f"{name}: {fid} is already there")
-                f = {"type": "Feature", "properties": {"id": fid}, "geometry": {"type": e["new"]["type"], "coordinates": []}}
-                data["features"].append(f)
-                by_id[fid] = f
-            if fid not in by_id:
-                raise DomusError(f"{name}: no feature {fid}")
-            f = by_id[fid]
-            g = f["geometry"]
-            new = None
-            for key in ("so", "soz", "en", "enz"):
-                if key in e:
-                    new = to_en(e[key]) if key.startswith("so") else json.loads(json.dumps(e[key]))
-                    if key in ("so", "en") and g["coordinates"]:
-                        old = _vertices(g)
-                        cand = [new] if g["type"] == "Point" else new
-                        olds = old[:-1] if g["type"] == "Polygon" and len(old) == len(cand) + 1 else old
-                        if len(olds) == len(cand) and all(len(o) > 2 for o in olds):
-                            cand = [c[:2] + list(o[2:]) for c, o in zip(cand, olds, strict=True)]
-                            new = cand[0] if g["type"] == "Point" else cand
-            if new is not None:
-                was = _vertices(g)[0] if g["coordinates"] else None
-                g["coordinates"] = _shape(new, g["type"])
-                say(f"   {name}: {fid}: {len(_vertices(g))} vertices, first {was} -> {_vertices(g)[0]}")
-            for k, v in e.get("props", {}).items():
-                if f["properties"].get(k) != v:
-                    say(f"   {name}: {fid}.{k}: {str(f['properties'].get(k))[:70]!r} -> {str(v)[:110]!r}")
-                f["properties"][k] = v
-            for k in e.get("drop_props", []):
-                if k in f["properties"]:
-                    say(f"   {name}: {fid}.{k}: dropped")
-                    del f["properties"][k]
-            expect[fid] = copy.deepcopy(f)
-        if not apply:
-            continue
+                coords = []
+                if keys:
+                    coords = kinds.to_en(frame(), e[keys[-1]]) if keys[-1].startswith("so") else json.loads(json.dumps(e[keys[-1]]))
+                out.append({"kind": "add", "layer": layer, "feature": {
+                    "type": "Feature", "properties": {"id": fid},
+                    "geometry": {"type": e["new"]["type"], "coordinates": kinds.shape(coords, e["new"]["type"])}}})
+            elif keys:
+                out.append({"kind": "coords", "layer": layer, "id": fid, keys[-1]: e[keys[-1]]})
+            if e.get("props") or e.get("drop_props"):
+                out.append({"kind": "props", "layer": layer, "id": fid, **({"set": e["props"]} if e.get("props") else {}),
+                            **({"drop": e["drop_props"]} if e.get("drop_props") else {})})
+    return kinds.read(out) if out else []
 
-        def check(after, name=name, before=before, touched=touched, expect=expect, data=data):
-            a_by = {f["properties"].get("id"): f for f in after["features"]}
-            for f in before["features"]:
-                fid = f["properties"].get("id")
-                if fid not in touched and a_by.get(fid) != f:
-                    raise DomusError(f"{name}: {fid} changed though it was not named: not written")
-            for fid, f in expect.items():
-                if a_by.get(fid) != f:
-                    raise DomusError(f"{name}: {fid} does not read back as written")
-            if len(after["features"]) != len(data["features"]):
-                raise DomusError(f"{name}: feature count is off")
 
-        copy_path = _write(path, data, raw, compact, backup, name, check)
-        say(f"{name}: written ({len(touched)} features changed, {len(data['features'])} in all); backup {copy_path}")
-    if not apply:
-        say("dry run: nothing written")
+def edit(site, spec, backup=None, apply=False, say=print, why=None, who=None):
+    """`domus site edit` with a spec in the form above: named features' coordinates and properties changed, features
+    added and deleted. Gives the edit's record (with apply False, what it would hold). Intents go to
+    domus.project.changes.apply themselves."""
+    intents = edit_intents(site, spec)
+    if not intents:
+        say("Nothing to change.")
+        return None
+
+    def written(name, copy_path, data):
+        return (f"{name}: written ({len({e['id'] for e in spec[name]})} features changed, {len(data['features'])} in all); "
+                f"backup {copy_path}")
+
+    return changes.apply(site, intents, _why(why, spec, "edit"), who, backup=backup, dry_run=not apply, say=say,
+                         written=written)
 
 
 # --------------------------------------------------------------------------- regrade
 
-def regrade(site, clouds, spec, backup, apply=False, say=print):
+def regrade(site, clouds, spec, backup=None, apply=False, say=print, why=None, who=None):
+    """`domus site regrade`: ground-fix points and lines given the levels a placed cloud shows, as `level` intents.
+    Gives the edit's record (with apply False, what it would hold)."""
     from ..prep.cloud import read_clouds
 
     radius, nmin, pct = spec.get("radius", 0.3), spec.get("min_points", 12), spec.get("percentile", 20)
@@ -270,8 +148,10 @@ def regrade(site, clouds, spec, backup, apply=False, say=print):
     xyz = np.vstack(parts)
     tree = cKDTree(xyz[:, :2])
     name = "ground-fixes.geojson"
-    path, raw, data, _ = _read(site, name)
-    before = json.loads(raw)
+    path = layers_dir(site) / name
+    if not path.exists():
+        raise DomusError(f"There's no {path}")
+    data = json.loads(path.read_text(encoding="utf-8"))
     by_id = {f["properties"].get("id"): f for f in data["features"]}
 
     def verts(g):
@@ -307,32 +187,14 @@ def regrade(site, clouds, spec, backup, apply=False, say=print):
         near = rt.query_ball_point(p[i, :2], reach)
         new[i] = p[i, 2] + (float(np.median(change[read][near])) if near else overall)
     change = new - p[:, 2]
+    intents = []
     for fid in spec["features"]:
         m = np.array([o[0] == fid for o in owner])
         ch = change[m]
         say(f"   {fid}: {int(m.sum())} vertices, {int((read & m).sum())} read from the cloud; change median {np.median(ch):+.3f}, "
             f"10th to 90th percentile {np.percentile(ch, 10):+.3f} to {np.percentile(ch, 90):+.3f}, extremes {ch.min():+.3f} / {ch.max():+.3f}")
-        f = by_id[fid]
-        vs = verts(f["geometry"])
-        for (ofid, k), z in zip(owner, new, strict=True):
-            if ofid == fid:
-                vs[k][2] = round(float(z), 3)
-        _with_basis(f["properties"], spec.get("basis"))
-    if not apply:
-        say("dry run: nothing written")
-        return
-
-    def check(after):
-        a_by = {f["properties"].get("id"): f for f in after["features"]}
-        for f in before["features"]:
-            fid = f["properties"].get("id")
-            if fid not in spec["features"]:
-                if a_by.get(fid) != f:
-                    raise DomusError(f"{fid} changed though it was not named: not written")
-            else:
-                va, vb = verts(a_by[fid]["geometry"]), verts(f["geometry"])
-                if len(va) != len(vb) or any(x[:2] != y[:2] for x, y in zip(va, vb, strict=True)):
-                    raise DomusError(f"{fid}: its points moved in plan: not written")
-
-    copy_path = _write(path, data, raw, False, backup, name, check)
-    say(f"ground-fixes.geojson written; backup {copy_path}")
+        intents.append({"kind": "level", "layer": "ground-fixes", "id": fid,
+                        "z": [round(float(z), 3) for (ofid, _), z in zip(owner, new, strict=True) if ofid == fid],
+                        **({"basis": spec["basis"]} if spec.get("basis") else {})})
+    return changes.apply(site, kinds.read(intents), _why(why, spec, "regrade"), who, backup=backup, dry_run=not apply,
+                         say=say, lines=False, written=lambda name, copy_path, data: f"{name} written; backup {copy_path}")

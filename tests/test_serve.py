@@ -273,3 +273,82 @@ def test_a_job_runs_one_domus_command_and_keeps_its_log(tmp_path):
     job.proc.wait(timeout=120)
     assert job.status() == {"state": "done", "log": __version__}
     assert (tmp_path / ".domus" / "version.log").exists()
+
+
+def changed_site(root):
+    """A site with two proposals and two edits, as domus.project.changes writes them (made up): one proposal open and
+    one rejected, and an edit an undo has undone."""
+    (root / "data").mkdir(parents=True)
+    (root / "data" / "site.toml").write_text("", encoding="utf-8")
+    for folder, name, value in [
+            ("proposals", "0001.json", {"id": "0001", "made": "2026-11-18T09:00:00Z", "source": "a check", "why": "Measured.",
+                                        "intents": [], "summary": ["walls-existing: W1: confidence = 'measured'"], "state": "open"}),
+            ("proposals", "0002.json", {"id": "0002", "made": "2026-11-18T09:01:00Z", "source": "a tool", "why": "Guessed.",
+                                        "intents": [], "summary": [], "state": "rejected",
+                                        "rejected": {"who": "sam", "when": "2026-11-18T09:02:00Z", "why": "No."}}),
+            ("edits", "0001-move.json", {"id": "0001", "kind": "move", "who": "sam", "when": "2026-11-18T09:03:00Z",
+                                         "why": "Measured.", "summary": ["walls-existing: W1 moved"], "inverse": [], "files": []}),
+            ("edits", "0002-undo.json", {"id": "0002", "kind": "undo", "who": "sam", "when": "2026-11-18T09:04:00Z",
+                                         "why": "Undoing edit 0001.", "undoes": "0001", "summary": [], "inverse": [], "files": []})]:
+        (root / ".domus" / folder).mkdir(parents=True, exist_ok=True)
+        (root / ".domus" / folder / name).write_text(json.dumps(value), encoding="utf-8")
+    return root
+
+
+def test_the_viewer_lists_the_changes_and_asks_for_one_at_a_time(tmp_path, monkeypatch):
+    started = []
+    monkeypatch.setattr(serve.ChangeJob, "start", lambda self, *args: started.append(args))
+    root = changed_site(tmp_path / "site")
+    data = tmp_path / "data"
+    data.mkdir()
+    httpd = serve.make_server("127.0.0.1", 0, [data], root / ".domus" / "v.db", trust_proxy=True, root=root)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    port, head = httpd.server_address[1], {"Content-Type": "application/json", "X-Forwarded-User": "sam"}
+    try:
+        listed = json.loads(call(port, "GET", "/api/changes")[1])
+        assert [p["id"] for p in listed["proposals"]] == ["0001", "0002"] and "intents" not in listed["proposals"][0]
+        assert [(e["id"], e["in_effect"], e.get("undone_by")) for e in listed["edits"]] == [("0002", True, None),
+                                                                                          ("0001", False, "0002")]
+        assert listed["job"] == {"state": "idle", "log": ""} and listed["count"] == 2
+        assert call(port, "POST", "/api/proposals/1/accept", "{}", head)[0] == 202
+        assert call(port, "POST", "/api/proposals/2/accept", "{}", head)[0] == 409          # rejected already
+        assert call(port, "POST", "/api/proposals/9/accept", "{}", head)[0] == 404
+        assert call(port, "POST", "/api/proposals/1/reject", "{}", head)[0] == 400          # with no reason
+        assert call(port, "POST", "/api/proposals/1/reject", json.dumps({"why": "Not yet."}), head)[0] == 202
+        assert call(port, "POST", "/api/edits/2/undo", "", head)[0] == 202
+        assert call(port, "POST", "/api/edits/7/undo", "{}", head)[0] == 404
+        assert call(port, "POST", "/api/edits/2/undo", "{}", {"Content-Type": "text/plain"})[0] == 415
+        assert call(port, "POST", "/api/edits/2/redo", "{}", head)[0] == 404
+        assert started == [("accept", "1", "--who", "sam", "--build"), ("reject", "1", "--why", "Not yet.", "--who", "sam"),
+                           ("undo", "2", "--who", "sam", "--build")]
+        monkeypatch.setattr(serve.ChangeJob, "status", lambda self: {"state": "running", "log": ""})
+        assert call(port, "POST", "/api/edits/2/undo", "{}", head)[0] == 409               # one change at a time
+        assert call(port, "POST", "/api/sketch/option", json.dumps({"name": "A", "items": []}), head)[0] == 409
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_a_change_job_runs_the_command(site, tmp_path):
+    import shutil
+
+    root = tmp_path / "demo"
+    shutil.copytree(site, root, ignore=shutil.ignore_patterns("viewer", ".domus"))
+    job = serve.ChangeJob(root)
+    job.start("proposals")
+    job.proc.wait(timeout=120)
+    assert job.status()["state"] == "done" and "No proposed changes wait for a person" in job.status()["log"]
+
+
+def test_each_site_of_many_has_its_own_changes(tmp_path):
+    changed_site(tmp_path / "sites" / "one")
+    httpd = serve.make_sites_server("127.0.0.1", 0, tmp_path / "sites")
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    port = httpd.server_address[1]
+    try:
+        assert [p["id"] for p in json.loads(call(port, "GET", "/s/one/api/changes")[1])["proposals"]] == ["0001", "0002"]
+        assert call(port, "GET", "/api/changes")[0] == 404
+        assert call(port, "POST", "/api/edits/1/undo", "{}", {"Content-Type": "application/json"})[0] == 404
+    finally:
+        httpd.shutdown()
+        httpd.server_close()

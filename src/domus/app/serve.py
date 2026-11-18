@@ -15,6 +15,11 @@ Pages:
     /api/create               GET: how the address box's build is going; POST {address}: start one, in an empty site only
     /api/sketch               POST {items}: what a sketch comes to (domus.sketch)
     /api/sketch/option        GET: how its build is going; POST {name, items}: save a sketch as an option and build it
+    /api/changes              GET: the changes proposed to the site's data, the edits made to it (docs/changes.md), and
+                              how the change asked for last is going
+    /api/proposals/<id>/accept POST: accept a proposed change and build the model again, as `domus site accept` does
+    /api/proposals/<id>/reject POST {why}: reject it, as `domus site reject` does
+    /api/edits/<id>/undo      POST: undo an edit and build the model again, as `domus site undo` does
     /healthz                  liveness, for Docker and Traefik
     /api/version              the app's version, and the model's build.json: when it was built and by which Domus
     /api/user                 who the login proxy says this is (only with DOMUS_TRUST_PROXY=1)
@@ -187,6 +192,9 @@ HEADERS = {
 GZIP_TYPES = {".css", ".geojson", ".html", ".js", ".json", ".mjs", ".svg", ".wasm"}
 GZIP_MIN = 1024
 SCAN_NAME = re.compile(r"^[A-Za-z0-9-]{1,40}\.(webm|mp4|json)$")
+CHANGE_PATH = re.compile(r"^/api/(?:proposals/(\d{1,6})/(accept|reject)|edits/(\d{1,6})/(undo))$")
+MAX_WHY = 500
+EDITS_SHOWN = 50
 NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 SITE_PATH = re.compile(r"^/s/([a-z0-9-]{1,64})(/.*)?$")
 
@@ -366,6 +374,47 @@ class BuildJob(Job):
         self.run("build")
 
 
+class ChangeJob(Job):
+    """One change to the site's data at a time from the viewer, run as its command runs it (`domus site accept`,
+    `reject` or `undo`), with a build after one that changes the data."""
+
+    def __init__(self, root, own_output=False):
+        super().__init__(root, "change", own_output, tail=8)
+
+    def start(self, *args):
+        self.run("site", *args)
+
+
+def _json_files(folder, pattern):
+    out = []
+    for path in sorted(Path(folder).glob("*.json")) if Path(folder).is_dir() else ():
+        if re.fullmatch(pattern, path.name):
+            try:
+                out.append(json.loads(path.read_text(encoding="utf-8")))
+            except (OSError, ValueError):
+                continue        # one being written: the next look sees it whole
+    return out
+
+
+def changes(root):
+    """The site's proposals, and its edits (the newest EDITS_SHOWN, newest first), as the viewer lists them: read from
+    .domus/proposals/ and .domus/edits/, as domus.project.changes writes them."""
+    root = Path(root)
+    keep = ("id", "made", "source", "why", "summary", "state", "accepted", "rejected")
+    proposals = [{k: p[k] for k in keep if k in p} for p in _json_files(root / ".domus" / "proposals", r"\d+\.json")]
+    records = sorted(_json_files(root / ".domus" / "edits", r"\d+-[a-z]+\.json"), key=lambda r: int(r.get("id", 0)))
+    undone = {}
+    for r in reversed(records):          # an undo comes after what it undoes, so its own state is known first
+        r["in_effect"] = r.get("id") not in undone
+        if r["in_effect"] and r.get("undoes"):
+            undone[r["undoes"]] = r["id"]
+        if r.get("id") in undone:
+            r["undone_by"] = undone[r["id"]]
+    keep = ("id", "kind", "who", "when", "why", "summary", "undoes", "in_effect", "undone_by", "basis", "rebuild")
+    edits = [{k: r[k] for k in keep if k in r} for r in reversed(records[-EDITS_SHOWN:])]
+    return {"proposals": proposals, "edits": edits, "count": len(records)}
+
+
 class SketchWorker:
     """A `domus sketch-worker` for one site, so its ground is read once. It stops when idle, and starts again when the site's files change."""
 
@@ -458,6 +507,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     build_job = None
     creator = None
     scan_job = None
+    change_job = None
     data_dirs = ()
     trust_proxy = False
     varies = False          # the response depends on Accept-Encoding
@@ -552,17 +602,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             model = json.loads(built.read_text(encoding="utf-8")) if built and built.exists() else None
             return self.send_json({"version": __version__, "model": model})
         if path == "/api/user":
-            name = None
-            if self.trust_proxy:
-                name = (self.headers.get("X-Forwarded-Preferred-Username") or self.headers.get("X-Forwarded-User")
-                        or self.headers.get("X-Forwarded-Email"))
-            return self.send_json({"id": name})
+            return self.send_json({"id": self.user()})
         if path == "/api/create":
             return self.send_json(self.creator.status())
         if path == "/api/scan-job":
             return self.send_json(self.scan_job.status())
         if path == "/api/sketch/option":
             return self.send_json(self.build_job.status())
+        if path == "/api/changes" and self.change_job is not None:
+            return self.send_json({**changes(self.change_job.root), "job": self.change_job.status()})
         if path.startswith("/api/db/"):
             route = self.db_route()
             if route is None:
@@ -591,8 +639,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def building(self):
-        """True while a model is being made or built here. The server runs one build at a time."""
-        return any(job is not None and job.status()["state"] == "running" for job in (self.creator, self.build_job))
+        """True while a model is being made or built here, or its data changed. The server runs one build at a time."""
+        return any(job is not None and job.status()["state"] == "running"
+                   for job in (self.creator, self.build_job, self.change_job))
+
+    def user(self):
+        """Who the login proxy says this is (only with DOMUS_TRUST_PROXY=1), else None."""
+        if not self.trust_proxy:
+            return None
+        return (self.headers.get("X-Forwarded-Preferred-Username") or self.headers.get("X-Forwarded-User")
+                or self.headers.get("X-Forwarded-Email"))
 
     def rebuild_if_stale(self):
         """A site's model that another Domus built is built again when the site is opened, one build at a time, and
@@ -697,7 +753,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if not isinstance(name, str) or not name.strip() or len(name) > 80:
             return self.send_json({"error": "Give the option a name."}, 400)
         with CREATE_LOCK:
-            if self.build_job.status()["state"] == "running":
+            if self.building():
                 return self.send_json({"error": "A build is already running."}, 409)
             try:
                 saved = save_option(self.build_job.root, name.strip(), items, self.build_job.own_output)
@@ -705,6 +761,37 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self.send_json({"error": str(e)}, 400)
             self.build_job.start()
         return self.send_json({"file": saved.relative_to(self.build_job.root).as_posix()}, 202)
+
+    def change(self, m, raw):
+        """Starts accepting or rejecting a proposal, or undoing an edit (`m`, the path's match), as the viewer asks: one
+        change at a time, and not while the model's being built."""
+        number, action = (m[1], m[2]) if m[1] else (m[3], m[4])
+        root = self.change_job.root
+        try:
+            body = json.loads(raw or b"{}")
+        except ValueError:
+            return self.send_json({"error": "not JSON"}, 400)
+        why = body.get("why") if isinstance(body, dict) else None
+        if action == "reject" and (not isinstance(why, str) or not why.strip() or len(why) > MAX_WHY):
+            return self.send_json({"error": "Say why it's rejected."}, 400)
+        if action != "undo":
+            try:
+                state = json.loads((root / ".domus" / "proposals" / f"{int(number):04d}.json").read_text(encoding="utf-8"))["state"]
+            except (OSError, ValueError, KeyError, TypeError):
+                return self.send_json({"error": "There's no such proposal."}, 404)
+            if state != "open":
+                return self.send_json({"error": f"That proposal was {state} already."}, 409)
+        elif not any(str(r.get("id")).isdigit() and int(r["id"]) == int(number)
+                     for r in _json_files(root / ".domus" / "edits", r"\d+-[a-z]+\.json")):
+            return self.send_json({"error": "There's no such edit."}, 404)
+        who = ["--who", (self.user() or "the viewer")[:80]]
+        args = {"accept": ["accept", number, *who, "--build"], "undo": ["undo", number, *who, "--build"],
+                "reject": ["reject", number, "--why", why.strip() if isinstance(why, str) else "", *who]}[action]
+        with CREATE_LOCK:
+            if self.building():
+                return self.send_json({"error": "The model is being built or changed: try again when that's done."}, 409)
+            self.change_job.start(*args)
+        return self.send_json({"state": "running"}, 202)
 
     def do_POST(self):
         path = urlsplit(self.path).path
@@ -719,10 +806,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if not 0 <= length <= 4096:
             return self.send_json({"error": "too large"}, 413)
         raw = self.rfile.read(length)
-        if urlsplit(self.path).path not in ("/api/create", "/api/scan-job"):
+        changing = CHANGE_PATH.match(path) if self.change_job is not None else None
+        if path not in ("/api/create", "/api/scan-job") and not changing:
             return self.send_json({"error": "not found"}, 404)
         if self.headers.get_content_type() != "application/json":
             return self.send_json({"error": "send application/json"}, 415)
+        if changing:
+            return self.change(changing, raw)
         if path == "/api/scan-job":
             return self.start_scan_job(raw)
         address, problem = read_address(raw)
@@ -791,12 +881,14 @@ class Sites:
                     return None
                 self.open[name] = {"store": Store(root / ".domus" / "viewer.db"), "creator": Creator(root, own_output=True),
                                    "scan_job": ScanJob(root, own_output=True), "sketch_worker": SketchWorker(root, own_output=True), "build_job": BuildJob(root, own_output=True),
+                                   "change_job": ChangeJob(root, own_output=True),
                                    "data_dirs": (root / "viewer" / "data", *((self.demo,) if self.demo else ()))}
             return self.open[name]
 
     def building(self):
         with self.lock:
-            return any(c[job].status()["state"] == "running" for c in self.open.values() for job in ("creator", "build_job"))
+            return any(c[job].status()["state"] == "running" for c in self.open.values()
+                       for job in ("creator", "build_job", "change_job"))
 
     def listing(self):
         """(name, title, state) of each site."""
@@ -872,7 +964,7 @@ class SitesHandler(Handler):
         path = urlsplit(self.path).path
         if path in ("/", "/index.html"):
             return self.send_page(self.sites.page())
-        if path in ("/scan", "/api/create", "/api/scan-job", "/api/sketch/option") or (path == "/demo" and not self.data_dirs):
+        if path in ("/scan", "/api/create", "/api/scan-job", "/api/sketch/option", "/api/changes") or (path == "/demo" and not self.data_dirs):
             return self.send_json({"error": "not found"}, 404)
         return super().do_GET()
 
@@ -924,7 +1016,8 @@ def make_server(host, port, data_dirs, db_path, trust_proxy=False, root=None, ou
                                                                                            output=output),
                                             "scan_job": ScanJob(root or Path(db_path).parent / "site"),
                                             "sketch_worker": SketchWorker(root or Path(db_path).parent / "site"),
-                                            "build_job": BuildJob(root or Path(db_path).parent / "site")})
+                                            "build_job": BuildJob(root or Path(db_path).parent / "site"),
+                                            "change_job": ChangeJob(root or Path(db_path).parent / "site")})
     httpd = http.server.ThreadingHTTPServer((host, port), functools.partial(cls, directory=str(VIEWER)))
     httpd.handler_class_worker = lambda: cls.sketch_worker
     return httpd

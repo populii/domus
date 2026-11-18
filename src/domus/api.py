@@ -33,6 +33,7 @@ __all__ = ["DomusError", "Site", "clip", "create", "demo", "fit_affine", "linz_q
 
 LAYER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 _opened = {}
+_GIVEN = object()          # edit()'s backup when it isn't given by name: the older edit(spec, backup, apply) by position
 
 
 def open_site(path=None):
@@ -317,26 +318,45 @@ class Site:
             say(f"Builds on this machine will run them until they change. Recorded in {extensions.trust_file()}.")
         return done
 
-    def shift(self, spec, backup, apply=False, say=print):
+    def shift(self, spec, backup=None, apply=False, say=print, why=None, who=None):
         """Moves named features of the site's layers by one vector, as domus site shift does, saying so in their basis:
         `spec` is {"shift": [dE, dN], "dz", "basis", "files": {layer file: [ids] or "*"}}, or a JSON file holding it.
-        Without `apply` it only says what would change; with it, each file is backed up into `backup`, a fresh folder,
-        written, read back and checked."""
+        Without `apply` it only says what would change; with it, it's an edit as edit() makes one, `why` its reason
+        (the spec's basis unless given) and each file's copy as it was in `backup`, a fresh folder, if it's given."""
         from .project import edits
 
         with self._writing():
-            edits.shift(self._project, _spec(spec), backup, apply, say)
+            return edits.shift(self._project, _spec(spec), backup, apply, say, why, who)
 
-    def edit(self, spec, backup, apply=False, say=print):
-        """Changes, adds and deletes named features of the site's layers, as domus site edit does: `spec` is
-        {layer file: [{"id", "so" or "en" (or "soz", "enz"), "props", "drop_props", "new", "delete"}]}, or a JSON file
-        holding it. Without `apply` it only says what would change; with it, as shift does."""
-        from .project import edits
+    def edit(self, intent, why=None, who=None, say=print, *, dry_run=False, backup=_GIVEN, apply=None):
+        """Changes the site's data the one way every change goes (docs/changes.md), and gives the edit's record.
+        `intent` says what to change, such as {"kind": "move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5,
+        0]}: an intent, a list of them, or a JSON file holding either. It's checked against the site, each file it
+        changes is written the safe way, all of them or none, and it's recorded in .domus/edits/ with `why`, which it
+        needs, `who` (this computer's user unless given), each file's SHA-256 before and after, and what puts it back,
+        which undo() applies. `dry_run` only says what would change. Provisional (docs/api.md).
 
+        The older form, edit(spec, backup=None, apply=False), with a spec as domus site edit has always taken it
+        ({layer file: [{"id", "so" or "en" (or "soz", "enz"), "props", "drop_props", "new", "delete"}]}), works as it
+        did: without `apply` it only says what would change, and with it the change is recorded the same way."""
+        from .project import changes, edits
+        from .project import intents as kinds
+
+        loaded = kinds.load(intent)
+        if kinds.is_intents(loaded):
+            if apply is not None:
+                dry_run = not apply
+            with self._writing():
+                return changes.apply(self._project, kinds.read(loaded), why, who, dry_run=dry_run, say=say,
+                                     backup=None if backup is _GIVEN else backup)
+        if not isinstance(loaded, dict):
+            raise DomusError("An edit is an intent or a list of them (docs/changes.md), or a spec as domus site edit takes it")
+        if backup is _GIVEN:            # edit(spec, backup, apply=False), by position, as it always was
+            backup, why, apply, who = why, None, bool(who) if apply is None else apply, None
         with self._writing():
-            edits.edit(self._project, _spec(spec), backup, apply, say)
+            return edits.edit(self._project, loaded, backup, bool(apply), say, why, who)
 
-    def regrade(self, clouds, spec, backup, apply=False, say=print):
+    def regrade(self, clouds, spec, backup=None, apply=False, say=print, why=None, who=None):
         """Gives ground-fix points and lines the levels a placed cloud shows, as domus site regrade does: `clouds` is
         a cloud in data/video (<tag>-dense or <tag>-site) or a list of them, and `spec` {"features", "radius",
         "percentile", "basis", ...}, or a JSON file holding it. Without `apply` it only says what would change; with
@@ -344,8 +364,56 @@ class Site:
         from .project import edits
 
         with self._writing():
-            edits.regrade(self._project, [clouds] if isinstance(clouds, str) else list(clouds), _spec(spec), backup, apply,
-                          say)
+            return edits.regrade(self._project, [clouds] if isinstance(clouds, str) else list(clouds), _spec(spec), backup,
+                                 apply, say, why, who)
+
+    def undo(self, edit, who=None, why=None, say=print):
+        """Undoes an edit, by its number as edits() gives it: what puts it back is applied, but only while each file it
+        changed is still as it left it, and the undo is recorded as an edit of its own, which can be undone in turn.
+        Gives that record. Provisional (docs/api.md)."""
+        from .project import changes
+
+        with self._writing():
+            return changes.undo(self._project, edit, who, why, say)
+
+    def edits(self):
+        """The edits made to the site's data, oldest first: each record as .domus/edits/ holds it (`id`, `kind`, `who`,
+        `when`, `why`, `intents`, `summary`, `files` with each one's SHA-256 before and after, `inverse`, `rebuild`),
+        with `in_effect`, and `undone_by` once an undo has undone it. Provisional (docs/api.md)."""
+        from .project import changes
+
+        return changes.records(self._project)
+
+    def propose(self, intents, why, source, say=print):
+        """Proposes a change for a person to accept or reject, as a check or a tool does when it finds something to
+        put right: `intents` as edit() takes them, `why` why, and `source` what proposed it. It's checked against the
+        site now; nothing changes until it's accepted. Gives the proposal (.domus/proposals/<id>.json). Provisional."""
+        from .project import changes
+        from .project import intents as kinds
+
+        return changes.propose(self._project, kinds.read(intents), why, source, say)
+
+    def proposals(self, state=None):
+        """The proposed changes, oldest first: each with `id`, `made`, `source`, `why`, `intents`, `summary` and its
+        `state`, open, accepted or rejected (only those in `state`, if it's given). Provisional (docs/api.md)."""
+        from .project import changes
+
+        return changes.proposals(self._project, state)
+
+    def accept(self, proposal, who=None, say=print):
+        """Accepts a proposed change, by its id: its intents applied as edit() applies them, with the proposal as their
+        basis. Gives the edit's record. Provisional (docs/api.md)."""
+        from .project import changes
+
+        with self._writing():
+            return changes.accept(self._project, proposal, who, say)
+
+    def reject(self, proposal, why, who=None, say=print):
+        """Rejects a proposed change, by its id, recording `why` and `who`; the site's data is left as it is. Gives the
+        proposal. Provisional (docs/api.md)."""
+        from .project import changes
+
+        return changes.reject(self._project, proposal, why, who, say)
 
     def _sketch(self, items):
         """For the server: what a sketch from the viewer comes to on the site, for the viewer. Not in the promise."""

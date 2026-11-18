@@ -674,17 +674,34 @@ can be half a metre or more out on a steep bank. Mark each fix's `source` and `c
 
 ### 8.6 Change layers safely
 
-Three commands change layers so you can check and undo it. Each says what it would change and writes nothing until you
-add `--apply`; then it backs each file up into a fresh folder you name, writes, reads back and checks that only what
-was named changed.
+Every change to a site's data goes one way, so it can be checked and undone ([docs/changes.md](docs/changes.md)). Say
+what to change as an intent, with why:
 
-- `domus site shift SPEC.json BACKUP` moves named features by one vector: `{"shift": [dE, dN], "dz": 0.06, "basis":
+```sh
+domus site edit move-w1.json --why "Measured from the boundary peg with a tape." --apply
+```
+
+where `move-w1.json` holds `{"kind": "move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5, 0]}`, or a list of
+intents applied as one edit. The kinds move features, set their vertices (`coords`) or a vertex's height (`level`), set
+and drop properties (`props`), add and delete features, and set settings (`setting`). Without `--apply` it says what
+would change and writes nothing; with it, each file is copied, written, read back and checked to have changed only as
+asked, and the edit is recorded in `.domus/edits/` with who, when and why. `domus site edits` lists the edits, and
+`domus site undo N` puts one back, as long as nothing has changed its files since. From Python, `site.edit(intent, why)`
+and `site.undo(n)`.
+
+Three older commands are edits the same way; `BACKUP`, a fresh folder for the files as they were, is optional:
+
+- `domus site shift SPEC.json [BACKUP]` moves named features by one vector: `{"shift": [dE, dN], "dz": 0.06, "basis":
   "...", "files": {"walls-existing.geojson": ["W2", "W3"]}}`.
-- `domus site edit SPEC.json BACKUP` sets named features' vertices and properties, adds and deletes them:
-  `{"house.geojson": [{"id": "window-3", "so": [[10.0, 4.3], [11.1, 4.3]], "props": {"basis": "..."}}, {"id":
-  "old-thing", "delete": true}]}`. `so`/`soz` are in the wall options' frame, `en`/`enz` on the grid.
-- `domus site regrade CLOUD SPEC.json BACKUP` gives ground-fix points and lines the levels a placed cloud shows:
+- `domus site edit SPEC.json [BACKUP]` with a spec in its older form sets named features' vertices and properties, adds
+  and deletes them: `{"house.geojson": [{"id": "window-3", "so": [[10.0, 4.3], [11.1, 4.3]], "props": {"basis":
+  "..."}}, {"id": "old-thing", "delete": true}]}`. `so`/`soz` are in the wall options' frame, `en`/`enz` on the grid.
+- `domus site regrade CLOUD SPEC.json [BACKUP]` gives ground-fix points and lines the levels a placed cloud shows:
   `{"features": ["lawn-ground"], "radius": 0.3, "percentile": 20, "basis": "..."}`.
+
+When you find something that should change but the person should decide, propose it instead:
+`site.propose(intents, why, source)`. They see it in `domus site proposals` and in the viewer's **Site** tab, and accept
+or reject it there or with `domus site accept N` and `domus site reject N --why "..."`. Nothing applies itself.
 
 ### 8.7 Wall options
 
@@ -793,6 +810,7 @@ for option in site.options():
 | `site.check(checks, tags, plots)` | The checks, as `domus prep check` runs them, and their report |
 | `api.create`, `api.new`, `api.demo`; `site.fetch()`, `map_canopy()`, `fetch_marks()`, `fetch_title()`, `fetch_points()`, `scan()`, `shots()`, `upgrade()`, `trust()`, `shift()`, `edit()`, `regrade()` | What the commands do, for a tool: `domus create`, `new`, `demo`, `fetch`, `canopy`, `marks`, `title`, `points`, `scan`, `shots` and `site ...`. Each takes `say`, which gets the lines the command prints |
 | `site.video.place(tag)`, `site.prep.profile(points)` and the other steps | `domus video`'s and `domus prep`'s steps, for a tool: provisional, so they may change between releases ([docs/api.md](docs/api.md)) |
+| `site.edit(intent, why)`, `undo()`, `edits()`, `propose()`, `proposals()`, `accept()`, `reject()` | The one route for every change to the site's data, recorded and undoable, and the changes proposed for a person to decide on ([docs/changes.md](docs/changes.md)): provisional too |
 | `api.linz_query`, `api.clip`, `api.fit_affine`, `api.resample_line` | Helpers for LINZ layers, raster windows, image-to-ground fits and lines |
 
 A process can open several sites at once, and each keeps what Domus reads of it apart, so a tool can compare two. A
