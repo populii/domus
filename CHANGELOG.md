@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.57
 
 - **For site projects:** a terrace that gives its own level at each corner is cut, where four of its corners lie
   within 5 mm of one circle, along the diagonal whose ends are closer in height, as the ground model cuts its grid's
