@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.55
 
 - **For site projects:** a terrace in an option written by hand whose outline crosses or touches itself still builds,
   now with a warning that names the option and the terrace and says what the build makes of it: shapely's `buffer(0)`
