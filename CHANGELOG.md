@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.46
 
 - The viewer carries Manifold too: its WebAssembly (manifold-3d 3.5.5, Apache-2.0, the same version as the build's)
   is in the viewer's `vendor` folder. `domus serve` lets the page compile it (`'wasm-unsafe-eval'` in its
