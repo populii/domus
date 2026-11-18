@@ -244,3 +244,100 @@ def test_steps_from_outside_the_regrade_area_stand_clear_of_the_ground_there(sit
     assert not d.garden.covers(shapely.Point(*d.stairs[0].a))      # its foot is outside the regrade area
     _, _, findings = through(s, opt)
     assert findings == []
+
+
+def ring_defects(ring):
+    """A ring's corners a hair apart (an edge under 1e-6 m) and its spikes (a corner whose two edges fold back on each
+    other, in a straight line): (how many of each, its shortest edge)."""
+    q = np.asarray(ring.coords)[:-1, :2]
+    e = np.roll(q, -1, axis=0) - q
+    length = np.hypot(e[:, 0], e[:, 1])
+    before = np.roll(e, 1, axis=0)
+    cross = before[:, 0] * e[:, 1] - before[:, 1] * e[:, 0]
+    return int((length < 1e-6).sum()), int(((np.abs(cross) < 2e-9) & ((before * e).sum(axis=1) < 0)).sum()), float(length.min())
+
+
+@pytest.mark.parametrize("shape", ["round a sharp corner", "round a sharp corner, its top stepping"])
+def test_a_walls_plan_with_corners_a_hair_apart_is_cut_from_the_ground(shape, project):
+    """A capped block wall's plan, the union of its mesh's many triangles (solids.footprint), less the body's top the
+    soil covers behind the cap, can have corners a fraction of a micrometre apart and spikes where they meet: these two
+    made-up walls' plans do, level and stepped, and GEOS's constrained Delaunay refuses them once their outline has a
+    corner every 5 cm, as it refused a wall on a real site. The walls' cut takes them all the same (solids.over snaps a plan to a 0.1
+    micrometre grid first), over their whole plan."""
+    from shapely.errors import GEOSException
+
+    low = round(ground_at(project, 8.0, 10.0), 2)
+    w = {**BLOCK, "id": "W", "line_so": [[10.0, 6.0], [10.0, 9.0], [11.0, 6.5]], "retained_side": "right", "top": low + 1.0}
+    if shape.endswith("stepping"):
+        w = {**w, "top": None, "tops": [low + 1.2, low + 1.0]}
+        del w["top"]
+    ww = design.evaluate(project, made_up("x", walls=[w]), segments=0)["walls"][0]
+    m = ww["mesh"]
+    pts, _, chain, toe, top = walls_mod.wall_levels(ww["def"])
+    standing = solids.standing(m.vertices, m.faces, pts, chain, toe, top, getattr(m, "soil_over", ()), getattr(m, "soil_over_m", 0.0))
+    plan, _, parts = standing
+    refused = []
+    for poly in (x for part, _ in parts for x in shapely.get_parts(part) if x.geom_type == "Polygon"):
+        hairs, spikes, shortest = ring_defects(poly.exterior)
+        try:
+            shapely.constrained_delaunay_triangles(shapely.segmentize(poly, 0.05))
+        except GEOSException:
+            refused.append((hairs, spikes, shortest))
+    assert refused and all(h > 10 and k >= 2 and sh < 1e-6 for h, k, sh in refused)       # the defect is there
+    origin = np.asarray(plan.centroid.coords[0])
+    cut = solids.walls_cut([standing], (), origin, float(np.nanmax(top)) + 5.0)
+    assert abs(solids.outline(cut).area() - plan.area) < 1e-4
+
+
+def test_where_geos_refuses_a_plan_it_is_ear_clipped(project, monkeypatch):
+    """Where GEOS's constrained Delaunay refuses a plan even snapped, over() triangulates it by Manifold's ear clipping,
+    checked to cover it once: here an L-shaped plan with a hole, GEOS made to refuse every plan. The solids between its
+    heights cover the plan, hole and all, and hold its area times their height."""
+    from shapely.errors import GEOSException
+
+    def refuse(*args, **kwargs):
+        raise GEOSException("IllegalStateException: Unable to find a convex corner")
+
+    monkeypatch.setattr(shapely, "constrained_delaunay_triangles", refuse)
+    plan = shapely.Polygon([(1000.0, 2000.0), (1004.0, 2000.0), (1004.0, 2001.0), (1001.0, 2001.0), (1001.0, 2003.0), (1000.0, 2003.0)],
+                           [[(1000.3, 2000.3), (1000.7, 2000.3), (1000.7, 2000.7), (1000.3, 2000.7)]])
+    low, high = solids.over(plan, np.array([1000.0, 2000.0]), [10.0, 10.5, 12.0])
+    for piece, height in ((low, 0.5), (high, 1.5)):
+        assert abs(solids.outline(piece).area() - plan.area) < 1e-6
+        assert abs(piece.volume() - plan.area * height) < 1e-6
+
+
+@pytest.mark.parametrize("material", ["timber", "block"])
+def test_a_walls_bottom_under_a_steep_stretch_of_its_top_isnt_its_top(material, site, project, tmp_path, at_site):
+    """A wall between a lower lawn and an upper one whose top drops 0.2 m over 4 cm, as a hand-drawn step can: over
+    that stretch its top isn't level, and a closed wall's bottom, 0.15 m under its toe, is the highest level face there.
+    The through check doesn't take it for the wall's top, with the ground over it by those 0.15 m: nothing comes
+    through."""
+    s = at_site(site, output=tmp_path)
+    low = round(ground_at(project, 8.0, 10.0), 2)
+    line = [[10.0, 6.0, low + 0.9], [10.0, 9.0, low + 0.9], [10.0, 9.04, low + 0.7], [10.0, 12.6, low + 0.7]]
+    opt = made_up("steep", walls=[{"id": "T", "material": material, "line_so": line, "retained_side": "left"}],
+                  terraces=[{"id": "lower", "kind": "lawn", "level": low, "at_so": [8.0, 10.0], "polygon_so": [[6, 4], [10, 4], [10, 18], [6, 18]]},
+                            {"id": "upper", "kind": "lawn", "level": low + 0.68, "at_so": [12.0, 10.0], "polygon_so": [[10, 4], [14, 4], [14, 18], [10, 18]]}])
+    _, _, findings = through(s, opt)
+    assert findings == []
+
+
+@pytest.mark.parametrize("kind", [{"material": "stone", "thickness_m": 0.4}, {"material": "gabion", "thickness_m": 0.5},
+                                  {"material": "block", "thickness_m": 0.3}], ids=["stone", "gabion", "block"])
+def test_a_thick_wall_in_bays_bending_at_its_step_shows_no_bottom_for_its_top(kind, site, project, tmp_path, at_site):
+    """A thick wall in level bays whose line bends a fifth of a degree where its top steps, as a driveway wall restyled
+    from timber can: at the step the wall's back closes over a sliver steep enough to count as upright, and under it
+    the wall's bottom, 0.15 m under its toe, was the highest face that isn't upright. The through check takes as a
+    wall's top only what looks up: nothing comes through."""
+    import math
+
+    s = at_site(site, output=tmp_path)
+    low = round(ground_at(project, 8.0, 10.0), 2)
+    a = math.radians(0.2)
+    line = [[10.0, 12.0], [10.0, 8.0], [10.0 - 3.0 * math.sin(a), 8.0 - 3.0 * math.cos(a)]]
+    opt = made_up("bays", walls=[{"id": "D", **kind, "line_so": line, "retained_side": "right", "tops": [low + 0.9, low + 0.68]}],
+                  terraces=[{"id": "lower", "kind": "lawn", "level": low, "at_so": [8.0, 10.0], "polygon_so": [[4, 2], [10, 2], [10, 18], [4, 18]]},
+                            {"id": "upper", "kind": "lawn", "level": low + 0.6, "at_so": [12.0, 10.0], "polygon_so": [[10, 2], [14, 2], [14, 18], [10, 18]]}])
+    _, _, findings = through(s, opt)
+    assert findings == []

@@ -199,6 +199,10 @@ def test_an_ifc_opens_again_georeferenced_with_the_options_numbers(built, model,
     for key in ("name", "material", "length_m", "height_min_m", "height_max_m", "top_min", "top_max", "toe_min", "toe_max"):
         assert numbers[key] == info[key], key
     assert info["toe_max"] < info["top_min"] and numbers["levels_datum"] == "NZVD2016"
+    (shell,) = wall.Representation.Representations[0].Items              # a closed solid, its pieces' corners welded
+    tri = np.asarray(shell.CoordIndex) - 1
+    edges = np.sort(np.concatenate([tri[:, [0, 1]], tri[:, [1, 2]], tri[:, [2, 0]]]), axis=1)
+    assert shell.Closed is True and (np.unique(edges, axis=0, return_counts=True)[1] == 2).all()
     import ifcopenshell.util.element as ue
 
     assert ue.get_material(wall).Name == "timber" and ue.get_container(wall).is_a("IfcSite")
@@ -210,7 +214,7 @@ def test_an_ifc_opens_again_georeferenced_with_the_options_numbers(built, model,
     assert ue.get_container(f.by_type("IfcRoof")[0]).is_a("IfcBuildingStorey")
     ground = terrain["Ground (LiDAR, with walls cut in)"]
     (faceset,) = ground.Representation.Representations[0].Items
-    assert faceset.is_a("IfcTriangulatedFaceSet")
+    assert faceset.is_a("IfcTriangulatedFaceSet") and faceset.Closed is None          # a surface, not a solid
     local = np.asarray(faceset.Coordinates.CoordList)
     lo = np.array([e0, n0, h0]) + local.min(axis=0)
     e, n, _, _ = model["extent"]
@@ -221,6 +225,7 @@ def test_an_ifc_of_the_site_as_it_is_keeps_its_old_wall(built, model, tmp_path, 
     f = ifcopenshell.open(str(api.open_site().export(tmp_path / "site.ifc")))
     (old,) = [w for w in f.by_type("IfcWall") if w.Tag == "W1"]
     assert psets(old)["Domus"]["toe_min"] == model["summary"]["walls"][0]["toe_min"]
+    assert old.Representation.Representations[0].Items[0].Closed is True                # the existing wall's a solid too
     ground = next(e for e in f.by_type("IfcGeographicElement") if e.PredefinedType == "TERRAIN")
     whole = next(layer for layer in model["layers"] if layer["id"] == "ground")
     assert len(ground.Representation.Representations[0].Items[0].Coordinates.CoordList) == len(whole["positions"]) // 3
@@ -328,3 +333,28 @@ def test_the_ground_is_cut_along_the_options_edge():
     assert np.allclose(cut_uv, cut[:, [0, 2]] / 4)                     # and the pictures go along with them
     a, b, c = (cut[f[:, k]] for k in range(3))
     assert (np.cross(b - a, c - a)[:, 1] > 0).all()                    # every piece still faces up
+
+
+def test_a_wall_manifold_wont_take_as_a_solid_isnt_marked_closed(project):
+    """The IFC export marks a wall's face set Closed only where Manifold takes it as a solid (ifc.shell). A wall of
+    named blocks round a sharp corner, a turn of 135 degrees, its capping course standing out, held on the inside of
+    the turn, has every edge in two triangles but isn't a solid yet, so it isn't marked Closed. Round a right angle
+    it is one, and it is."""
+    import math
+    from collections import Counter
+
+    from domus.export import ifc
+    from domus.model import terrain
+    from domus.options import design
+
+    en = design.frame(project).en(np.array([[8.0, 10.0]]))
+    low = round(float(terrain.ground(project).sample(en[:, 0], en[:, 1])[0]), 2)
+    for turn, solid in ((90, True), (135, False)):
+        a = math.radians(turn)
+        wall = {"id": "W", "material": "segmental", "unit_m": [0.457, 0.2], "cap_m": 0.1, "thickness_m": 0.27, "depth_m": 0.3,
+                "cap_depth_m": 0.26, "cap_overhang_m": 0.025, "retained_side": "left", "top": low + 1.0,
+                "line_so": [[10.0, 6.0], [10.0, 9.0], [10.0 + 3 * math.sin(a), 9.0 + 3 * math.cos(a)]]}
+        m = design.evaluate(project, {"id": "x", "name": "x", "walls": [wall]}, segments=0)["walls"][0]["mesh"]
+        _, f, closed = ifc.shell(m.vertices, m.faces)
+        edges = Counter(tuple(sorted(e)) for t in f.tolist() for e in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])))
+        assert set(edges.values()) == {2} and closed is solid, f"a turn of {turn} degrees"

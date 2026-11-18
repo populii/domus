@@ -34,7 +34,7 @@ heading in the panel), `colour`, `visible` (false: off until switched on) and `i
 
 | Type | Its own keys |
 |---|---|
-| `mesh` | `positions` (x, y, z in threes), `indices` (triangles, in threes); `uv` with `texture` (a file) and `repeat`, `opacity`, `role` and `option` (below), `tint`, `mask`; on an option's wall of a named block whose units are deeper than its capping units, `soil_over`, the triangles of the body's top behind the cap, which the soil covers as the wall is built, and `soil_over_m`, how far it comes up over them (to the cap's top) |
+| `mesh` | `positions` (x, y, z in threes), `indices` (triangles, in threes); `uv` with `texture` (a file) and `repeat`, `opacity`, `role` and `option` (below), `tint`, `mask`; on an option's wall of a named block whose units are deeper than its capping units, `soil_over`, the triangles of the body's top behind the cap, which the soil covers as the wall is built, and `soil_over_m`, how far it comes up over them (to the cap's top); on a wall of a named block (an option's or one that's there) whose face shares a length with another such wall's, `shared`, the triangles of that length, which close the wall's solid but which the viewer leaves to the other wall, as both would show through each other |
 | `lines` | `segments`: each segment's two ends, six numbers; `labels`: `{text, at}` along them |
 | `labels` | `items`: `{text, at, kind}`, `at` in viewer metres; an observation's (`kind` `observation`) has a `tone`, `ok`, `near`, `off` or `lost`, which colours it ([observations.md](observations.md)) |
 | `points` | `file`: a JSON of `positions` (base64 little-endian int16, in `step` metres) and `colours` (base64 bytes); `size` |

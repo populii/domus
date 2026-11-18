@@ -60,6 +60,7 @@ import math
 import manifold3d as mf
 import numpy as np
 import shapely
+from shapely.errors import GEOSException
 from shapely.geometry import Polygon, box
 
 from ..geo.mesh import offset_behind
@@ -564,16 +565,41 @@ def footprint(vertices, faces):
     return shapely.make_valid(plan).buffer(1e-6) if not plan.is_empty else plan
 
 
+PLAN_GRID_M = 1e-7      # a plan is snapped to a grid this fine before it's triangulated (over)
+PLAN_HOLE_M2 = 1e-6     # a hole in it smaller than this is a sliver between the triangles it's the union of
+
+
+def _plan_triangles(poly):
+    """A polygon's triangles, each its three corners, constrained to its outline: GEOS's constrained Delaunay, or where
+    GEOS refuses the outline, Manifold's ear clipping, checked to cover the polygon once."""
+    try:
+        return np.array([np.asarray(t.exterior.coords)[:3, :2] for t in shapely.get_parts(shapely.constrained_delaunay_triangles(poly))])
+    except GEOSException:
+        pass
+    poly = shapely.geometry.polygon.orient(poly, 1.0)          # its outer ring anticlockwise, its holes clockwise
+    rings = [np.asarray(r.coords)[:-1, :2] for r in (poly.exterior, *poly.interiors)]
+    at = rings[0].mean(axis=0)                                 # about a point of its own, as Manifold's arithmetic wants
+    tris = np.vstack(rings)[np.asarray(mf.triangulate([np.ascontiguousarray(r - at) for r in rings]), np.int64).reshape(-1, 3)]
+    a, b, c = tris[:, 0], tris[:, 1], tris[:, 2]
+    area = 0.5 * ((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0]))
+    if not len(tris) or (area < -1e-12).any() or abs(area.sum() - poly.area) > 1e-6 * max(poly.area, 1.0):
+        raise ValueError(f"a plan of {poly.area:.4f} m2 that neither GEOS nor Manifold triangulates")
+    return tris
+
+
 def over(plan, origin, levels):
     """Solids over `plan` (shapely, on the site's grid), about `origin`: one between each two of `levels` in turn, the
     lowest first, each a height at points (e, n) or one height. They're worked out on the same triangles, constrained
-    to the plan's outline with a corner every 5 cm along it, where the heights are read, so each meets the next."""
+    to the plan's outline with a corner every 5 cm along it, where the heights are read, so each meets the next. The
+    plan is snapped to a fine grid first (PLAN_GRID_M), less any sliver of a hole: a mesh's plan (footprint), the union
+    of its many triangles, can have corners a fraction of a micrometre apart and spikes where they meet, and GEOS's
+    constrained Delaunay refuses those once the outline has its corners every 5 cm."""
     pieces = [[] for _ in levels[1:]]
-    for part in shapely.get_parts(plan):
+    for part in shapely.get_parts(shapely.set_precision(plan, PLAN_GRID_M)):
         if part.geom_type != "Polygon" or part.area < 1e-9:
             continue
-        dense = shapely.segmentize(part, 0.05)
-        tris = np.array([np.asarray(t.exterior.coords)[:3, :2] for t in shapely.get_parts(shapely.constrained_delaunay_triangles(dense))])
+        part = Polygon(part.exterior, [r for r in part.interiors if Polygon(r).area >= PLAN_HOLE_M2])
+        tris = _plan_triangles(shapely.segmentize(part, 0.05))
         if not len(tris):
             continue
         a, b, c = tris[:, 0], tris[:, 1], tris[:, 2]

@@ -294,16 +294,18 @@ line_so = [[0, 2], [1, 2]]
 
 
 def test_steps_can_be_railway_sleepers(two_lawns, project):
-    """A flight of sleepers is two sleepers to a tread, each with faces of its own, and carries the picture's uv."""
+    """A flight of sleepers is two sleepers to a tread, each with faces of its own, and carries the picture's uv. It's a
+    closed solid (tests/test_closed_solids.py), with a bottom in the ground."""
     from domus.options import design
 
     low, opt = two_lawns
     s = design.evaluate(project, {**opt, "stairs": [{**opt["stairs"][0], "material": "sleepers"}]})["stairs"][0]
     m = s["mesh"]
     assert (s["material"], s["risers"]) == ("sleepers", 4) and design.STEP_LOOKS["sleepers"][1][0] == "steps-sleepers.jpg"
-    assert m.uv.shape == (len(m.vertices), 2) and len(m.vertices) == 4 * (4 * 7) + 4       # 7 faces a tread, and the back
+    assert m.uv.shape == (len(m.vertices), 2)
     assert m.vertices[:, 2].max() == pytest.approx(low + 0.68, abs=0.01)
-    tops = m.vertices[m.faces][np.ptp(m.vertices[m.faces][:, :, 2], axis=1) < 1e-9]            # the level faces
+    level = m.vertices[m.faces][np.ptp(m.vertices[m.faces][:, :, 2], axis=1) < 1e-9]           # the level faces
+    tops = level[level[:, 0, 2] > low]                                                         # the treads, not the bottom
     assert len(tops) == 4 * 2 * 2 and sorted({round(float(z) - low, 2) for z in tops[:, 0, 2]}) == [0.17, 0.34, 0.51, 0.68]
 
 
@@ -413,8 +415,8 @@ def test_a_flight_can_stand_on_ground_that_slopes_across_its_foot(two_lawns, pro
     s = design.evaluate(project, {**opt, "stairs": [stair]})["stairs"][0]
     assert (s["risers"], s["riser_m"], s["foot"], s["foot_rise_m"]) == (4, 0.133, low, 0.28) and "tread_widths_m" not in s
     m = design.evaluate(project, {**opt, "stairs": [{**stair, "material": "sleepers"}]})["stairs"][0]["mesh"]
-    quads = 4 * 2 * 3 + 4 + 1                                # sleepers' tops and ends, risers, the back
-    assert m.uv.shape == (len(m.vertices), 2) and len(m.vertices) == 4 * quads
+    level = m.vertices[m.faces][np.ptp(m.vertices[m.faces][:, :, 2], axis=1) < 1e-9]
+    assert m.uv.shape == (len(m.vertices), 2) and (level[:, 0, 2] > low).sum() == 4 * 2 * 2     # two sleepers a tread
     # Two equal levels are a level foot, and a foot above its head is a mistake.
     plain = design.Design({**opt, "stairs": [{**stair, "foot": low}]}, site=project).stairs[0]
     level = design.Design({**opt, "stairs": [{**stair, "foot": [low, low]}]}, site=project).stairs[0]
@@ -635,8 +637,9 @@ def meeting(drop, low):
 
 def test_block_walls_that_meet_share_their_courses_and_their_bond(site, project):
     """Two walls of the same block that stand against each other are set out as one: the same courses, the bond
-    carried on from the one into the other, and the face they share drawn once. A top that is not a whole number
-    of courses from the other's is reported."""
+    carried on from the one into the other, and the face they share drawn once: the lower wall's mesh has it too,
+    which closes its solid, but lists it (`shared`) for the viewer to leave to the other. A top that is not a whole
+    number of courses from the other's is reported."""
     from domus.options import design
 
     low = round(ground_at(8.0, 10.0), 2)
@@ -654,7 +657,10 @@ def test_block_walls_that_meet_share_their_courses_and_their_bond(site, project)
     m = res["walls"][1]["mesh"]
     so = design.frame(project).so(m.vertices[:, :2])
     on_face = (np.abs(so[:, 0] - 10.0) < 1e-6)[m.faces].all(axis=1)                               # the triangles of B's face
-    assert so[m.faces[on_face], 1].min() == pytest.approx(9.0)                                    # which starts where A's ends
+    drawn = on_face & ~np.isin(np.arange(len(m.faces)), m.shared)                                 # those the viewer draws
+    assert so[m.faces[drawn], 1].min() == pytest.approx(9.0)                                      # start where A's ends
+    assert so[m.faces[on_face], 1].min() == pytest.approx(8.95)       # the length A draws closes B's solid, listed `shared`
+    assert so[m.faces[m.shared], 1].max() == pytest.approx(9.0) and on_face[m.shared].all()
     assert so[:, 1].min() == pytest.approx(8.95)                                                  # while its top runs on into A
     # two and a half courses lower: B is still set out on A's courses, and says what is cut
     odd = meeting(0.5, low)

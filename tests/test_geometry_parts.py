@@ -59,9 +59,10 @@ def test_wall_uv_hangs_from_the_top_edge_at_true_scale():
     # the section from the face's top edge, u the distance along the wall.
     line = np.array([[0.0, 0.0], [2.0, 0.0], [4.0, 0.0]])
     m = wall_strip(line, 41.0, 39.85, 0.3, 1, 1.0, 40.0)
-    rows = m.uv[~m.cap, 1].reshape(-1, 3)      # the face, top and back (the end caps are apart)
+    rows = m.uv[~m.cap, 1].reshape(-1, 3)      # the face, top and back (the end caps are apart), then the bottom's own
     slope = np.hypot(1.0, 1.0)
-    assert np.allclose(rows[:, 0], [-slope - 0.15, -slope, 0.0, 0.3, 0.3 + 1.15])
+    assert np.allclose(rows[:5, 0], [-slope - 0.15, -slope, 0.0, 0.3, 0.3 + 1.15])
+    assert np.allclose(rows[5:], rows[[0, 4]])   # the bottom's corners: the face's foot and the back's, a copy of each
     assert np.allclose(m.uv[:3, 0], [0.0, 2.0, 4.0])
     # The face's v grows with the slant distance between its vertices.
     v = m.vertices
@@ -78,8 +79,8 @@ def test_wall_end_caps_take_the_texture_across_the_end():
     u, v = m.uv[m.cap].T
     assert np.allclose(u[:5], [0.0, 0.0, 1.0, 1.3, 1.3]) and np.allclose(u[5:], u[:5])
     assert np.allclose(v[:5], [-1.15, -1.0, 0.0, 0.0, -1.15])
-    face_rows = m.faces[~np.any(m.cap[m.faces], axis=1)]
-    assert len(face_rows) == 4 * 2 * 2 and np.all(m.cap[m.faces].sum(axis=1) % 3 == 0)
+    face_rows = m.faces[~np.any(m.cap[m.faces], axis=1)]    # round the cross-section: face, top, back, and the bottom
+    assert len(face_rows) == 5 * 2 * 2 and np.all(m.cap[m.faces].sum(axis=1) % 3 == 0)
 
 
 def test_flood_gives_each_crown_its_own_slope():

@@ -1,5 +1,7 @@
 """Minimal triangle-mesh helpers (site coordinates: E, N, height)."""
 
+import itertools
+
 import numpy as np
 
 
@@ -289,6 +291,72 @@ def offset_behind(line, distance, side=1):
     return out
 
 
+def join_t_junctions(vertices, faces, uv=None, tol=1e-6):
+    """A mesh of pieces whose edges meet where one piece's edge runs past another's corner (a T-junction), with each such
+    edge cut at the corners on it, so that every edge two pieces share is an edge of both: a closed surface of such
+    pieces is then closed edge to edge, as a solid's is. Corners within `tol` of each other count as one, and a corner
+    within `tol` of an edge lies on it. A cut triangle keeps its turn, the new corners take the places of the corners on
+    the edge, and their texture coordinates (`uv`) are its own, read along the edge, so it looks as it did. A triangle
+    with two corners within `tol` of each other draws nothing, and goes: counted, its edges would hide one that's alone.
+    Gives (vertices, faces, uv, parent): `parent` is the triangle of `faces` each one comes from."""
+    v = np.asarray(vertices, float)
+    f = np.array(faces, np.int64).reshape(-1, 3)
+    uv = None if uv is None else np.asarray(uv, float)
+    parent = np.arange(len(f))
+    low = v.min(axis=0) if len(v) else np.zeros(3)
+    for _ in range(64):
+        key = np.round((v - low) / tol).astype(np.int64)
+        _, first, weld = np.unique(key, axis=0, return_index=True, return_inverse=True)
+        w = weld.reshape(-1)[f]
+        flat = (w[:, 0] == w[:, 1]) | (w[:, 1] == w[:, 2]) | (w[:, 2] == w[:, 0])
+        if flat.any():                                      # two corners as one: it draws nothing
+            f, parent, w = f[~flat], parent[~flat], w[~flat]
+        edges = np.concatenate([w[:, [0, 1]], w[:, [1, 2]], w[:, [2, 0]]])
+        tri, slot = np.tile(np.arange(len(f)), 3), np.repeat([0, 1, 2], len(f))
+        _, inverse, count = np.unique(np.sort(edges, axis=1), axis=0, return_inverse=True, return_counts=True)
+        alone = np.flatnonzero((count[inverse.reshape(-1)] == 1) & (edges[:, 0] != edges[:, 1]))
+        if not len(alone):
+            break
+        ends = np.unique(edges[alone].ravel())
+        at = v[first[ends]]
+        cuts = {}                                           # a triangle: its edge to cut, and the corners on it in turn
+        for k in alone:
+            if tri[k] in cuts:
+                continue
+            a, b = v[first[edges[k, 0]]], v[first[edges[k, 1]]]
+            d = b - a
+            length = float(np.sqrt(d @ d))
+            if length <= tol:
+                continue
+            t = (at - a) @ d / (length * length)
+            on = (np.linalg.norm(a + t[:, None] * d - at, axis=1) <= tol) & (t * length > tol) & ((1.0 - t) * length > tol)
+            if on.any():
+                order = np.argsort(t[on])
+                cuts[tri[k]] = (slot[k], t[on][order], ends[on][order])
+        if not cuts:
+            break
+        new_v, new_uv, new_f, new_parent = [], [], [], []
+        for k, (s, ts, corners) in cuts.items():
+            i0, i1, i2 = f[k, s], f[k, (s + 1) % 3], f[k, (s + 2) % 3]
+            fan = [i0]
+            for t, c in zip(ts, corners, strict=True):
+                fan.append(len(v) + len(new_v))
+                new_v.append(v[first[c]])
+                if uv is not None:
+                    new_uv.append(uv[i0] + t * (uv[i1] - uv[i0]))
+            fan.append(i1)
+            f[k] = (fan[0], fan[1], i2)
+            for p, q in itertools.pairwise(fan[1:]):
+                new_f.append((p, q, i2))
+                new_parent.append(parent[k])
+        v = np.vstack([v, new_v])
+        if uv is not None:
+            uv = np.vstack([uv, new_uv])
+        f = np.vstack([f, np.asarray(new_f, np.int64).reshape(-1, 3)])
+        parent = np.concatenate([parent, np.asarray(new_parent, np.int64)])
+    return v, f, uv, parent
+
+
 def wall_strip(line, top, bottom, thickness, side, batter=0.0, toe=None, chain=None):
     """A wall of given thickness along a polyline. `side` (+1 left, -1 right of the line
     direction) is where the body sits; the line itself is one face of the wall. With a
@@ -336,6 +404,11 @@ def wall_strip(line, top, bottom, thickness, side, batter=0.0, toe=None, chain=N
         for i in range(r * n, r * n + n - 1):
             faces += [(i, i + 1, i + n + 1), (i, i + n + 1, i + n)]
     verts = np.vstack(rows)
+    # The bottom, in the ground, from the foot of the back to the foot of the face, with corners of its own, so the
+    # face's and the back's corners keep their shading
+    bf, bb = k * n + 2 * k, k * n + 2 * k + n
+    for i in range(n - 1):
+        faces += [(bb + i, bb + i + 1, bf + i + 1), (bb + i, bf + i + 1, bf + i)]
     s0, e0 = k * n, k * n + k                        # the caps' own vertices
     for r in range(1, k - 1):
         faces.append((s0, s0 + r, s0 + r + 1))                 # start cap
@@ -345,7 +418,10 @@ def wall_strip(line, top, bottom, thickness, side, batter=0.0, toe=None, chain=N
         p = verts[[r * n + i for r in range(k)]]
         cap_xyz.append(p)
         cap_uv.append(np.column_stack([(p[:, :2] - pts[i]) @ back[i] + 0.5 * batter, p[:, 2] - top[i]]))
-    m = Mesh(np.vstack([verts] + cap_xyz), faces)
-    m.uv = np.vstack([np.column_stack([np.tile(np.asarray(chain, float), k), np.concatenate(vs)])] + cap_uv)
-    m.cap = np.arange(len(m.vertices)) >= s0
+    uv = np.column_stack([np.tile(np.asarray(chain, float), k), np.concatenate(vs)])
+    if side < 0:            # the body on the right of the line mirrors the strip: its triangles turn the other way
+        faces = [(a, c, b) for a, b, c in faces]
+    m = Mesh(np.vstack([verts] + cap_xyz + [rows[0], rows[-1]]), faces)
+    m.uv = np.vstack([uv] + cap_uv + [uv[:n], uv[(k - 1) * n:]])
+    m.cap = (np.arange(len(m.vertices)) >= s0) & (np.arange(len(m.vertices)) < bf)
     return m

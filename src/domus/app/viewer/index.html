@@ -697,7 +697,9 @@ function meshFromLayer(layer, material) {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(layer.positions, 3));
   if (layer.uv) g.setAttribute("uv", new THREE.Float32BufferAttribute(layer.uv, 2));
-  g.setIndex(layer.indices);
+  // `shared`: triangles that lie in another layer's face, which draws them (a wall's length of face in another's)
+  const skip = new Set(layer.shared || []);
+  g.setIndex(skip.size ? layer.indices.filter((_, k) => !skip.has(Math.floor(k / 3))) : layer.indices);
   g.computeVertexNormals();
   g.computeBoundsTree();
   return new THREE.Mesh(g, material);

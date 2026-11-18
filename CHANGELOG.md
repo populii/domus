@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** walls and steps are drawn as closed solids, an option's and the existing walls: each
+  encloses its volume, down to a bottom in the ground, as Manifold takes a solid, and looks and lays its pictures as
+  before. A wall of named blocks is cut where one piece's edge runs past another's corner, as its capping course's
+  ends do past the body's, and each of its bands of courses is drawn as just its part of the face where the foot
+  crosses a course on the way. A stepped wall's stacked capping units, and a flight of sleepers' risers, meet the
+  rest of it edge to edge. Where its top steps at a turn of its line, its back and its capping course take the
+  corner's mitre, where they left a wedge open or ran past the corner, and on a small turn its top no longer has a
+  hole at the step. Where two walls of a named block share a length of face, both have it now, closing each one's
+  solid, and the viewer still draws it once (`shared`, [docs/model-format.md](docs/model-format.md)). A plain wall
+  held on the right of its line faces out, where it was drawn inside out, which showed in a glTF viewer that hides
+  the backs of faces. The IFC export marks a wall or a flight closed, its corners welded, where Manifold takes it as
+  a solid ([docs/export.md](docs/export.md)). A wall of named blocks round a sharp corner, a turn of 120 degrees or
+  more, isn't one yet, and its export doesn't say it is.
+- **For site projects:** a build no longer stops with GEOS's "Unable to find a convex corner" on a wall whose drawn
+  plan, the union of its mesh's triangles, has corners a fraction of a micrometre apart and spikes where they meet,
+  as a capped block wall along an arc with a stepped top had. The plan is snapped to a 0.1 micrometre grid before the
+  option's ground is cut under it, and where GEOS still refuses it, it's triangulated by ear clipping instead.
+
 ## 2026.11.60
 
 - **For site projects:** an option's ground is drawn from its solids (`domus.options.solids`), the ones its cut and

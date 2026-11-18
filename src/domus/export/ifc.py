@@ -156,6 +156,26 @@ def measure(f, key, value):
     return f.create_entity("IfcText" if len(text) > 255 else "IfcLabel", text)
 
 
+def shell(v, faces, tol=1e-6):
+    """A mesh's corners welded where its pieces meet (a wall's pieces each have corners of their own, for its picture),
+    less any triangle that closes up: (positions, triangles, and whether it's a closed solid). It's one only where
+    Manifold takes it as one, with a volume: every edge in two triangles isn't enough, as the two can face the same
+    way, or the surface pass through itself, as round a wall of named blocks' sharp corner (a turn of 120 degrees
+    or more) it still does."""
+    import manifold3d as mf
+
+    v = np.asarray(v, float)
+    key = np.round((v - v.min(axis=0)) / tol).astype(np.int64)
+    _, first, inverse = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    f = inverse.reshape(-1)[np.asarray(faces, np.int64).reshape(-1, 3)]
+    f = f[(f[:, 0] != f[:, 1]) & (f[:, 1] != f[:, 2]) & (f[:, 2] != f[:, 0])]
+    p = v[first]
+    if not len(f):
+        return p, f, False
+    solid = mf.Manifold(mf.Mesh64(vert_properties=np.ascontiguousarray(p - p.mean(axis=0)), tri_verts=np.ascontiguousarray(f, np.uint64)))
+    return p, f, solid.status() == mf.Error.NoError and solid.volume() > 0.0
+
+
 def local(positions):
     """Viewer metres (x east, y up, z south) as the IFC model's coordinates: east, north and up of the origin."""
     p = np.asarray(positions, float)
@@ -230,9 +250,9 @@ class Writer:
         """An element of `ifc_class` (with its `predefined` type, which IfcOpenShell makes USERDEFINED with it as the
         object type where the class has no such type), its GlobalId from `key`: contained in `container` or a part of
         `parent`, placed by `matrix` (4 by 4 in the model's coordinates, the identity unless given), its body
-        `items`, each (positions in its own coordinates, triangles, style name, colour) a triangulated face set in its
-        style, and its Domus property set `props`, whose `ref` is its Tag too and whose `material` names its
-        material."""
+        `items`, each (positions in its own coordinates, triangles, style name, colour, and optionally whether it bounds
+        a solid, which marks it Closed) a triangulated face set in its style, and its Domus property set `props`, whose
+        `ref` is its Tag too and whose `material` names its material."""
         api, f = self.ifc.api, self.f
         element = self.same_id(api.root.create_entity(f, ifc_class=ifc_class, predefined_type=predefined, name=name), key)
         if container is not None:
@@ -241,13 +261,16 @@ class Writer:
             api.aggregate.assign_object(f, products=[element], relating_object=parent)
         api.geometry.edit_object_placement(f, product=element, matrix=matrix)
         if items:
-            facesets = [self.builder.triangulated_face_set(np.asarray(v, float).tolist(), np.asarray(t).tolist())
-                        for v, t, _, _ in items]
+            facesets = [self.builder.triangulated_face_set(np.asarray(item[0], float).tolist(), np.asarray(item[1]).tolist())
+                        for item in items]
+            for item, faceset in zip(items, facesets, strict=True):
+                if len(item) > 4 and item[4]:
+                    faceset.Closed = True
             rep = f.create_entity("IfcShapeRepresentation", ContextOfItems=self.body, RepresentationIdentifier="Body",
                                   RepresentationType="Tessellation", Items=facesets)
             api.geometry.assign_representation(f, product=element, representation=rep)
             api.style.assign_representation_styles(f, shape_representation=rep,
-                                                   styles=[self.style(s, c) for _, _, s, c in items])
+                                                   styles=[self.style(item[2], item[3]) for item in items])
         if props.get("ref") is not None:
             element.Tag = str(props["ref"])
         self.properties(element, props)
@@ -299,6 +322,9 @@ def write(parts, model, path, georef, lonlat, name=None, house=None):
         if not len(faces):
             continue
         ifc_class, predefined, where = what
-        w.element(ifc_class, predefined, part.name, f"layer:{part.id}", [(local(v), faces, part.colour, part.colour)],
+        closed = False
+        if ifc_class in ("IfcWall", "IfcStair") and where == "site":       # walls and steps the build draws: solids
+            v, faces, closed = shell(v, faces)
+        w.element(ifc_class, predefined, part.name, f"layer:{part.id}", [(local(v), faces, part.colour, part.colour, closed)],
                   properties(part, model, shown and shown["id"]), container=storey if where == "house" else w.site)
     w.f.write(str(path))

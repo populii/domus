@@ -110,8 +110,8 @@ def test_each_command_keeps_its_own_help(capsys):
 
 
 def box(x0, z0, x1, z1, y):
-    """A level square at height y, in viewer metres: positions and indices."""
-    return {"positions": [x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1], "indices": [0, 1, 2, 0, 2, 3]}
+    """A level square at height y, in viewer metres, looking up as a solid's top does: positions and indices."""
+    return {"positions": [x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1], "indices": [0, 2, 1, 0, 3, 2]}
 
 
 def test_the_option_checks_find_nothing_wrong_on_the_demo(site, built, project):
@@ -168,12 +168,13 @@ def test_the_soil_over_a_walls_body_behind_its_cap_is_how_it_is_built(site, tmp_
 
 
 def block(x0, z0, x1, z1, y0, y1):
-    """A closed box from y0 up to y1 over a rectangle, in viewer metres: positions and indices."""
+    """A closed box from y0 up to y1 over a rectangle, in viewer metres, its faces turned outward: positions and
+    indices."""
     positions = [c for y in (y0, y1) for c in (x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1)]
-    indices = [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7]                     # its base and its top
+    indices = [0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6]                     # its base, looking down, and its top, up
     for i in range(4):
         j = (i + 1) % 4
-        indices += [i, j, 4 + j, i, 4 + j, 4 + i]                       # its sides
+        indices += [i, 4 + j, j, i, 4 + i, 4 + j]                       # its sides, looking out
     return {"positions": positions, "indices": indices}
 
 

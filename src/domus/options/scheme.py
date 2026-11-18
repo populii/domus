@@ -38,7 +38,7 @@ from shapely.geometry import LineString, Polygon
 from shapely.ops import polygonize, unary_union
 
 from ..errors import DomusError
-from ..geo.mesh import Mesh, Surface, delaunay_by_height, offset_behind, prism, resample_line
+from ..geo.mesh import Mesh, Surface, delaunay_by_height, join_t_junctions, offset_behind, prism, resample_line
 from ..model import walls as walls_mod
 from ..model.house import COMPASS
 from ..model.walls import bay_levels, line_normals
@@ -387,13 +387,22 @@ class Stair:
                          [(u0, under), (u0 + 0.03, under), (u0 + 0.03, 1), (u0, 1)])
                     quad([at(b1, s1, low), at(b0, s1, low), at(b0, s1, top), at(b1, s1, top)],
                          [(u0 + 0.5, under), (u0 + 0.53, under), (u0 + 0.53, 1), (u0 + 0.5, 1)])
-                u0 = 0.29 * 2 * i + 0.13            # the riser: the front sleeper's side
-                quad([at(a0, s1, low), at(a0, s0, low), at(a0, s0, top), at(a0, s1, top)],
-                     [(u0 + w, under), (u0 + w0, under), (u0 + w0, 1), (u0 + w, 1)])
+                # the riser: the front sleeper's side, from the tread below (the first from the foot), as its picture
+                # hangs from its top
+                u0, rz = 0.29 * 2 * i + 0.13, low if i == 0 else tops[i - 1]
+                rv = 1 - (top - rz) / riser
+                quad([at(a0, s1, rz), at(a0, s0, rz), at(a0, s0, top), at(a0, s1, top)],
+                     [(u0 + w, rv), (u0 + w0, rv), (u0 + w0, 1), (u0 + w, 1)])
             under = 1 - (self.head - low) / riser
             quad([at(self.length, s0, low), at(self.length, s1, low), at(self.length, s1, self.head),
                   at(self.length, s0, self.head)], [(w0, under), (w, under), (w, 1), (w0, 1)])
-        m.uv = np.asarray(uv, float)
+            quad([at(0.0, s0, low), at(0.0, s1, low), at(self.length, s1, low), at(self.length, s0, low)],    # its bottom
+                 [(w0, 0), (w, 0), (w, 1), (w0, 1)])
+        # The sleepers' ends meet the risers and one another part way along their edges: cut there, the flight is a
+        # closed solid
+        v, f, tex, _ = join_t_junctions(m.vertices, m.faces, np.asarray(uv, float))
+        m = Mesh(v, f)
+        m.uv = tex
         return m
 
 

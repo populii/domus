@@ -482,6 +482,20 @@ def _level_faces(tri):
     return tri[(size > 1e-9) & (np.abs(n[:, 1]) > 0.87 * size)]
 
 
+def _facing_up(tri):
+    """The triangles that look straight up: a solid's tops, as its faces turn outward, not its undersides or bottom."""
+    n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    size = np.linalg.norm(n, axis=1)
+    return tri[(size > 1e-9) & (n[:, 1] > 0.87 * size)]
+
+
+def _not_upright(tri):
+    """The triangles that aren't upright: the level ones and the sloping ones, a solid's tops, undersides and bottom."""
+    n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    size = np.linalg.norm(n, axis=1)
+    return tri[(size > 1e-9) & (np.abs(n[:, 1]) > 0.01 * size)]
+
+
 def _top_points(tri, step=0.04):
     """Points over the level faces of `tri`, a little in from their edges."""
     out = []
@@ -530,7 +544,8 @@ def _where(model, point):
 
 def check_through(site, findings, tol=TOL_THROUGH):
     """Ground that comes through an option's walls and flights, or stands over a tread's edge, in the built model. A
-    top inside another of the option's walls and flights, under that one's top, is hidden, so it isn't checked. Over a
+    wall's or a flight's top is a face of it that looks up with nothing of it over it, never its bottom or an underside.
+    A top inside another of the option's walls and flights, under that one's top, is hidden, so it isn't checked. Over a
     wall's faces the soil covers as it's built (a layer's `soil_over`: the body's top behind a shallower capping
     course), the ground may come up `soil_over_m`, to the cap's top."""
     path = site.output / "model.json"
@@ -554,12 +569,13 @@ def check_through(site, findings, tol=TOL_THROUGH):
         for i, (name, t) in enumerate(solid):
             buried = np.zeros(len(t), bool)                            # the faces the soil covers as the wall is built
             buried[solids[i].get("soil_over", [])] = True
-            p, cover = _top_points(t[~buried]), _top_points(t[buried])
+            p, cover = _top_points(_facing_up(t[~buried])), _top_points(_facing_up(t[buried]))
             allow = np.concatenate([np.zeros(len(p)), np.full(len(cover), float(solids[i].get("soil_over_m", 0.0)))])
             p = np.vstack([p, cover])
             if not len(p):
                 continue
-            keep = p[:, 1] >= _height(_level_faces(t), p[:, 0], p[:, 2]) - 1e-6         # its top, not an underside
+            # its top, looking up, with nothing of it over the point, a steep stretch of its top included
+            keep = p[:, 1] >= _height(_not_upright(t), p[:, 0], p[:, 2]) - 1e-6
             p, allow = p[keep], allow[keep]
             # Less what's inside another of the option's walls and flights, under its top, as a wall's end tucked into
             # a thicker wall at a corner: nothing of it shows, and the ground there is checked against that one's top.

@@ -515,11 +515,13 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
                                   "retained_max_m", "face_area_m2", "top_min", "top_max", "toe_min", "toe_max")}
         info["checks"] = "; ".join(w["flags"]) or "none"
         buried = getattr(w["mesh"], "soil_over", ())                  # the soil's, as the wall is built (walls.unit_mesh)
+        shared = getattr(w["mesh"], "shared", ())                     # in another wall's face, which draws it
         out.append({**mesh_json(w["mesh"], frame, walls.MATERIAL_COLOURS.get(w["material"], "#999"),
                                 f"{w['id']} {w['name']} ({w['material']})"),
                     "id": f"option-{oid}-{w['id']}", **tag,
                     **wall_texture(site, w["mesh"], w["def"], w["def"]["properties"].get("picture") == "painted"), "info": info,
-                    **({"soil_over": [int(i) for i in buried], "soil_over_m": round(w["mesh"].soil_over_m, 3)} if len(buried) else {})})
+                    **({"soil_over": [int(i) for i in buried], "soil_over_m": round(w["mesh"].soil_over_m, 3)} if len(buried) else {}),
+                    **({"shared": [int(i) for i in shared]} if len(shared) else {})})
     # Steps.
     stair_keys = ("id", "name", "material", "risers", "riser_m", "going_m", "rise_m", "width_m", "length_m", "foot", "head")
     for st in res["stairs"]:
@@ -885,9 +887,10 @@ def add_walls(b):
                 **{k: round(v, 2) for k, v in info.items()},
                 "note": w["properties"].get("note", "")}
         wall_info.append(info)
+        shared = getattr(m, "shared", ())                             # in another wall's face, which draws it
         layers.append({**mesh_json(m, frame, walls.MATERIAL_COLOURS.get(w["material"], "#999"), w["name"]),
                        "id": f"wall-{w['id']}", "group": "Existing walls", **wall_texture(b.site, m, w),
-                       "info": info})
+                       "info": info, **({"shared": [int(i) for i in shared]} if len(shared) else {})})
     summary["walls"] = wall_info
 
 

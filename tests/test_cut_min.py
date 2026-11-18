@@ -76,22 +76,23 @@ def test_a_course_only_a_step_of_the_foot_cuts_short_ends_at_a_joint():
 
 def test_the_drawing_shows_the_two_cut_units():
     """Near the end, each course's face is drawn piece by piece: the end's unit starts at a joint of the picture, where
-    the course's new joint is."""
+    the course's new joint is. (A piece of another course that runs past that point is cut there too, so the wall is
+    closed edge to edge, and keeps its own picture: so at each new joint, one of the pieces that start there is the
+    end's unit, its picture starting at a joint.)"""
     w = block_wall([[0, 0], [10.1 * LENGTH, 0]])
     m = walls.mesh(w)[0]
     v, uv = m.vertices, m.uv * [walls.UNIT_BLOCKS, 1]
     rate = w["set_out"]["rate"][0]
-    found = set()
-    for tri in np.asarray(m.faces).reshape(-1, 3)[::2]:              # each quad's first triangle
+    found = {}
+    for tri in np.asarray(m.faces).reshape(-1, 3):                   # each triangle: those that start at a new joint
         p = v[tri]
         if np.all(np.abs(p[:, 1]) < 1e-6) and 0.2 <= p[:, 2].min() and p[:, 2].max() <= 1.0:   # the face, under the cap
             start = float(p[:, 0].min() * rate)
             tex = float(uv[tri, 0].min())
             for joint in (9.55, 9.3):                                 # the even courses' and the odd ones'
                 if abs(start - joint) < 1e-6:
-                    found.add(joint)
-                    assert abs(tex - round(2 * tex) / 2) < 1e-6       # the picture's unit starts at a joint
-    assert found == {9.55, 9.3}
+                    found.setdefault(joint, []).append(abs(tex - round(2 * tex) / 2) < 1e-6)
+    assert set(found) == {9.55, 9.3} and all(any(at) for at in found.values())    # the unit's picture starts at a joint
 
 
 def test_the_capping_course_keeps_to_the_same_minimum():
