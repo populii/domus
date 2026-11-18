@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.50
 
 - **For site projects:** no block of a wall of a named block (`unit_m`) is cut shorter than `cut_min_m`, 0.15 m
   unless the wall or `[defaults]` in `options/_site.toml` says otherwise, as a maker's manual has it. Where a course
