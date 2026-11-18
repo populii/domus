@@ -209,6 +209,8 @@ def option_wall(cfg, defaults, frame):
         "bedding": float(cfg.get("bedding_m", defaults.get("bedding_m", 0.0))),
         "base": float(cfg.get("base_m", defaults.get("base_m", 0.0))),
         "trench": float(cfg.get("trench_m", defaults.get("trench_m") or depth)),
+        # the shortest piece a named unit is cut to: a shorter one and a whole unit become two equal cuts (walls.set_out)
+        "cut_min": float(cfg.get("cut_min_m", defaults.get("cut_min_m", 0.15))),
         # What it takes besides, for its materials (domus.options.materials): its units' pins and their cores, its
         # drainage pipe and filter fabric, and a timber wall's posts. None unless it says.
         **{k: cfg.get(k, defaults.get(k)) for k in MATERIAL_KEYS},

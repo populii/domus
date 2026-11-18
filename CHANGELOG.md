@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** no block of a wall of a named block (`unit_m`) is cut shorter than `cut_min_m`, 0.15 m
+  unless the wall or `[defaults]` in `options/_site.toml` says otherwise, as a maker's manual has it. Where a course
+  would end in a shorter piece, at an end of the wall, a corner or a step in its top, that piece and the whole block
+  beside it are two equal cut blocks instead, so no wall moves, and the courses of the other bond at that end do the
+  same, so their joints stay a quarter of a block apart. It's drawn so, the materials list counts the cut blocks, and
+  `domus prep check blocks` reports them and no piece under the minimum; it reads a course's pieces the right way
+  round where its bond runs against the wall's line, too. The capping course keeps to the same minimum. A wall whose
+  courses end in whole blocks, or in pieces no shorter than the minimum, is set out as it was
+  ([docs/options.md](docs/options.md)). The materials list no longer counts a cut piece where only a step of the foot
+  cuts a course short within a block of an end or a corner: the step goes at a joint, and the course ends in the
+  end's own piece.
+
 ## 2026.11.49
 
 - A wall option's paved terrace (`kind = "paving"`, what a path sketched in the viewer becomes) is drawn as pavers,

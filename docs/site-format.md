@@ -195,6 +195,7 @@ gives them in `[datums.<datum>]` and `[house]` reads with them there, and `domus
 | `defaults.base_m` | `0.0` | A base course under the bedding, compacted |
 | `defaults.trench_m` | worked out | Its trench's width from its face, filled from the bottom of the base course with what's brought in (the base, the bedding, the wall and any drainage aggregate behind it): depth_m, unless given |
 | `defaults.seal_m` | `0.0` | Soil over the drainage aggregate behind it, at the top of its trench under the finished ground: soil brought back in, counted as fill |
+| `defaults.cut_min_m` | `0.15` | The shortest piece a named unit (unit_m) is cut to: where a course would end in a shorter one, it and the whole unit beside it become two equal cut units, and so would a capping course's |
 | `defaults.pins_per_unit` |  | Pins for each unit under another course, in a wall of named blocks |
 | `defaults.pins_per_box` |  | Pins in a box, to count the boxes |
 | `defaults.core_void_m3` |  | The voids in each unit, filled with drainage aggregate |

@@ -99,7 +99,7 @@ def listed(walls, design, volumes, settings):
             b[key][0] += counted[key][0]
             b[key][1] += counted[key][1]
         b["top"] += counted["top"]
-        b["narrow"] = b.get("narrow", 0) + sum(1 for x in counted["cut_m"] if x < walls_mod.UNIT_CUT_MIN_M - 1e-9)
+        b["narrow"] = b.get("narrow", 0) + sum(1 for x in counted["cut_m"] if x < walls_mod.cut_min(d) - 1e-9)
         b["walls"].append(w["id"])
         _, chain, top, _, first = wall_numbers(d)
         b["face"] += _area(chain, top - unit[2] - first)               # from its first course to under its cap
@@ -116,8 +116,8 @@ def listed(walls, design, volumes, settings):
         which = ", ".join(b["walls"])
         by_area = b["face"] / (length * height)
         add("Blocks", f"Straight units, {size}, whole", b["straight"][0], "units", f"walls {which}")
-        narrow = (f"{b['narrow']} of the pieces cut to fit are under {walls_mod.UNIT_CUT_MIN_M * 1000:.0f} mm, too "
-                  "narrow to cut: move a corner or an end (domus prep check blocks)") if b["narrow"] else None
+        narrow = (f"{b['narrow']} of the pieces cut to fit are under the shortest a unit is cut to (`cut_min_m`), with "
+                  "no whole unit beside them to share the cut: move a corner or an end (domus prep check blocks)") if b["narrow"] else None
         add("Blocks", f"Straight units, {size}, cut to fit", b["straight"][1], "units", narrow)
         add("Blocks", f"Corner units, {size}, whole", b["corner"][0], "units",
             "at each outside corner, each end, and each course's end where the top steps down")

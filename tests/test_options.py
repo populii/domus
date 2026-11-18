@@ -235,7 +235,8 @@ def test_a_wall_can_name_its_block(site, tmp_path, project):
     from domus.options import design
 
     low = round(ground_at(8.0, 10.0), 2)
-    cfg = {"id": "W", "material": "segmental", "unit_m": [0.457, 0.2], "cap_m": 0.1, "colour": "#7f868b",
+    # No shortest cut (cut_min_m 0): its courses run on to its end as the picture does (tests/test_cut_min.py has the rule)
+    cfg = {"id": "W", "material": "segmental", "unit_m": [0.457, 0.2], "cap_m": 0.1, "colour": "#7f868b", "cut_min_m": 0.0,
            "line_so": [[10.0, 6.0], [10.0, 12.0]], "retained_side": "left", "top": low + 0.9}
     w = design.Design({"walls": [cfg]}, site=project).wall_levels()[0]
     assert walls.units(w) == (0.457, 0.2, 0.1, "#7f868b")
@@ -578,7 +579,7 @@ def test_capping_units_are_whole_from_each_corner_step_and_end(site, project):
     assert first == pytest.approx([0, block, 2 * block, 3 * block])           # three whole units, the last through to the corner
     assert second[0] == pytest.approx(3 * block + 0.27) and second[-1] == pytest.approx(7 * block)
     assert np.diff(second) == pytest.approx([block, block, 4 * block - 0.27 - 3 * block, block])
-    assert third[0] == pytest.approx(7 * block + 0.27) and min(np.diff(third)) >= walls.CAP_MIN_M
+    assert third[0] == pytest.approx(7 * block + 0.27) and min(np.diff(third)) >= walls.UNIT_CUT_MIN_M
     m, _ = walls.mesh(w)
     so = design.frame(project).so(m.vertices[:, :2])
     edge = (np.abs(m.vertices[:, 2] - m.vertices[:, 2].max()) < 1e-9) & (np.abs(m.uv[:, 1]) < 1e-9) & (np.abs(so[:, 0] - 10.0) < 1e-6)

@@ -256,6 +256,8 @@ OPTIONS_SITE = Table("options/_site.toml", {
                         COMPUTED),
         "seal_m": Key("Soil over the drainage aggregate behind it, at the top of its trench under the finished ground: "
                       "soil brought back in, counted as fill", 0.0),
+        "cut_min_m": Key("The shortest piece a named unit (unit_m) is cut to: where a course would end in a shorter one, "
+                         "it and the whole unit beside it become two equal cut units, and so would a capping course's", 0.15),
         # What a wall or a paved terrace takes besides, for the materials list alone (docs/options.md): none unless given
         "pins_per_unit": Key("Pins for each unit under another course, in a wall of named blocks"),
         "pins_per_box": Key("Pins in a box, to count the boxes"),

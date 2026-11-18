@@ -73,7 +73,15 @@ UNIT_JOIN_M = 0.06      # walls this close stand against each other, and are bui
 # the far side and the other face's butts against it. Where whole units do not reach, the one cut to fit is in
 # the middle of the length, or two share it with a whole one's length so that neither is a sliver.
 CAP_SHORT = 0.006       # a capping unit is drawn up to this much short, or UNIT_FIT long, so that whole ones reach
-CAP_MIN_M = 0.15        # no cut capping unit is shorter than this
+
+# No unit is cut shorter than the wall's `cut_min_m` (UNIT_CUT_MIN_M unless it says), as a maker's manual has it: a
+# narrower piece won't stay in the wall. Where a course would end in such a piece, at an end of the wall, a corner or a
+# step in its top, the last whole unit and that piece become two equal cut units instead, so nothing moves (_splits).
+# The courses of the other bond at that end do the same, so their joints stay a quarter of a unit from these: the
+# short course's joint is half a unit plus half the piece in from the end, the other's three quarters of a unit plus
+# half the piece. The capping course keeps to the same minimum: its cut unit is in the middle of a length of top, or
+# two equal ones share it (_lay).
+UNIT_CUT_MIN_M = 0.15
 
 
 def from_feature(feature):
@@ -441,10 +449,11 @@ def _span(chain, values, c0, c1):
     return np.concatenate([values[inside], np.interp([c0, c1], chain, values)])
 
 
-def _lay(a, b, length):
+def _lay(a, b, length, least=UNIT_CUT_MIN_M):
     """Capping units `length` long laid from `a` to `b` along a wall: where their joints fall, and what the length
     counts against the choice that made it (0 where whole units reach, 1 where one is cut, a little more where two
-    are). Whole units are laid in from both ends, and the cut ones are in the middle."""
+    are). Whole units are laid in from both ends, and the cut ones are in the middle: where the one cut to fit would be
+    shorter than `least`, a whole unit and it become two equal cut units."""
     span = b - a
     if span < 0.02:
         return [float(a), float(max(a, b))], 0.0
@@ -452,7 +461,7 @@ def _lay(a, b, length):
     if -CAP_SHORT <= span / (n * length) - 1 <= UNIT_FIT:
         return [float(a + span * j / n) for j in range(n + 1)], 0.0
     whole, rest = int(span // length), span % length
-    if whole and rest < CAP_MIN_M:
+    if whole and rest < least:
         whole, cut, count = whole - 1, [(length + rest) / 2] * 2, 1.2
     else:
         cut, count = [rest], 1.0
@@ -461,7 +470,7 @@ def _lay(a, b, length):
     return [float(a + s) for s in np.concatenate([[0.0], np.cumsum(sizes)])], count
 
 
-def _caps(chain, top, cuts, corners, length, depth, lap=0.0):
+def _caps(chain, top, cuts, corners, length, depth, lap=0.0, least=UNIT_CUT_MIN_M):
     """The capping units along a wall of named blocks, `length` long and `depth` deep. Its top is in lengths, from
     a corner, a step or an end to the next. At a corner one face's unit runs through: to the far face at an
     outside corner, on behind the other face in an inside one. The other face's unit butts against it, `depth`
@@ -495,12 +504,103 @@ def _caps(chain, top, cuts, corners, length, depth, lap=0.0):
             a = c0 + {"out": 0.0 if after.get(i) else depth, "in": -depth if after.get(i) else 0.0, "up": -length / 2}.get(k0, 0.0)
             b = c1 + {"out": -depth if after.get(i + 1) else 0.0, "in": 0.0 if after.get(i + 1) else depth,
                       "down": length / 2}.get(k1, 0.0)
-            joints, cut = _lay(a, b, length)
+            joints, cut = _lay(a, b, length, least)
             laid.append((c0, c1, joints))
             count += cut
         if best is None or count < best[0] - 1e-9:
             best = (count, laid)
     return best[1]
+
+
+def cut_min(wall):
+    """The shortest piece a unit of a wall of named blocks is cut to (`cut_min_m`), UNIT_CUT_MIN_M unless it says."""
+    given = wall.get("cut_min")
+    if given is None:
+        given = (wall.get("properties") or {}).get("cut_min_m")
+    return UNIT_CUT_MIN_M if given is None else float(given)
+
+
+def end_piece(u, parity, inward):
+    """The first piece of a course of `parity` (0 even, 1 odd) that ends at `u` blocks along its bond, the course lying
+    from there towards greater u (`inward` 1) or smaller (-1): its length in blocks, 1 where a joint is at the end."""
+    v = (u - 0.5 * parity) % 1.0
+    x = 1.0 - v if inward > 0 else v
+    return 1.0 if x < UNIT_WHOLE or x > 1.0 - UNIT_WHOLE else float(x)
+
+
+def _is_cut(x):
+    """Whether a piece `x` blocks long is a unit cut to fit: neither a whole unit nor half of one (a corner unit's end,
+    or a unit half behind another face in an inside corner)."""
+    return not (abs(x - 1.0) < UNIT_WHOLE or abs(x - 0.5) < UNIT_WHOLE)
+
+
+def _splits(chain, top, cuts, u0, rate, hidden, unit, datum, least):
+    """Where courses of a wall of named blocks end in two equal cut units (UNIT_CUT_MIN_M): each [at, toward, above],
+    the distance along the wall of the end, which way the courses lie from it (toward 1: they end there going along
+    the wall, -1: they start there), and the level a course's top must be over to end there (None at the wall's ends
+    and corners, the lower top's highest course where its top steps). An end is split where a course of either bond
+    would end in a cut piece shorter than `least`, and there's a whole unit next to it to share the cut with."""
+    length, height, cap = unit[:3]
+    out = []
+
+    def short(x):
+        return _is_cut(x) and x * length < least - 1e-9
+
+    def room(k, c, toward):
+        """How many blocks a course has from the end at `c` along stretch k to the stretch's other end."""
+        far = cuts[k] if toward > 0 else cuts[k + 1]
+        return abs(rate[k]) * abs(c - far)
+
+    for k in range(len(cuts) - 1):
+        for c, toward in ((float(cuts[k]), -1), (float(cuts[k + 1]), 1)):
+            if any(h0 - 1e-6 <= c <= h1 + 1e-6 for h0, h1 in hidden):
+                continue                                              # another wall's face carries the course on
+            u = u0[k] + rate[k] * (c - cuts[k])
+            inward = -toward * (1 if rate[k] > 0 else -1)
+            pieces = [end_piece(u, p, inward) for p in (0, 1)]
+            if any(short(x) for x in pieces) and room(k, c, toward) > max(pieces) + 1.0 + UNIT_WHOLE:
+                out.append([c, toward, None])
+    for i in range(len(chain) - 1):                                   # the top steps along a stretch
+        if abs(chain[i + 1] - chain[i]) > 1e-9 or abs(top[i + 1] - top[i]) < 1e-9 or np.abs(np.asarray(cuts) - chain[i]).min() < 1e-6:
+            continue
+        c = float(chain[i])
+        toward = 1 if top[i] > top[i + 1] else -1                     # the higher courses end there going along, or start
+        lower, higher = sorted((float(top[i]) - cap, float(top[i + 1]) - cap))
+        k = int(np.clip(np.searchsorted(cuts, c, side="right") - 1, 0, len(u0) - 1))
+        u = u0[k] + rate[k] * (c - cuts[k])
+        inward = -toward * (1 if rate[k] > 0 else -1)
+        above, j = [], math.ceil((datum - higher) / height - 1e-6)      # the tops of the courses that end there
+        while datum - j * height > lower + 1e-6 and len(above) < 1000:
+            above.append(datum - j * height)
+            j += 1
+        pieces = [end_piece(u, round((datum - t) / height) % 2, inward) for t in above]
+        if any(short(x) for x in pieces) and room(k, c, toward) > max(pieces, default=0.0) + 1.0 + UNIT_WHOLE:
+            out.append([c, toward, lower])
+    return out
+
+
+def split_at(so, c, toward, course_top):
+    """Whether the course whose top is at `course_top` ends in two equal cut units where it ends at `c` along its wall,
+    lying `toward` (set_out's `splits`)."""
+    for at, way, above in so.get("splits") or ():
+        if abs(at - c) < 1e-6 and way == toward and (above is None or course_top > above + 1e-6):
+            return True
+    return False
+
+
+def course_joints(lo, hi, parity, split_lo=False, split_hi=False):
+    """The joints of a course of `parity` (0 even, 1 odd) from `lo` to `hi` blocks along its bond: one at each whole
+    number of blocks (a half more for an odd course) between them, none at the ends themselves. Where an end is split
+    (split_at), the joint next to it gives way to one halfway between that end and the joint before, so the last two
+    units are equal cuts."""
+    shift = 0.5 * parity
+    joints = list(np.arange(math.ceil(lo - shift + UNIT_WHOLE) + shift, hi - UNIT_WHOLE, 1.0))
+    first = list(joints)
+    if split_hi and len(first) >= 2:
+        joints[-1] = 0.5 * (first[-2] + hi)
+    if split_lo and len(first) >= 2:
+        joints[0] = 0.5 * (lo + first[1])
+    return [float(j) for j in joints]
 
 
 def set_out(walls, ground=None):
@@ -601,16 +701,17 @@ def set_out(walls, ground=None):
                 break
         u0, rate, notes = _bond(cuts, corners, unit[0], seed)
         lap = unit[1] if abs(2 * unit[2] - unit[1]) < 1e-6 else 0.0      # two capping units make a course: steps are capped as stairs
-        caps = _caps(found[i]["chain"], found[i]["top"], cuts, corners, unit[0], w["thickness"], lap) if unit[2] else []
+        least = cut_min(w)
+        caps = _caps(found[i]["chain"], found[i]["top"], cuts, corners, unit[0], w["thickness"], lap, least) if unit[2] else []
+        splits = _splits(found[i]["chain"], found[i]["top"], cuts, u0, rate, hidden, unit, found[i]["datum"], least)
         w["set_out"] = {"datum": found[i]["datum"], "cuts": cuts, "u0": u0, "rate": rate, "hidden": hidden,
-                        "caps": caps, "notes": found[i]["notes"] + notes}
+                        "caps": caps, "splits": splits, "notes": found[i]["notes"] + notes}
         laid += [{"unit": unit[:3], "wall": i, "a": a, "d": d, "run": run, "face": face, "u0": u0[k], "rate": rate[k],
                   "cut": cuts[k]} for k, a, d, run, face in mine]
     return {w["id"]: w["set_out"]["notes"] for w in named}
 
 
 UNIT_WHOLE = 0.011      # blocks: a piece this near a whole or half block is one (as `domus prep check blocks` takes it)
-UNIT_CUT_MIN_M = 0.15   # no unit is cut shorter than this: a narrower piece won't stay in the wall
 COUNT_STEP_M = 0.01     # how finely the courses are followed along a wall to count its units
 
 
@@ -712,17 +813,40 @@ def unit_count(wall, ground=None):
                     if kb == "top" and not (head[min(b, n - 1)] < datum - j * height - 1e-6):
                         kb = "foot"
                     ua, ub = (u0[k] + rate[k] * (x - c0) for x in (ca, cb))
-                    (lo, klo, wlo), (hi, khi, whi) = sorted(((ua, ka, (k - 1, j)), (ub, kb, (k, j))))
+                    t = datum - j * height                                        # the course's top
+                    sa, sb = (kind in ("end", "out", "in", "top") and split_at(so, x, way, t)
+                              for kind, x, way in ((ka, ca, -1), (kb, cb, 1)))
+                    (lo, klo, wlo, slo), (hi, khi, whi, shi) = sorted(((ua, ka, (k - 1, j), sa), (ub, kb, (k, j), sb)))
                     if cut_short:
                         pieces = math.ceil(hi - lo - UNIT_WHOLE) + 1
                         straight[1] += pieces
                         cut_m.extend([length] * pieces)
                         continue
+                    joints = course_joints(lo, hi, j % 2, slo, shi) if slo or shi else []
+                    if len(joints) >= 2:                   # an end in two equal cut units: from the course's joints
+                        sizes = np.diff([lo, *joints, hi])
+                        classify(float(sizes[0]), klo, wlo)
+                        classify(float(sizes[-1]), khi, whi)
+                        for x in sizes[1:-1]:                                     # whole units, and the split end's cut one
+                            if abs(x - 1.0) < UNIT_WHOLE:
+                                straight[0] += 1
+                            else:
+                                straight[1] += 1
+                                cut_m.append(float(x) * length)
+                        continue
                     shift = 0.5 * (j % 2)
                     first = math.ceil(lo - shift - UNIT_WHOLE) + shift            # the first joint after its start
                     last = math.floor(hi - shift + UNIT_WHOLE) + shift            # the last before its end
                     if first > last + 1e-9:                                       # all in one unit
-                        classify(hi - lo, klo if klo != "foot" else khi, wlo if klo != "foot" else whi)
+                        if "foot" in (klo, khi) and {klo, khi} & {"end", "out", "in", "top"}:
+                            # From an end to where the foot steps: the step goes at the unit's joint, so the unit is
+                            # the end's whole piece, from the end to its joint.
+                            if klo == "foot":
+                                classify(end_piece(hi, j % 2, -1), khi, whi)
+                            else:
+                                classify(end_piece(lo, j % 2, 1), klo, wlo)
+                        else:
+                            classify(hi - lo, klo if klo != "foot" else khi, wlo if klo != "foot" else whi)
                         continue
                     inside = round(last - first)                                  # whole units between them
                     for x, kind, where in ((first - lo, klo, wlo), (hi - last, khi, whi)):
@@ -764,8 +888,18 @@ def unit_mesh(wall, pts, chain, top, bottom):
     side, datum = wall["side"], so["datum"]
     cuts, u0, rate = np.asarray(so["cuts"]), so["u0"], so["rate"]
     caps = so.get("caps") or []
-    # A point where a hidden length of face starts and ends, and each joint between two capping units.
-    for c in sorted({c for span in so["hidden"] for c in span} | {c for c0, c1, joints in caps for c in joints if c0 < c < c1}):
+    # The courses that end in two equal cut units (set_out's `splits`) are drawn piece by piece from two blocks in from
+    # their end: (from, to, the end, which way the courses lie from it, the level their tops are over, the stretch).
+    regions = []
+    for at, toward, above in so.get("splits") or ():
+        k = int(np.clip(np.searchsorted(cuts, at - 1e-6 if toward > 0 else at + 1e-6, side="right") - 1, 0, len(u0) - 1))
+        inner = at - toward * 2.0 / abs(rate[k])
+        inner = float(np.clip(inner, cuts[k], cuts[k + 1]))
+        regions.append((min(at, inner), max(at, inner), at, toward, above, k))
+    # A point where a hidden length of face starts and ends, each joint between two capping units, and where a split
+    # end's pieces start.
+    for c in sorted({c for span in so["hidden"] for c in span} | {c for c0, c1, joints in caps for c in joints if c0 < c < c1}
+                    | {r[0] for r in regions} | {r[1] for r in regions}):
         if chain[0] < c < chain[-1] and np.abs(chain - c).min() > 1e-6:
             i = int(np.searchsorted(chain, c))
             t = (c - chain[i - 1]) / (chain[i] - chain[i - 1])
@@ -818,6 +952,53 @@ def unit_mesh(wall, pts, chain, top, bottom):
             if lo <= min(ba, bb):
                 break
             hi = lo
+
+    def body_face(i, k, ua, ub, bot, head, out):
+        """The courses of the face between points i and i+1 (`ua` and `ub` blocks along the bond), from `bot` to
+        `head`, bare: in one piece, or course by course where a course ends in two equal cut units, each unit with
+        its own piece of the picture, the one at the end starting at a joint of it."""
+        mid = 0.5 * (chain[i] + chain[i + 1])
+        found = [r for r in regions if r[0] - 1e-6 <= mid <= r[1] + 1e-6 and r[5] == k]
+        if not found:
+            panel(pts[i], pts[i + 1], ua, ub, bot, head, out, bare=True)
+            return
+        _, _, at, toward, above, _ = found[0]
+        u_end = u0[k] + rate[k] * (at - cuts[k])
+        way = 1 if (toward > 0) == (rate[k] > 0) else -1             # the end is at the greater u, or the smaller
+        probe = at - toward * 1e-4                                     # just inside the courses' end
+        low_end, high_end = float(np.interp(probe, chain, bottom)), float(np.interp(probe, chain, top)) - cap
+        span = ub - ua
+
+        def at_u(u, a, b):
+            f = 0.0 if abs(span) < 1e-12 else (u - ua) / span
+            return a + f * (b - a)
+
+        j0 = math.floor((datum - max(head)) / height + 1e-6)
+        j1 = math.ceil((datum - min(bot)) / height - 1e-6)
+        for j in range(j0, j1 + 1):
+            t = datum - j * height
+            z_lo = (max(t - height, bot[0]), max(t - height, bot[1]))
+            z_hi = (min(t, head[0]), min(t, head[1]))
+            if z_hi[0] <= z_lo[0] + 1e-9 and z_hi[1] <= z_lo[1] + 1e-9:
+                continue
+            cut_at = None
+            if (above is None or t > above + 1e-6) and low_end <= t - height + 1e-6 and high_end >= t - 1e-6:
+                par = j % 2
+                if way > 0:
+                    last = math.floor(u_end - 0.5 * par - UNIT_WHOLE) + 0.5 * par
+                    joint = 0.5 * (last - 1.0 + u_end)
+                else:
+                    last = math.ceil(u_end - 0.5 * par + UNIT_WHOLE) + 0.5 * par
+                    joint = 0.5 * (last + 1.0 + u_end)
+                cut_at = (joint, last - joint)                         # the new joint, and the end unit's picture shift
+            marks = [ua, ub]
+            if cut_at and min(ua, ub) + 1e-9 < cut_at[0] < max(ua, ub) - 1e-9:
+                marks = [ua, cut_at[0], ub]
+            for u1, u2 in itertools.pairwise(marks):
+                shift = cut_at[1] if cut_at and (0.5 * (u1 + u2) - cut_at[0]) * way > 0 else 0.0
+                pa, pb = at_u(u1, pts[i], pts[i + 1]), at_u(u2, pts[i], pts[i + 1])
+                panel(pa, pb, u1 + shift, u2 + shift, (at_u(u1, *z_lo), at_u(u2, *z_lo)),
+                      (at_u(u1, *z_hi), at_u(u2, *z_hi)), out, bare=True)
 
     def across(i, back=behind, front=pts):
         """The blocks an end of the wall shows across it at point i, from its `front` to its `back`: whole half
@@ -901,7 +1082,7 @@ def unit_mesh(wall, pts, chain, top, bottom):
             cap_face = tuple(c + each * float((cap_front[j] - pts[j]) @ d) for c, j in ((ca, i), (cb, i + 1))) if caps else None
             fa_u, fb_u = (cap_face[0] + 0.25, cap_face[1] + 0.25) if caps else (fa, fb)
             if shown:
-                panel(pts[i], pts[i + 1], ua, ub, bot, under, np.array([*-back, 0.0]), bare=True)
+                body_face(i, k, ua, ub, bot, under, np.array([*-back, 0.0]))
                 panel(cap_front[i], cap_front[i + 1], fa, fb, under, head, np.array([*-back, 0.0]), cap_face)
                 if overhang > 1e-9:
                     quad([(*cap_front[i], under[0], fa_u, 0.0), (*cap_front[i + 1], under[1], fb_u, 0.0),
@@ -918,7 +1099,12 @@ def unit_mesh(wall, pts, chain, top, bottom):
             quad([(*cap_front[i], top[i], fa_u, 0.0), (*cap_front[i + 1], top[i + 1], fb_u, 0.0),
                   (*cap_behind[i + 1], top[i + 1], cb_u, rb), (*cap_behind[i], top[i], ca_u, ra)], np.array([0.0, 0.0, 1.0]))
             continue
-        if shown:
+        if shown and any(r[0] - 1e-6 <= mid <= r[1] + 1e-6 and r[5] == k for r in regions):
+            under = (top[i] - cap, top[i + 1] - cap)                   # the face: its capping course, and course by course
+            if cap:
+                panel(pts[i], pts[i + 1], ua, ub, under, head, np.array([*-back, 0.0]), face)
+            body_face(i, k, ua, ub, bot, under, np.array([*-back, 0.0]))
+        elif shown:
             panel(pts[i], pts[i + 1], ua, ub, bot, head, np.array([*-back, 0.0]), face)             # the face
         panel(behind[i], behind[i + 1], va, vb, bot, head, np.array([*back, 0.0]), back_face)       # the back
         quad([(*pts[i], top[i], ta, 0.0), (*pts[i + 1], top[i + 1], tb, 0.0),

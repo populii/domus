@@ -627,17 +627,24 @@ def _cut(x):
     return not (abs(x - 1.0) < TOL_BLOCK or abs(x - 0.5) < TOL_BLOCK)
 
 
-def _cut_piece(findings, where, metres, at):
-    narrow = (f", under the {walls.UNIT_CUT_MIN_M * 1000:.0f} mm a unit can be cut to"
-              if metres < walls.UNIT_CUT_MIN_M - 1e-9 else "")
-    findings.append(("blocks", "fail", where, f"a course has a cut piece {metres * 1000:.0f} mm long {at}{narrow}"))
+def _cut_piece(findings, where, metres, at, least, split=False):
+    """A finding for a cut piece `metres` long: one of two equal cut units a course ends in, where it would otherwise
+    end in a piece under the wall's `least` (walls.cut_min), or a piece under `least` where no unit could share it."""
+    if split:
+        text = (f"a course ends in two equal cut units {metres * 1000:.0f} mm long {at}, so that no unit is cut under "
+                f"{least * 1000:.0f} mm")
+    else:
+        narrow = f", under the {least * 1000:.0f} mm a unit can be cut to" if metres < least - 1e-9 else ""
+        text = f"a course has a cut piece {metres * 1000:.0f} mm long {at}{narrow}"
+    findings.append(("blocks", "fail", where, text))
     return 1
 
 
 def check_blocks(site, findings):
     """Block walls set out in whole units: every course of each stretch starts and ends with a whole block or half
     of one (the end of a corner unit), the top course of a bay ends at a step down with a whole block, and the caps
-    are whole units. Each wall's block (`unit_m`) gives the sizes."""
+    are whole units. Each wall's block (`unit_m`) gives the sizes. Where a course ends in two equal cut units, so that
+    none is cut under the wall's minimum (`cut_min_m`, walls.set_out), they're what it reports there."""
     from .. import options
     from ..options import design
 
@@ -650,6 +657,7 @@ def check_blocks(site, findings):
             if not unit or "set_out" not in d:
                 continue
             length, height, cap, _ = unit
+            least = walls.cut_min(d)
             so = d["set_out"]
             pts, _, chain, _, top = terrain.wall_levels(d, site=site)
             cuts, u0, rate = so["cuts"], so["u0"], so["rate"]
@@ -663,11 +671,16 @@ def check_blocks(site, findings):
                         c1 = h0
                 ua, ub = (u0[k] + rate[k] * (c - cuts[k]) for c in (c0, c1))
                 s, o = fr.so(pts[int(np.argmin(np.abs(chain - c0)))][None, :2])[0]
+                # Each course's pieces from its joints, whichever way the bond runs along the stretch, the ends that
+                # are split in two equal cut units included.
+                ends = sorted(((ua, walls.split_at(so, c0, -1, math.inf), f"at the start of stretch {k} (s {s:.2f}, o {o:.2f})"),
+                               (ub, walls.split_at(so, c1, 1, math.inf), f"at the end of stretch {k}")), key=lambda e: e[0])
+                (lo, split_lo, at_lo), (hi, split_hi, at_hi) = ends
                 for p in (0, 1):
-                    if _cut(_piece(ua, p, False)):
-                        fails += _cut_piece(findings, where, _piece(ua, p, False) * length, f"at the start of stretch {k} (s {s:.2f}, o {o:.2f})")
-                    if _cut(_piece(ub, p, True)):
-                        fails += _cut_piece(findings, where, _piece(ub, p, True) * length, f"at the end of stretch {k}")
+                    sizes = np.diff([lo, *walls.course_joints(lo, hi, p, split_lo, split_hi), hi])
+                    for x, at, split in [(sizes[0], at_lo, split_lo)] + ([(sizes[-1], at_hi, split_hi)] if len(sizes) > 1 else []):
+                        if _cut(x):
+                            fails += _cut_piece(findings, where, x * length, at, least, split)
                 blocks = abs(ub - ua)
                 if abs(blocks * 2 - round(blocks * 2)) > 2 * TOL_BLOCK:
                     fails += 1
@@ -684,9 +697,13 @@ def check_blocks(site, findings):
                     while level > lo - cap + 1e-6:
                         parity = int(round((so["datum"] - level) / height)) % 2
                         x = _piece(u, parity, before=bool(down_along) == (rate[k] > 0))
+                        split = walls.split_at(so, chain[i], 1 if down_along else -1, level)
+                        if split:
+                            x = 0.5 * (1.0 + x)                # the end's unit and the one before it, cut equal
                         if abs(x - 1.0) >= TOL_BLOCK:
                             fails += _cut_piece(findings, where, x * length,
-                                                f"at the step from {hi:.2f} down to {lo:.2f}, in the course with its top at {level:.2f}")
+                                                f"at the step from {hi:.2f} down to {lo:.2f}, in the course with its top at {level:.2f}",
+                                                least, split)
                         level -= height
             for c0, c1, joints in so.get("caps") or []:
                 sizes = np.diff(joints)

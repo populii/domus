@@ -121,9 +121,18 @@ A wall of a named block (`unit_m`) is set out block by block:
 - Its capping course is laid in capping units as long as its blocks, set out on `thickness_m` and drawn
   `cap_depth_m` deep (below). Each length of top, from a corner, a step or an end to the next, starts and ends with
   a whole unit. At a corner the unit of one face runs through to the far side and the other face's butts against it. Where whole units do not
-  reach, the one cut to fit is in the middle of the length, or two share it so that neither is under 150 mm.
+  reach, the one cut to fit is in the middle of the length, or two share it so that neither is under `cut_min_m`.
   Where the top steps one course along a straight stretch, and two capping units make a course, two capping
   units are stacked beside the end of the higher course and the higher capping course laps half a unit over them.
+- No block is cut shorter than `cut_min_m`: 0.15 m, the 6 inches makers give, unless the wall or `[defaults]` says
+  otherwise. Where a course would end in a shorter piece, at an end of the wall, a corner or a step in its top, that
+  piece and the whole block beside it become two equal cut blocks instead, as makers' manuals do it (a 46 mm piece
+  beside a 457 mm block: two blocks of 251 mm), so nothing moves. The courses of the other bond at that end do the
+  same, so their joints stay a quarter of a block from these: the short course's new joint is half a block and half
+  the piece in from the end, the other's three quarters of a block and half the piece, where the plain bond would
+  put them only half the piece apart. It's drawn so, counted so in the materials list, and `domus prep check blocks`
+  reports the two equal cut blocks. Where no whole block is beside the piece, as on a stretch shorter than that, the
+  piece stays, and the check says it's under the minimum.
 - Where something does not fit, a block is drawn cut at the corner, or a course under the cap, and the wall's
   checks say how far to move the corner or the top.
 
@@ -228,7 +237,7 @@ material = "sleepers"
 A `restyle` entry sets anything a wall takes (`material`, `thickness_m`, `upstand_m`, `picture`, `unit_m`), and later
 entries win. One that changes `material` drops the block the base named (`unit_m`, `cap_m`, `colour`) and how it's
 built (`depth_m`, `cap_depth_m`, `cap_overhang_m`, `embed_m`, `embed_per_m`, `embed_courses`, `bedding_m`,
-`base_m`, `trench_m`, `seal_m`, and for its materials `pins_per_unit`, `pins_per_box`, `core_void_m3`, `pipe_m`,
+`base_m`, `trench_m`, `seal_m`, `cut_min_m`, and for its materials `pins_per_unit`, `pins_per_box`, `core_void_m3`, `pipe_m`,
 `outlet_spacing_m`, `geotextile`, `post_spacing_m`). A
 `restyle_stairs` entry does the same for the steps. Change the scheme itself in the file it is based on, and every
 style of it follows.
