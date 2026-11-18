@@ -39,6 +39,9 @@
   than one polygon, where only its first counted; a site without a picture of its paving (`data/features/paving.jpg`)
   gets the paving's colour without its grain, where its build stopped; and an area where the photo sees none of its
   paving in sun says so.
+- The viewer's direction gizmo takes the page's theme: north and south in the accent teal, east and west in amber, up in
+  the ink, on the panel's ground, and it changes with the light or dark theme. Its letters are in the display face,
+  bolder, and fill most of each circle: Domus's copy of three-viewport-gizmo takes a `font.fill` setting for that.
 
 ## 2026.11.38
 

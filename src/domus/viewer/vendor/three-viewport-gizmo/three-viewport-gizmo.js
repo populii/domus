@@ -1,3 +1,5 @@
+// three-viewport-gizmo 2.2.0 (MIT, see LICENSE), with one change by Domus: `font.fill` (0.7 unless given) is the share of
+// a sphere handle's width a label may take, so the viewer's direction letters can be bigger in their circles.
 var oe = Object.defineProperty;
 var re = (s, e, t) => e in s ? oe(s, e, { enumerable: !0, configurable: !0, writable: !0, value: t }) : s[e] = t;
 var m = (s, e, t) => re(s, typeof e != "symbol" ? e + "" : e, t);
@@ -277,7 +279,7 @@ const Be = (s, e = 2) => {
     const b = [...p].sort((J, se) => {
       var Ut, Lt;
       return (((Ut = J.label) == null ? void 0 : Ut.length) || 0) - (((Lt = se.label) == null ? void 0 : Lt.length) || 0);
-    }).pop().label, { family: F, weight: B } = I, C = i ? Math.sqrt(Math.pow(x * 0.7, 2) / 2) : x;
+    }).pop().label, { family: F, weight: B, fill: Fl = 0.7 } = I, C = i ? Math.sqrt(Math.pow(x * Fl, 2) / 2) : x;
     let G = C, R = 0, W = 0;
     do {
       c.font = `${B} ${G}px ${F}`;
