@@ -897,7 +897,9 @@ def add_options(b):
     b.removed_features = {}     # site feature id -> the options that take it out
     b.lawns_redrawn = {}        # lawn id -> the options that draw it themselves, on their own ground
     lawns = vegetation.lawns(canopy.read(b.site))
-    found = [(opt, design.evaluate(b.site, opt)) for opt in options.load_all(b.site)]
+    # Each option worked out on the grid first: its terraces reach the lawns, and an option taken from the last build
+    # needs no more. One drawn afresh is worked out again with its soil measured as solids.
+    found = [(opt, design.evaluate(b.site, opt, segments=0)) for opt in options.load_all(b.site)]
     for line in crossing_warnings(found):
         b.say(line)
     # Each lawn that is there has a plain picture, its grass without its bare patches: the options draw the lawn
@@ -915,6 +917,7 @@ def add_options(b):
         cached = b.cache.get(f"option-{opt['id']}", k) if k else None
         if cached is None:
             before = buildcache.snapshot(b.site.output)
+            res = design.evaluate(b.site, opt)
             opt_layers, opt_summary, opt_textures = option_layers(b.site, opt, res, frame, extent, cfg, wall_defs, lawns, b.tin)
             if k:
                 b.cache.put(f"option-{opt['id']}", k, [opt_layers, opt_summary, opt_textures], buildcache.written(b.site.output, before))

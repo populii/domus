@@ -842,9 +842,13 @@ class Context:
         self.services_settings = {} if services_settings is None else services_settings
 
 
-def evaluate(opt, site, existing=None, step=0.1):
+def evaluate(opt, site, existing=None, step=0.1, soil=None):
     """Everything the viewer and the comparison table need about one option, worked out on what `site` (a Context)
-    gives it, from the ground as it is unless `existing` gives another."""
+    gives it, from the ground as it is unless `existing` gives another. Its cut and fill are read point by point on a
+    `step` grid (soil_moved), unless `soil` measures them: soil(design, walls) gives {"cut_m3", "fill_m3", "seal_m3"}
+    for the option worked out and its walls levelled (domus.options.solids, as design.evaluate passes it), and those
+    are its cut, its fill and the soil over its walls' drainage in the materials list. The grid still gives the area
+    disturbed and the deepest cut and fill."""
     d = Design(opt, site.settings["defaults"], existing or site.ground, site.garden, site.frame, site.existing_walls,
                site.limits)
     rules, fg = site.settings.get("rules", {}), site.regrade
@@ -867,6 +871,10 @@ def evaluate(opt, site, existing=None, step=0.1):
            "area_m2": float(disturbed.sum() * cell),
            "cut_max_m": float(cut.max()) if len(cut) else 0.0,
            "fill_max_m": float(fill.max()) if len(fill) else 0.0}
+    seal = None
+    if soil is not None:                        # measured exactly: cut and fill as solids
+        measured = soil(d, walls)
+        vol["cut_m3"], vol["fill_m3"], seal = measured["cut_m3"], measured["fill_m3"], measured["seal_m3"]
     vol["net_m3"] = vol["fill_m3"] - vol["cut_m3"]
     vol["tolerance_m3"] = vol["area_m2"] * LIDAR_TOLERANCE_M
 
@@ -1001,7 +1009,7 @@ def evaluate(opt, site, existing=None, step=0.1):
         "stairs": stairs,
         "terraces": terr,
         "volumes": volumes,
-        "materials": materials.listed(winfo, d, volumes, site.settings),
+        "materials": materials.listed(winfo, d, volumes, site.settings, seal),
         "flat": {"before_m2": round(flat_before, 1), "after_m2": round(flat_after, 1),
                  "gain_m2": round(flat_after - flat_before, 1), "points": (fe, fn)},
         "areas": {k: round(v, 1) for k, v in areas.items()},

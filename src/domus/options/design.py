@@ -20,7 +20,7 @@ from ..errors import DomusError
 from ..geo import geojson
 from ..model import terrain
 from ..project.site import cached, given
-from . import scheme
+from . import scheme, solids
 from .scheme import (  # noqa: F401 (the names site tools and tests use, as they were here)
     LIDAR_TOLERANCE_M,
     STAIR_PROUD_M,
@@ -199,6 +199,16 @@ def context(site):
                           site.settings().get("services", {}), removed_limits(site))
 
 
-def evaluate(site, opt, existing=None, step=0.1):
-    """Everything the viewer and the comparison table need about one option: scheme.evaluate on the site."""
-    return scheme.evaluate(opt, context(site), existing, step)
+def evaluate(site, opt, existing=None, step=0.1, segments=None):
+    """Everything the viewer and the comparison table need about one option: scheme.evaluate on the site, its cut and
+    fill measured as solids (domus.options.solids) with batters' cones of `segments` sides (solids.SEGMENTS unless
+    given), so the table, the materials list and site.evaluate give the same. `segments=0` reads them on the grid
+    instead, for what needs the option worked out but not its soil."""
+    ctx = context(site)
+
+    def soil(d, walls):
+        s = solids.option_solids(d, walls, ctx.existing_walls, segments=segments or solids.SEGMENTS)
+        return {**s.volumes(), "seal_m3": float(sum(p.volume() for what, part, p in s.named
+                                                    if what == "fill" and part.startswith("seal")))}
+
+    return scheme.evaluate(opt, ctx, existing, step, None if segments == 0 else soil)

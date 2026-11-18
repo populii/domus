@@ -818,7 +818,7 @@ for option in site.options():
     result = site.evaluate(option)
     print(option["id"], result["volumes"]["fill_m3"], result["flat"]["gain_m2"])
 # a-one-wall 23.4 86.1
-# b-two-tiers 74.7 159.4
+# b-two-tiers 75.5 159.4
 ```
 
 | | What it gives |

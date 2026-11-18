@@ -281,7 +281,9 @@ build paints.
   any sliver under 0.3 m wide that a wall cuts off. It is drawn as its grass without the bare patches it has
   today, and so is a new lawn within a metre of it, so the two read as one lawn. Beds, their plants and
   stumps are not drawn while an option is shown.
-- Cut, fill and the area disturbed, with a range from the LiDAR's tolerance. Cut and fill are soil. The soil a
+- Cut, fill and the area disturbed, with a range from the LiDAR's tolerance. Cut and fill are soil, measured as
+  solids: the shapes of the soil the option takes away and brings in (`domus.options.solids`), which the materials
+  list's soil takes too. The area disturbed and the deepest cut and fill are read on a 0.1 m grid. The soil a
   new wall holds back counts, but the wall itself, from its face to its back and from its toe to its top, doesn't:
   the soil under it is at its toe. A wall that says how it's built stands in its trench, and the soil stops at the
   trench's bottom, but for the soil over its drainage aggregate (`seal_m`), which is fill. Nor does paving: under a

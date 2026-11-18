@@ -186,8 +186,8 @@ class Site:
     def evaluate(self, option):
         """What an option comes to, as the viewer and its comparison table show it: its walls and their heights, cut and
         fill, flat lawn, its checks, and what it takes to build (`materials`, docs/options.md). `option` is one of
-        options(), or its id. Cut and fill are soil, measured from the ground as the build draws it, ground(): a new
-        wall's own body and paving don't count."""
+        options(), or its id. Cut and fill are soil, measured as solids from the ground as the build draws it,
+        ground(): a new wall's own body and paving don't count."""
         from .options import design
 
         if isinstance(option, str):

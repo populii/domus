@@ -57,11 +57,12 @@ def _area(chain, height):
     return float(np.trapezoid(np.maximum(height, 0.0), chain)) if len(chain) > 1 else 0.0
 
 
-def listed(walls, design, volumes, settings):
+def listed(walls, design, volumes, settings, seal_m3=None):
     """The option's materials: {"allowance_pct": ..., "rows": [...]}, each row {"group", "item", "net", "order",
     "unit"} with "tonnes" where a density is given and "note" where there's more to say. `walls` are the option's walls
     as scheme.evaluate gives them (their `def` levelled and set out), `design` the scheme.Design, `volumes` its cut
-    and fill, and `settings` the site's options/_site.toml."""
+    and fill, and `settings` the site's options/_site.toml. `seal_m3`, where the cut and fill were measured as solids,
+    is the soil over the walls' drainage they measured, part of the fill; else it's worked out wall by wall."""
     cfg = settings.get("materials", {}) or {}
     pct = float(cfg.get("allowance_pct", 0.0))
     density = dict(cfg.get("density_t_m3", {}) or {})
@@ -155,7 +156,7 @@ def listed(walls, design, volumes, settings):
     add("Aggregate", "Bedding", built["bedding"], "m3", "along each wall's trench", density_key="bedding")
     add("Aggregate", "Drainage aggregate behind the units", built["drainage"], "m3",
         "from each wall's back to its trench's, up to the soil over it", density_key="drainage")
-    add("Soil", "Low-permeability soil over the drainage aggregate", built["seal"], "m3",
+    add("Soil", "Low-permeability soil over the drainage aggregate", built["seal"] if seal_m3 is None else seal_m3, "m3",
         "soil: part of the fill")
     pipes = sorted({float(w["def"]["pipe_m"]) for w in walls if w["def"].get("pipe_m")})
     add("Drainage", f"Perforated drainage pipe, {'/'.join(f'{p * 1000:.0f}' for p in pipes)} mm, in a filter sock",

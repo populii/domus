@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** an option's cut and fill are measured as solids (`domus.options.solids`), the shapes of the
+  soil it takes away and brings in, where they were added up point by point on a 0.1 m grid. The comparison table,
+  `summary.json`, `site.evaluate` and the materials list's soil (cut, fill, fill less cut, and the soil over a wall's
+  drainage) all take them, and they come within 0.05% of the soil read on a 2.5 cm grid. The area disturbed, the
+  deepest cut and fill and their range are read on the grid as before. What the server says a sketch comes to once it
+  settles is its solids' too, with the preview's cones, so it says what the preview showed. Cut and fill move most
+  where a wall lies along the grid's rows, as one drawn on round numbers can: each point on its face or its back was
+  counted as the wall's, with the soil down at the wall's toe, though only half of the point's cell is under the wall.
+  On the demo the one-wall option cuts 0.9 m3 where the grid gave 1.3, and the two-tier option fills 75.5 m3 where it
+  gave 74.7. The soil over a wall's drainage was worked out along the wall's whole length; the solids leave out what
+  lies outside the regrade area, under another wall, or in the deeper drainage of another wall it meets.
+
 ## 2026.11.57
 
 - **For site projects:** a terrace that gives its own level at each corner is cut, where four of its corners lie

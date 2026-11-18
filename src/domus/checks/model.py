@@ -608,7 +608,7 @@ def check_fixes(site, findings):
         return 0
     fr, fails = design.frame(site), 0
     for opt in options.load_all(site):
-        res = design.evaluate(site, opt)
+        res = design.evaluate(site, opt, segments=0)      # its walls and ground, not its soil
         pts = g.points
         kept = pts[np.abs(res["design"].drawn(pts[:, 0], pts[:, 1]) - pts[:, 2]) < 0.01]
         for w in res["walls"]:
@@ -661,7 +661,7 @@ def check_blocks(site, findings):
 
     fr, fails = design.frame(site), 0
     for opt in options.load_all(site):
-        res = design.evaluate(site, opt)
+        res = design.evaluate(site, opt, segments=0)      # its walls and ground, not its soil
         for w in res["walls"]:
             d = w["def"]
             unit = walls.units(d)

@@ -149,7 +149,9 @@ def evaluate(site, items):
     opt = to_option(site, items)
     if not opt["walls"] and not opt["terraces"]:
         return {"walls": [], "empty": True}
-    res = design.evaluate(site, opt, step=0.25)
+    from .preview import PREVIEW_SEGMENTS  # the preview's cones, so the numbers here are the preview's
+
+    res = design.evaluate(site, opt, step=0.25, segments=PREVIEW_SEGMENTS)
     return {
         "walls": [{k: w[k] for k in ("id", "name", "length_m", "height_min_m", "height_max_m", "retained_max_m", "flags")} for w in res["walls"]],
         "volumes": res["volumes"],
