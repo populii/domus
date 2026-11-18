@@ -4,7 +4,6 @@
     domus prep canopy-plot [out.jpg]
 """
 
-import argparse
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -14,11 +13,9 @@ from ..model import canopy, vegetation
 from ..project import rasters
 
 
-def main(site):
-    ap = argparse.ArgumentParser(prog="domus prep canopy-plot", description=__doc__.split("\n\n")[0])
-    ap.add_argument("out", nargs="?", default="data/sources/canopy.jpg",
-                    help="the picture to write, in the site's folder (default: data/sources/canopy.jpg)")
-    out = ap.parse_args().out
+def draw(site, out="data/sources/canopy.jpg"):
+    """`domus prep canopy-plot`: the candidate crowns `domus canopy` maps, over the aerial, as the picture `out` in
+    the site's folder."""
     extent = site.settings()["model"]["extent"]
     cands, _ = canopy.map_canopy(site, extent, vegetation.removed_areas(canopy.read(site)))
     plot(site, extent, cands, site.path / out)

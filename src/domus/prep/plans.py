@@ -8,7 +8,6 @@
 laid on the ground through [[drapes]] in data/site.toml. Needs `pip install domus[plans]`; the image has it.
 """
 
-import argparse
 import json
 
 import numpy as np
@@ -21,14 +20,7 @@ from . import config
 MM_PER_PT = 25.4 / 72
 
 
-def usage(step, what):
-    """A plan step's arguments, of which it has none: what it does comes from data/prep.json."""
-    argparse.ArgumentParser(prog=f"domus prep {step}", description=f"{what}, as \"plans\" in data/prep.json says "
-                            "(docs/from-documents.md).").parse_args()
-
-
 def pages(site):
-    usage("plan-pages", "The embedded page scans out of a PDF, without re-encoding")
     import pdfplumber
 
     for job in config(site, "plans")["pages"]:
@@ -186,7 +178,6 @@ def _runs(page, split_at_space):
 
 
 def georef(site):
-    usage("plan-georef", "A scanned sheet's affine fit from pixels to the grid, from the grid crosses printed on it")
     from PIL import Image
 
     out_dir = site.path / "data" / "georef"
@@ -339,6 +330,5 @@ def _trace_page(site, job, page):
 
 
 def trace(site):
-    usage("plan-trace", "A vector sheet's linework and text, as GeoJSON on the grid")
     for job in config(site, "plans")["trace"]:
         trace_one(site, job)

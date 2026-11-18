@@ -18,7 +18,6 @@ Sources are under sources/raw/ in the site project. domus.features.MATERIALS and
 one copy of a texture covers.
 """
 
-import argparse
 import json
 from pathlib import Path
 
@@ -77,10 +76,9 @@ def seamless(a, axes, frac=0.18):
     return out
 
 
-def feature_textures(site):
-    ap = argparse.ArgumentParser(prog="domus prep feature-textures")
-    ap.add_argument("--check", help="directory for the sources with their quads drawn on")
-    args = ap.parse_args()
+def feature_textures(site, check=None):
+    """`domus prep feature-textures`: the textures "feature_textures" in data/prep.json names, cut from
+    its photos into data/features/; with `check`, a folder for the sources with their quads drawn on."""
     cfg = config(site, "feature_textures")
     out = site.path / "data" / "features"
     out.mkdir(parents=True, exist_ok=True)
@@ -97,20 +95,19 @@ def feature_textures(site):
         Image.fromarray(np.clip(tex, 0, 255).astype(np.uint8)).save(out / name, quality=82)
         med = np.median(tex.reshape(-1, 3), axis=0).astype(int)
         print(f"{name}: {t['size'][0]}x{t['size'][1]} from {t['source']}{note}, median #{med[0]:02x}{med[1]:02x}{med[2]:02x}")
-        if args.check:
+        if check:
             im = Image.fromarray(img)
             ImageDraw.Draw(im).line([*map(tuple, t["quad"]), tuple(t["quad"][0])], fill=(255, 0, 0), width=3)
-            Path(args.check).mkdir(parents=True, exist_ok=True)
-            im.save(Path(args.check) / f"src-{name}", quality=80)
+            Path(check).mkdir(parents=True, exist_ok=True)
+            im.save(Path(check) / f"src-{name}", quality=80)
     for name, base in cfg.get("turned", {}).items():
         Image.open(out / base).transpose(Image.Transpose.ROTATE_90).save(out / name, quality=82)
         print(f"{name}: {base} turned on its side")
 
 
-def wall_textures(site):
-    ap = argparse.ArgumentParser(prog="domus prep wall-textures")
-    ap.add_argument("--check", help="directory for the frames with their quads drawn on")
-    args = ap.parse_args()
+def wall_textures(site, check=None):
+    """`domus prep wall-textures`: the wall textures "wall_textures" in data/prep.json names, into
+    data/walls/; with `check`, a folder for the frames with their quads drawn on."""
     cfg = config(site, "wall_textures")
     out = site.path / "data" / "walls"
     out.mkdir(parents=True, exist_ok=True)
@@ -134,12 +131,12 @@ def wall_textures(site):
         post = post * (boards.mean(axis=(0, 1)) / post.mean(axis=(0, 1)))
         h = post.shape[1] // 2
         save(np.hstack([post[:, h:], boards, post[:, :h]]), name)
-    if args.check:
-        Path(args.check).mkdir(parents=True, exist_ok=True)
+    if check:
+        Path(check).mkdir(parents=True, exist_ok=True)
         for name, p in cfg["pieces"].items():
             im = Image.open(raw_dir(site) / p["source"]).convert("RGB")
             ImageDraw.Draw(im).line([*map(tuple, p["quad"]), tuple(p["quad"][0])], fill=(255, 0, 0), width=3)
-            im.save(Path(args.check) / f"src-{name}.jpg", quality=80)
+            im.save(Path(check) / f"src-{name}.jpg", quality=80)
 
 
 def faces_by_group(site):
@@ -295,15 +292,13 @@ def apply_rects(mask, ext, spec):
     return mask
 
 
-def house_textures(site):
-    ap = argparse.ArgumentParser(prog="domus prep house-textures", description="Rectify house walls from photos and "
-                                 "placed video, as \"house_textures\" in data/prep.json says (docs/from-documents.md).")
-    ap.add_argument("groups", metavar="group", nargs="*", help="the sources to rectify, by name (default: all of them)")
-    asked = ap.parse_args().groups
+def house_textures(site, groups=()):
+    """`domus prep house-textures`: the house's walls rectified from photos and placed video, as
+    "house_textures" in data/prep.json says, into data/house/: the sources named in `groups`, else all of them."""
     out = site.path / "data" / "house"
     out.mkdir(parents=True, exist_ok=True)
     sources = config(site, "house_textures")["sources"]
-    wanted = asked or list(sources)
+    wanted = list(groups) or list(sources)
     groups = faces_by_group(site)
     index_path = out / "faces.json"
     index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {}

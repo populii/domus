@@ -16,7 +16,7 @@ from domus.errors import DomusError
 PUBLIC = {"DomusError", "Site", "clip", "create", "demo", "fit_affine", "linz_query", "new", "open_site", "resample_line"}
 SITE_METHODS = {"build", "check", "edit", "evaluate", "export", "fetch", "fetch_marks", "fetch_points", "fetch_title", "frame",
                 "grid", "ground", "house_walls", "layer", "lot", "map_canopy", "options", "output", "path", "regrade", "scan",
-                "settings", "shift", "shots", "title", "trust", "upgrade", "video"}
+                "settings", "shift", "shots", "title", "trust", "upgrade", "video", "prep"}
 
 
 def test_the_promised_names_are_all_there():
@@ -194,6 +194,14 @@ def test_the_video_steps_are_the_sites_and_say_what_they_print(site, tmp_path):
     assert said == [f"{out} {w} x {h} {first} .. {last}" for out, w, h, first, last in written]
     size, box = video.crop(frames / "t000.000.jpg", tmp_path / "piece.jpg", 64, (8, 8, 24, 16), say=said.append)
     assert size == (16, 8) and said[-1] == f"{tmp_path / 'piece.jpg'} (16, 8) full-res box {box}"
+
+
+def test_the_prep_steps_are_the_sites_and_say_what_they_print(site, tmp_path):
+    said = []
+    rows = api.open_site(site).prep.profile([[0.0, 2.0], [4.0, 2.0]], offsets=[0.0, 1.0], step=2.0, csv=tmp_path / "p.csv",
+                                            say=said.append)
+    assert len(rows) == 3 and said[0].split() == ["along", "s", "o", "+0", "+1"] and len(said) == 4
+    assert (tmp_path / "p.csv").read_text(encoding="utf-8").splitlines()[0] == "along,s,o,+0,+1"
 
 
 def test_the_helpers(monkeypatch):

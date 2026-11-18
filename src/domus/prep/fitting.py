@@ -19,7 +19,6 @@ data/video/<TAG>-georef.json (or --georef), meets the plane; printed are the cam
 the frame and its height.
 """
 
-import argparse
 import json
 from pathlib import Path
 
@@ -152,37 +151,28 @@ class Placed:
         return c, what, out
 
 
-def face_main(site):
-    """`domus prep face-fit`."""
-    ap = argparse.ArgumentParser(prog="domus prep face-fit", description="Fit vertical faces in a placed cloud.")
-    ap.add_argument("cloud", help="the cloud: <tag>-dense or <tag>-site in data/video, or an .npz file")
-    ap.add_argument("spec", help="the faces: a JSON file of name: {box, along, model}")
-    ap.add_argument("--all", action="store_true", help="every point of a -site cloud, not only those three cameras saw")
-    args = ap.parse_args()
+def fit_faces(site, cloud, spec, all_points=False):
+    """`domus prep face-fit`: vertical faces fitted in the placed cloud `cloud` (a name in data/video, or an .npz
+    file), as `spec` says (a dict of name: {box, along, model}, or a JSON file holding one)."""
     from ..options import design
 
-    xyz, _ = read_clouds(site, [args.cloud], args.all)
+    xyz, _ = read_clouds(site, [cloud], all_points)
     so, z = design.frame(site).so(xyz[:, :2]), xyz[:, 2]
-    for name, item in json.loads(Path(args.spec).read_text(encoding="utf-8")).items():
+    for name, item in (spec if isinstance(spec, dict) else json.loads(Path(spec).read_text(encoding="utf-8"))).items():
         print(face_line(name, item["along"], face_fit(so, z, item)))
-    return 0
 
 
-def points_main(site):
-    """`domus prep frame-points`."""
-    ap = argparse.ArgumentParser(prog="domus prep frame-points", description="Where a placed frame's pixels meet a plane.")
-    ap.add_argument("tag", help="the placed reconstruction, data/video/<TAG>-sfm.npz and <TAG>-georef.json")
-    ap.add_argument("spec", help="the frames: a JSON list of {frame, plane, points}")
-    ap.add_argument("--georef", help="another placement of it than data/video/<TAG>-georef.json")
-    args = ap.parse_args()
+def frame_points(site, tag, spec, georef=None):
+    """`domus prep frame-points`: where pixels of placed reconstruction `tag`'s frames meet a plane, as `spec`
+    says (a list of {frame, plane, points}, or a JSON file holding one); `georef` is another placement of it."""
     from ..options import design
 
     fr = design.frame(site)
-    placed = Placed(site, args.tag, args.georef)
-    for item in json.loads(Path(args.spec).read_text(encoding="utf-8")):
+    placed = Placed(site, tag, georef)
+    for item in spec if isinstance(spec, list) else json.loads(Path(spec).read_text(encoding="utf-8")):
         found = placed.on_plane(item["frame"], item["plane"], item["points"], fr)
         if found is None:
-            print(item["frame"], "is not a registered frame of", args.tag)
+            print(item["frame"], "is not a registered frame of", tag)
             continue
         c, what, points = found
         cs = fr.so(c[None, :2])[0]
@@ -190,4 +180,3 @@ def points_main(site):
         for label, (p, behind) in points.items():
             so = fr.so(p[None, :2])[0]
             print(f"   {label:38s} s {so[0]:6.2f}  o {so[1]:6.2f}  H {p[2]:6.2f}" + ("   (behind the camera)" if behind else ""))
-    return 0

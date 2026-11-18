@@ -25,7 +25,6 @@ leaving out points more than --above metres over the ground (branches over a wal
 boundary (red), the existing walls (yellow) and the house (white).
 """
 
-import argparse
 import csv
 from pathlib import Path
 
@@ -183,6 +182,11 @@ def plan(site, xyz, rgb, corners, out, px=0.02, mode="top", above=None, lines=Fa
     return im.size, int(keep.sum())
 
 
+def _names(clouds):
+    """Clouds' names, from a list or comma-separated."""
+    return clouds.split(",") if isinstance(clouds, str) else list(clouds)
+
+
 def _corners(text):
     try:
         return [[float(v) for v in p.split(",")] for p in text.split()]
@@ -190,30 +194,20 @@ def _corners(text):
         raise DomusError(f'Give the box as its two corners, "s,o s,o": {e}') from e
 
 
-def main(site):
-    """`domus prep cloud`: the cloud's ground against the model's or the LiDAR's, cell by cell."""
-    ap = argparse.ArgumentParser(prog="domus prep cloud", description=__doc__.split("\n\n")[0])
-    ap.add_argument("clouds", help="the clouds, <tag>-site or <tag>-dense in data/video (or .npz files), comma-separated")
-    ap.add_argument("box", help='the box\'s two corners, "s,o s,o" (or "east,north east,north" with --grid)')
-    ap.add_argument("--cell", type=float, nargs="+", default=[1.0], help="the cells' size in metres (or along, across)")
-    ap.add_argument("--pct", type=float, default=20.0, help="the percentile of each cell's points taken as its ground")
-    ap.add_argument("--min", type=int, default=12, dest="nmin", help="the fewest points a cell needs")
-    ap.add_argument("--by", choices=("points", "level"), default="points",
-                    help="each point's height over the ground, or the cell's level over the ground under its lowest points")
-    ap.add_argument("--against", choices=("model", "lidar"), default="model",
-                    help="the model's ground with the site's fixes, or the LiDAR's ground model alone")
-    ap.add_argument("--all", action="store_true", help="every point of a -site cloud, not only those three cameras saw")
-    ap.add_argument("--grid", action="store_true", help="the box is on the site's grid, not the options' frame")
-    ap.add_argument("--csv", help="also write the table to this file")
-    args = ap.parse_args()
-    xyz, _ = read_clouds(site, args.clouds.split(","), args.all)
-    if len(args.cell) > 2:
+def by_cell(site, clouds, box, cell=(1.0,), pct=20.0, nmin=12, by="points", against="model", all_points=False, grid=False,
+            csv_file=None):
+    """`domus prep cloud`: the clouds' ground against the model's or the LiDAR's, cell by cell, over `box`, printed
+    as a table and written to `csv_file` too if it's given; the module's docstring says how. `clouds` are names in
+    data/video (or .npz files), a list or comma-separated; `box` is two corners, a list or "s,o s,o". Gives the
+    rows."""
+    xyz, _ = read_clouds(site, _names(clouds), all_points)
+    if len(cell) > 2:
         raise DomusError("--cell takes one size, or two: along the box and across it")
-    rows = compare(site, xyz, _corners(args.box), args.cell, args.pct, args.nmin, args.against, args.grid, args.by)
-    names = ("E", "N") if args.grid else ("s", "o")
+    rows = compare(site, xyz, _corners(box) if isinstance(box, str) else box, cell, pct, nmin, against, grid, by)
+    names = ("E", "N") if grid else ("s", "o")
     head = [names[0], names[1], "points", "cloud - ground (cm)", "cloud level"]
-    print(f"{names[0]:>9} {names[1]:>9} {'points':>7} {'cm':>6} {'level':>8}   (cloud's {args.pct:g}th percentile "
-          f"less the {'model' if args.against == 'model' else 'LiDAR'}'s ground)")
+    print(f"{names[0]:>9} {names[1]:>9} {'points':>7} {'cm':>6} {'level':>8}   (cloud's {pct:g}th percentile "
+          f"less the {'model' if against == 'model' else 'LiDAR'}'s ground)")
     for u, v, n, d, z in rows:
         print(f"{u:9.2f} {v:9.2f} {n:7d} {100 * d:+6.0f} {z:8.2f}")
     if rows:
@@ -221,30 +215,20 @@ def main(site):
         print(f"{len(rows)} cells: median {100 * np.median(d):+.0f} cm, quartiles {100 * np.percentile(d, 25):+.0f} to "
               f"{100 * np.percentile(d, 75):+.0f} cm")
     else:
-        print(f"No cell of the box has {args.nmin} points of the cloud or more.")
-    if args.csv:
-        with open(args.csv, "w", newline="", encoding="utf-8") as fh:
+        print(f"No cell of the box has {nmin} points of the cloud or more.")
+    if csv_file:
+        with open(csv_file, "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
             w.writerow(head)
             w.writerows([[round(u, 3), round(v, 3), n, round(100 * d, 1), round(z, 3)] for u, v, n, d, z in rows])
-    return 0
+    return rows
 
 
-def plan_main(site):
-    """`domus prep cloud-plan`: the cloud from above over a box."""
-    ap = argparse.ArgumentParser(prog="domus prep cloud-plan", description="A placed cloud from above, in its own colours.")
-    ap.add_argument("clouds", help="the clouds, <tag>-site or <tag>-dense in data/video (or .npz files), comma-separated")
-    ap.add_argument("box", help='the box\'s two corners, "s,o s,o" (or "east,north east,north" with --grid)')
-    ap.add_argument("out", help="the picture to write (.png or .jpg)")
-    ap.add_argument("--px", type=float, default=0.02, help="metres a pixel covers")
-    ap.add_argument("--mode", choices=("top", "low", "height"), default="top",
-                    help="each pixel's highest point's colour, its lowest's, or grey by its height over the ground")
-    ap.add_argument("--above", type=float, help="leave out points more than this many metres over the ground")
-    ap.add_argument("--lines", action="store_true", help="draw the boundary, the existing walls and the house")
-    ap.add_argument("--all", action="store_true", help="every point of a -site cloud, not only those three cameras saw")
-    ap.add_argument("--grid", action="store_true", help="the box is on the site's grid, not the options' frame")
-    args = ap.parse_args()
-    xyz, rgb = read_clouds(site, args.clouds.split(","), args.all)
-    size, n = plan(site, xyz, rgb, _corners(args.box), args.out, args.px, args.mode, args.above, args.lines, args.grid)
-    print(f"wrote {args.out} ({size[0]} x {size[1]} px, {n} points)")
-    return 0
+def from_above(site, clouds, box, out, px=0.02, mode="top", above=None, lines=False, all_points=False, grid=False):
+    """`domus prep cloud-plan`: the clouds from above over `box`, in their own colours (`mode` top or low) or grey by
+    height over the ground (height), `px` metres a pixel, into the picture `out`. Gives its size and the points
+    drawn."""
+    xyz, rgb = read_clouds(site, _names(clouds), all_points)
+    size, n = plan(site, xyz, rgb, _corners(box) if isinstance(box, str) else box, out, px, mode, above, lines, grid)
+    print(f"wrote {out} ({size[0]} x {size[1]} px, {n} points)")
+    return size, n

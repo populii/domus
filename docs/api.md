@@ -88,12 +88,14 @@ Each function that does what a command does takes `say`, which gets each line th
 fetch, draft and build in a process of their own, which prints its own, and a few notices from deeper in Domus, such
 as a house part a build can't draw, are printed as they were.
 
-## Provisional: the video steps
+## Provisional: the video and prep steps
 
 `site.video` runs the steps of `domus video` ([video.md](video.md)): `site.video.place("walk-colmap")` places a
-reconstruction as `domus video place walk-colmap` does. They're **provisional**, as
-[PEP 411](https://peps.python.org/pep-0411/) means it: public and documented, but a step may change from one release
-to the next without a deprecation until they're declared stable. The promise above doesn't cover them yet.
+reconstruction as `domus video place walk-colmap` does. `site.prep` runs those of `domus prep`
+([from-documents.md](from-documents.md)) the same way: `site.prep.profile("0,2 4,2", offsets=[0, 1])`. They're
+**provisional**, as [PEP 411](https://peps.python.org/pep-0411/) means it: public and documented, but a step may change
+from one release to the next without a deprecation until they're declared stable. The promise above doesn't cover them
+yet.
 
 Each step is a method named after it: `auto`, `frames`, `reconstruct`, `reconstruct_chain`, `two_lens`, `merge`,
 `split`, `link`, `link_picks`, `place`, `pick`, `dense`, `export`, `plot`, `sheet`, `crop` and `picks_edit`. Its
@@ -102,6 +104,12 @@ focal=650)`: a list stands for a comma-separated option, `range_` and `as_` for 
 `loops=False` for `--no-loops`. Each takes `say`, which gets the lines the step prints. Paths are as the command takes
 them, from the current folder (but `auto`'s video, which is in the site's folder unless it's a full path), and `sheet`,
 `crop` and `picks_edit` work on the files they're given.
+
+The prep steps are `plan_pages`, `plan_georef`, `plan_trace`, `ifc`, `feature_textures`, `wall_textures`,
+`house_textures`, `boards`, `sections`, `profile`, `cloud`, `cloud_plan`, `face_fit`, `frame_points`, `overlay` and
+`canopy_plot`, their arguments named the same way (`from_`, `min_` and `all_` for `--from`, `--min` and `--all`); a
+box or a line's points can be pairs or the command's text. `domus prep check` is `site.check()`, above. Most read
+what to do from `data/prep.json`, and `profile`, `cloud` and `cloud_plan` give what they found.
 
 ## Helpers
 

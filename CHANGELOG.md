@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **For site projects:** a site's `video` and `prep` run the steps of `domus video` and `domus prep` the same way:
+  `site.video.place("walk")`, `site.prep.profile(...)` and the rest, with the command's options as arguments and
+  `say` for what each prints. They're provisional: public and documented, but they may change between releases
+  without a deprecation until they're declared stable ([docs/api.md](docs/api.md)). The steps' options are the command
+  line's own now, and each step's usage names it as `domus video <step>` or `domus prep <step>`.
 - **For site projects:** a site's `video` runs the steps of `domus video` the same way: `site.video.place("walk")`,
   `site.video.reconstruct(...)` and the rest, with the command's options as arguments and `say` for what each prints.
   They're provisional: public and documented, but they may change between releases without a deprecation until

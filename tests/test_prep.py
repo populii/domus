@@ -1,7 +1,6 @@
 """The prep steps on made-up documents: a PDF, a photo, the demo site."""
 
 import json
-import sys
 
 import numpy as np
 import pytest
@@ -39,13 +38,9 @@ def prep_json(site):
 
 
 def run(project, step, *args):
-    from domus import prep
+    from domus.app import cli
 
-    argv = sys.argv
-    try:
-        return prep.main(project, [step, *args])
-    finally:
-        sys.argv = argv
+    return cli.call(["prep", step, *args], project)
 
 
 def test_trace_puts_a_vector_sheet_on_the_grid(site, prep_json, project):

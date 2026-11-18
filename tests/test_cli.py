@@ -78,10 +78,24 @@ def test_the_server_takes_what_follows_it_as_it_is(nowhere, monkeypatch):
     assert run(["build", "--fresh", "--frsh"]) == 2      # a command's own arguments are the command line's to check
 
 
-def test_video_with_no_step_lists_them(nowhere, capsys):
+def test_video_and_prep_with_no_step_list_them(nowhere, capsys):
     assert run(["video"]) == 0
     out = capsys.readouterr().out
     assert out.startswith("usage: domus video <step> [args]") and "  place              Place a reconstruction" in out
+    assert run(["prep"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("usage: domus prep <step> [args]\n\nSteps:") and "  overlay            The model's parts" in out
+
+
+def test_a_prep_step_reads_its_arguments_and_calls_the_api(nowhere, monkeypatch):
+    from domus import api
+
+    asked = []
+    monkeypatch.setattr(api.Prep, "cloud", lambda self, clouds, box, **kw: asked.append((clouds, box, kw["min_"], kw["all_"])))
+    (nowhere / "data").mkdir()
+    (nowhere / "data" / "site.toml").write_text("", encoding="utf-8")
+    assert run(["prep", "cloud", "a-site,b-dense", "0,0 4,6", "--min", "5", "--all"]) == 0
+    assert asked == [("a-site,b-dense", "0,0 4,6", 5, True)]
 
 
 def test_a_video_step_reads_its_arguments_and_calls_the_api(nowhere, monkeypatch):

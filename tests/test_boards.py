@@ -3,7 +3,6 @@
 import json
 import re
 import shutil
-import sys
 
 import numpy as np
 import pytest
@@ -108,13 +107,9 @@ def house_photo(site):
 
 
 def run(project, *args):
-    from domus import prep
+    from domus.app import cli
 
-    argv = sys.argv
-    try:
-        return prep.main(project, ["boards", *args])
-    finally:
-        sys.argv = argv
+    return cli.call(["prep", "boards", *args], project)
 
 
 def test_domus_prep_boards_reads_the_sites_wall_photos(house_photo, capsys, project):

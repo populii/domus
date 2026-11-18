@@ -24,8 +24,8 @@ named by --site or the DOMUS_SITE environment variable. The command line reads w
 that Site (domus.project.site) to the command.
 
 A command is a call to the public API (domus.api): this module reads the arguments, makes the call, and prints what
-the call doesn't say itself; domus.app.video does the same for the video steps. A step of `prep`, and `serve`, reads
-its own arguments. Every command and step prints its usage with --help, and does nothing else.
+the call doesn't say itself; domus.app.video and domus.app.prep do the same for the video and prep steps. `serve`
+reads its own arguments. Every command and step prints its usage with --help, and does nothing else.
 """
 
 import argparse
@@ -46,8 +46,8 @@ def choose_site(path):
 def parser():
     """The command line: every command and step, each with its own --help. One that's `handed` on takes what follows
     it as it is, and reads it itself."""
-    from .. import prep, shots
-    from . import video
+    from .. import shots
+    from . import prep, video
 
     ap = argparse.ArgumentParser(prog="domus", description="3D site models for comparing retaining wall options.")
     ap.add_argument("--version", action="version", version=__version__)
@@ -118,11 +118,9 @@ def parser():
     how.add_argument("--epsg", type=int, help="the file is already on this grid")
     sub.add_argument("--up", choices=["y", "z"], help="the scan's vertical axis, taken as true")
 
-    sub = command(commands, "prep", _prep, "Turning a site's documents and photos into its data. See docs/from-documents.md.",
-                  "plans, IFC, textures, checks from your documents")
-    steps = sub.add_subparsers(dest="step", metavar="step")
-    for name, (_, _, what) in prep.STEPS.items():
-        command(steps, name, _prep, f"{what}.", what, handed=True)
+    sub = command(commands, "prep", prep.listed, "Turning a site's documents and photos into its data. See "
+                  "docs/from-documents.md.", "plans, IFC, textures, checks from your documents")
+    prep.add(sub.add_subparsers(dest="prep_step", metavar="step"), command)
 
     command(commands, "serve", _serve, "Serve the viewer and the built model.", "serve the viewer", handed=True)
 
@@ -158,11 +156,9 @@ def parser():
     return ap
 
 
-def main(argv=None):
-    for stream in (sys.stdout, sys.stderr):     # NZ addresses have macrons, which a Windows console's encoding can't print
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8", errors="replace")
-    argv = list(sys.argv[1:] if argv is None else argv)
+def read(argv):
+    """The command line's arguments, read: what `run(args, site, named)` runs is `run`."""
+    argv = list(argv)
     # A New Zealand latitude starts with a minus, which argparse would read as another option.
     if "--centre" in argv and argv.index("--centre") + 1 < len(argv):
         k = argv.index("--centre")
@@ -173,6 +169,22 @@ def main(argv=None):
         args.rest = [*extras, *args.rest]
     elif extras:
         ap.error(f"unrecognized arguments: {' '.join(extras)}")
+    return args
+
+
+def call(argv, site, named=None):
+    """A command on `site` (domus.project.site's Site) in this process, its arguments `argv` read as the command line
+    reads them: a DomusError comes as it is, where the command line ends with its message. Gives what the command
+    gives, its exit code if it has one."""
+    args = read(argv)
+    return args.run(args, site, named)
+
+
+def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):     # NZ addresses have macrons, which a Windows console's encoding can't print
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    args = read(sys.argv[1:] if argv is None else argv)
     from ..project import site as sites
 
     if args.site:
@@ -278,13 +290,6 @@ def _edit(args, site, named):
         s.regrade(args.clouds.split(","), args.spec, args.backup, args.apply)
     else:
         getattr(s, args.action)(args.spec, args.backup, args.apply)
-
-
-def _prep(args, site, named):
-    """`domus prep [STEP ARGS]`: the step, which reads its own arguments and is handed the site (domus.prep)."""
-    from .. import prep
-
-    return prep.main(site, [args.step, *args.rest] if args.step else [])
 
 
 def _serve(args, site, named):

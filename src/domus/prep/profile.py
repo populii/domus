@@ -9,7 +9,6 @@ looking along it. The ground is the model's existing ground: the ground model wi
 table, and --csv FILE writes it too.
 """
 
-import argparse
 import csv
 import itertools
 
@@ -66,30 +65,27 @@ def profile(site, points, offsets=(0.0,), step=0.5, grid=False):
     return out
 
 
-def main(site):
-    ap = argparse.ArgumentParser(prog="domus prep profile", description=__doc__.split("\n\n")[0])
-    ap.add_argument("points", help='the line\'s points, "s,o s,o ..." (or "east,north ..." with --grid)')
-    ap.add_argument("--offsets", type=float, nargs="+", default=[0.0], help="metres across the line (left negative)")
-    ap.add_argument("--step", type=float, default=0.5, help="metres between stations (0: the line's points only)")
-    ap.add_argument("--grid", action="store_true", help="the points are on the site's grid, not the options' frame")
-    ap.add_argument("--csv", help="also write the table to this file")
-    args = ap.parse_args()
-    try:
-        points = [[float(v) for v in p.split(",")] for p in args.points.split()]
-    except ValueError as e:
-        raise DomusError(f'Give the line\'s points as "s,o s,o ...": {e}') from e
-    rows = profile(site, points, args.offsets, args.step, args.grid)
-    names = ("E", "N") if args.grid else ("s", "o")
-    head = ["along", names[0], names[1], *(f"{o:+g}" for o in args.offsets)]
+def table(site, points, offsets=(0.0,), step=0.5, grid=False, csv_file=None):
+    """`domus prep profile`: the ground along the line through `points` (s, o pairs, or east, north on the grid
+    with `grid`; or the text "s,o s,o ...") every `step` metres, and `offsets` metres either side, printed as a
+    table and written to `csv_file` too if it's given. Gives the table's rows."""
+    if isinstance(points, str):
+        try:
+            points = [[float(v) for v in p.split(",")] for p in points.split()]
+        except ValueError as e:
+            raise DomusError(f'Give the line\'s points as "s,o s,o ...": {e}') from e
+    rows = profile(site, points, offsets, step, grid)
+    names = ("E", "N") if grid else ("s", "o")
+    head = ["along", names[0], names[1], *(f"{o:+g}" for o in offsets)]
     print("  ".join(f"{h:>8}" for h in head))
     table = []
     for s, p, z in rows:
-        row = [s, p[0], p[1], *(z[o] for o in args.offsets)]
+        row = [s, p[0], p[1], *(z[o] for o in offsets)]
         table.append(row)
         print("  ".join(f"{v:8.2f}" for v in row))
-    if args.csv:
-        with open(args.csv, "w", newline="", encoding="utf-8") as fh:
+    if csv_file:
+        with open(csv_file, "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
             w.writerow(head)
             w.writerows([[round(v, 3) for v in row] for row in table])
-    return 0
+    return table

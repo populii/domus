@@ -792,7 +792,7 @@ for option in site.options():
 | `site.export(path, format=None, option=None)` | The built model, or it with a scheme shown, as glTF (`.glb`) or IFC (`.ifc`) |
 | `site.check(checks, tags, plots)` | The checks, as `domus prep check` runs them, and their report |
 | `api.create`, `api.new`, `api.demo`; `site.fetch()`, `map_canopy()`, `fetch_marks()`, `fetch_title()`, `fetch_points()`, `scan()`, `shots()`, `upgrade()`, `trust()`, `shift()`, `edit()`, `regrade()` | What the commands do, for a tool: `domus create`, `new`, `demo`, `fetch`, `canopy`, `marks`, `title`, `points`, `scan`, `shots` and `site ...`. Each takes `say`, which gets the lines the command prints |
-| `site.video.place(tag)` and the other video steps | `domus video`'s steps, for a tool: provisional, so they may change between releases ([docs/api.md](docs/api.md)) |
+| `site.video.place(tag)`, `site.prep.profile(points)` and the other steps | `domus video`'s and `domus prep`'s steps, for a tool: provisional, so they may change between releases ([docs/api.md](docs/api.md)) |
 | `api.linz_query`, `api.clip`, `api.fit_affine`, `api.resample_line` | Helpers for LINZ layers, raster windows, image-to-ground fits and lines |
 
 A process can open several sites at once, and each keeps what Domus reads of it apart, so a tool can compare two. A

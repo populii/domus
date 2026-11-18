@@ -21,7 +21,6 @@ stands in front of: everything but the house itself is drawn only where the came
 --see-through.
 """
 
-import argparse
 import itertools
 from pathlib import Path
 
@@ -268,38 +267,28 @@ class Scene:
                 c.hide = None
 
 
-def main(site):
-    ap = argparse.ArgumentParser(prog="domus prep overlay", description=__doc__.split("\n\n")[0])
-    ap.add_argument("tag", help="the placed reconstruction, data/video/<TAG>-sfm.npz")
-    ap.add_argument("out", help="the folder to write the frames to")
-    ap.add_argument("frames", nargs="+", help="frames to draw on, such as t012.500")
-    ap.add_argument("--frames-dir", "--frames", dest="frames_dir", help="where the clip's frames are (default "
-                    "sources/raw/frames6/<clip>/)")
-    ap.add_argument("--georef", help="another placement of the reconstruction than data/video/<TAG>-georef.json")
-    ap.add_argument("--only", help=f"some of {', '.join(GROUPS)}, comma-separated")
-    ap.add_argument("--option", help="a wall option to draw too, by its file's name in options/")
-    ap.add_argument("--see-through", action="store_true", help="draw the house's faces turned away from the camera too")
-    ap.add_argument("--suffix", default="", help="added to each picture's name")
-    args = ap.parse_args()
-    groups = set(GROUPS) if not args.only else set(args.only.split(","))
+def draw_frames(site, tag, out, frames, frames_dir=None, georef=None, only=None, option=None, see_through=False,
+                suffix=""):
+    """`domus prep overlay`: the model's parts drawn over `frames` of placed reconstruction `tag`, into the folder
+    `out`; the module's docstring says how. `only` is some of the groups, a list or comma-separated."""
+    groups = set(GROUPS) if not only else set(only.split(",") if isinstance(only, str) else only)
     if groups - set(GROUPS):
         raise DomusError(f"--only takes {', '.join(GROUPS)}")
-    placed = Placed(site, args.tag, args.georef)
-    frames_dir = Path(args.frames_dir) if args.frames_dir else site.path / "sources" / "raw" / "frames6" / args.tag.split("-")[0]
-    scene = Scene(site, args.option)
-    out_dir = Path(args.out)
+    placed = Placed(site, tag, georef)
+    frames_dir = Path(frames_dir) if frames_dir else site.path / "sources" / "raw" / "frames6" / tag.split("-")[0]
+    scene = Scene(site, option)
+    out_dir = Path(out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    for frame in args.frames:
+    for frame in frames:
         cam = placed.camera(frame)
         if cam is None:
-            print(frame, "is not a registered frame of", args.tag)
+            print(frame, "is not a registered frame of", tag)
             continue
         src = frames_dir / f"{frame}.jpg"
         if not src.exists():
             raise DomusError(f"There's no frame {src}: give the clip's frames folder with --frames")
         img = Image.open(src).convert("RGB")
-        scene.draw(Canvas(img, placed, placed.names.index(frame)), cam[1], groups, args.see_through)
-        out = out_dir / f"{args.tag}-{frame}{args.suffix}.jpg"
-        img.save(out, quality=88)
-        print(out, "camera at E {:.2f} N {:.2f} H {:.2f}".format(*cam[1]))
-    return 0
+        scene.draw(Canvas(img, placed, placed.names.index(frame)), cam[1], groups, see_through)
+        picture = out_dir / f"{tag}-{frame}{suffix}.jpg"
+        img.save(picture, quality=88)
+        print(picture, "camera at E {:.2f} N {:.2f} H {:.2f}".format(*cam[1]))

@@ -365,6 +365,11 @@ class Site:
         """The site's video steps, as `domus video <step>` runs them (Video, provisional)."""
         return Video(self._project)
 
+    @property
+    def prep(self):
+        """The site's prep steps, as `domus prep <step>` runs them (Prep, provisional)."""
+        return Prep(self._project)
+
 
 class Video:
     """A site's video steps, as `domus video <step>` runs them (docs/video.md): from its videos to point clouds on its
@@ -529,6 +534,141 @@ class Video:
 
         with _saying(say):
             return picks_edit.edit(picks, edits)
+
+
+class Prep:
+    """A site's prep steps, as `domus prep <step>` runs them (docs/from-documents.md): from its documents and photos to
+    its data. `site.prep` gives them; `domus prep check` is `site.check()`.
+
+    **Provisional**, as PEP 411 means it: public and documented, but a step may change from one release to the next
+    without a deprecation until the steps are declared stable. Most steps read what to do from data/prep.json. Each
+    prints what it does as it goes, and `say` gets each line (print unless given). Paths are taken as the command takes
+    them, from the current folder (but `canopy_plot`'s picture, which is in the site's folder)."""
+
+    def __init__(self, project):
+        self._project = project
+
+    def __repr__(self):
+        return f"Prep({str(self._project.path)!r})"
+
+    def _run(self, say, step, *args, **kwargs):
+        with _saying(say), _writes(self._project):
+            return step(self._project, *args, **kwargs)
+
+    def plan_pages(self, say=print):
+        """Pulls the page scans out of a PDF, as domus prep plan-pages does and "plans" in data/prep.json says."""
+        from .prep import plans
+
+        return self._run(say, plans.pages)
+
+    def plan_georef(self, say=print):
+        """Pins scanned sheets to the grid by their grid crosses, as domus prep plan-georef does."""
+        from .prep import plans
+
+        return self._run(say, plans.georef)
+
+    def plan_trace(self, say=print):
+        """Traces a vector PDF's linework onto the grid, as domus prep plan-trace does."""
+        from .prep import plans
+
+        return self._run(say, plans.trace)
+
+    def ifc(self, say=print):
+        """A designer's IFC model of the house on the grid, as domus prep ifc does and "ifc" in data/prep.json says. It
+        needs IfcOpenShell (the `ifc` extra)."""
+        from .prep import ifc
+
+        return self._run(say, ifc.place)
+
+    def feature_textures(self, check=None, say=print):
+        """Cuts fence, shed and paving textures from photos, as domus prep feature-textures does; `check` is a folder
+        for the sources with their quads drawn on."""
+        from .prep import textures
+
+        return self._run(say, textures.feature_textures, check)
+
+    def wall_textures(self, check=None, say=print):
+        """Cuts wall textures from photos, as domus prep wall-textures does; `check` is a folder for the frames with
+        their quads drawn on."""
+        from .prep import textures
+
+        return self._run(say, textures.wall_textures, check)
+
+    def house_textures(self, groups=(), say=print):
+        """Rectifies the house's walls from photos and placed video, as domus prep house-textures does: the sources in
+        `groups`, else all of them."""
+        from .prep import textures
+
+        return self._run(say, textures.house_textures, groups)
+
+    def boards(self, faces=(), along=None, band=0.5, heights=None, spacing=(0.08, 0.25), step=0.0002, above=None,
+               say=print):
+        """The weatherboards' spacing and lap lines' heights on rectified wall photos, as domus prep boards finds them:
+        on `faces` (all of them unless named), with the command's options of the same names."""
+        from .prep import boards
+
+        return self._run(say, boards.measure_faces, faces, along, band, heights, spacing, step, above)
+
+    def sections(self, clouds, step=1.0, from_=-6.0, to=16.0, say=print):
+        """Cross-sections through the placed clouds `clouds`, as domus prep sections draws them; `from_` is its
+        --from."""
+        from .prep import sections
+
+        return self._run(say, sections.draw, clouds, step, from_, to)
+
+    def profile(self, points, offsets=(0.0,), step=0.5, grid=False, csv=None, say=print):
+        """The ground along a line and either side of it, as domus prep profile gives it: `points` are (s, o) pairs (or
+        east and north on the grid, with `grid`), or the text "s,o s,o ...". Returns the table's rows; `csv` also
+        writes them to that file."""
+        from .prep import profile
+
+        return self._run(say, profile.table, points, offsets, step, grid, csv)
+
+    def cloud(self, clouds, box, cell=(1.0,), pct=20.0, min_=12, by="points", against="model", all_=False, grid=False,
+              csv=None, say=print):
+        """A placed cloud's ground against the model's or the LiDAR's, cell by cell, as domus prep cloud gives it:
+        `clouds` a list or comma-separated, `box` two corners or "s,o s,o"; `min_` and `all_` are its --min and --all.
+        Returns the rows; `csv` also writes them to that file."""
+        from .prep import cloud
+
+        return self._run(say, cloud.by_cell, clouds, box, cell, pct, min_, by, against, all_, grid, csv)
+
+    def cloud_plan(self, clouds, box, out, px=0.02, mode="top", above=None, lines=False, all_=False, grid=False,
+                   say=print):
+        """A placed cloud from above, as domus prep cloud-plan draws it, into the picture `out`. Returns its size and
+        the points drawn."""
+        from .prep import cloud
+
+        return self._run(say, cloud.from_above, clouds, box, out, px, mode, above, lines, all_, grid)
+
+    def face_fit(self, cloud, spec, all_=False, say=print):
+        """Fits vertical faces in a placed cloud, as domus prep face-fit does: `spec` is a dict of name: {box, along,
+        model}, or a JSON file holding one."""
+        from .prep import fitting
+
+        return self._run(say, fitting.fit_faces, cloud, spec, all_)
+
+    def frame_points(self, tag, spec, georef=None, say=print):
+        """Where a placed frame's pixels meet a wall's plane or a level, as domus prep frame-points finds it: `spec` is
+        a list of {frame, plane, points}, or a JSON file holding one."""
+        from .prep import fitting
+
+        return self._run(say, fitting.frame_points, tag, spec, georef)
+
+    def overlay(self, tag, out, frames, frames_dir=None, georef=None, only=None, option=None, see_through=False, suffix="",
+                say=print):
+        """The model's parts drawn over frames of a placed clip, as domus prep overlay draws them, into the folder
+        `out`; `only` is a list or comma-separated."""
+        from .prep import overlay
+
+        return self._run(say, overlay.draw_frames, tag, out, frames, frames_dir, georef, only, option, see_through, suffix)
+
+    def canopy_plot(self, out="data/sources/canopy.jpg", say=print):
+        """A plan of the candidate tree crowns over the aerial, as domus prep canopy-plot draws it, into `out` in the
+        site's folder."""
+        from .prep import canopy_plot
+
+        return self._run(say, canopy_plot.draw, out)
 
 
 class _Lines:

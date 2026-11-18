@@ -35,11 +35,9 @@ Prints the findings and the notes, writes .domus/checks/check_model.json in the 
 same folder) and exits 1 if a check fails its tolerance.
 """
 
-import argparse
 import itertools
 import json
 import math
-import sys
 import time
 from collections import Counter
 
@@ -756,19 +754,5 @@ def run(site, checks=CHECKS, tags=None, plots=False):
     (checks_dir(site) / "check_model.json").write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
     return report
 
-
-def main(site):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("checks", nargs="*", default=list(CHECKS))
-    ap.add_argument("--tags", nargs="*", help="placed reconstructions for plumb and clouds (default: all)")
-    ap.add_argument("--plots", action="store_true")
-    args = ap.parse_args()
-    report = run(site, args.checks, args.tags, args.plots)
-    for f in report["findings"]:
-        print(f"{f['check']:7s} {f['level']:9s} {f['object']:40s} {f['detail']}")
-    for name, why in report["skipped"].items():
-        print(f"{name:7s} skipped   {why}")
-    log(f"failures by check: {report['failures']}; wrote {checks_dir(site).relative_to(site.path) / 'check_model.json'}")
-    sys.exit(1 if any(report["failures"].values()) else 0)
 
 

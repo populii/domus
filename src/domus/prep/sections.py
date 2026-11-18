@@ -8,7 +8,6 @@ slice of every cloud and plots offset from the line against height, with the LiD
 and the line. Writes data/video/checks/sections/<first cloud>-s<s>.png and a contact sheet.
 """
 
-import argparse
 import itertools
 
 import numpy as np
@@ -59,16 +58,12 @@ def frame_of(pts, line, origin):
     return s, o
 
 
-def main(site):
-    ap = argparse.ArgumentParser(prog="domus prep sections")
-    ap.add_argument("clouds", nargs="+")
-    ap.add_argument("--step", type=float, default=1.0)
-    ap.add_argument("--from", dest="s_from", type=float, default=-6.0)
-    ap.add_argument("--to", type=float, default=16.0)
-    args = ap.parse_args()
+def draw(site, names, step=1.0, s_from=-6.0, to=16.0):
+    """`domus prep sections`: cross-sections through the placed clouds `names` (in data/video), every `step`
+    metres along the edge from `s_from` to `to`, into data/video/checks/sections/."""
     line, start = edge_line(site)
     clouds = []
-    for name in args.clouds:
+    for name in names:
         d = np.load(video_dir(site) / f"{name}.npz")
         xyz = d["xyz"]
         keep = d["nview"] >= 3 if "nview" in d else np.ones(len(xyz), bool)
@@ -80,7 +75,7 @@ def main(site):
     out.mkdir(parents=True, exist_ok=True)
     W, H, sc = 760, 520, 120.0
     tiles = []
-    for sk in np.arange(args.s_from, args.to + 1e-6, args.step):
+    for sk in np.arange(s_from, to + 1e-6, step):
         img = Image.new("RGB", (W, H), (250, 250, 247))
         dr = ImageDraw.Draw(img)
         # Section line in plan: the point at s = sk on the edge (found by sampling the polyline
@@ -133,14 +128,14 @@ def main(site):
                         f"right of the line to the right   1 m = {sc:.0f} px", fill=(20, 20, 20))
         dr.text((8, H - 16), "orange: LiDAR ground; yellow: the reference line; blue: model walls",
                 fill=(90, 90, 90))
-        path = out / f"{args.clouds[0]}-s{sk:+05.1f}.png"
+        path = out / f"{names[0]}-s{sk:+05.1f}.png"
         img.save(path)
         tiles.append(img)
     cols = 3
     sheet = Image.new("RGB", (cols * W // 2, ((len(tiles) + cols - 1) // cols) * H // 2), "white")
     for k, t in enumerate(tiles):
         sheet.paste(t.resize((W // 2, H // 2)), ((k % cols) * W // 2, (k // cols) * H // 2))
-    sheet.save(out / f"{args.clouds[0]}-sheet.jpg", quality=85)
+    sheet.save(out / f"{names[0]}-sheet.jpg", quality=85)
     print(f"{len(tiles)} sections -> {out.relative_to(site.path)}")
 
 

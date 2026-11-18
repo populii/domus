@@ -59,7 +59,7 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 | `prep/` | A site's documents and photos into its data |
 | `importers/` | Places into site folders: New Zealand's (`nz/`), anywhere's (`osm`) |
 | `project/` | The site folder: the Site each part is handed (its folder, output, settings, format and grid) and its rasters, its settings' schema, formats and upgrades, trusted extensions, layer edits, `domus new` and the demo |
-| `app/` | On top of it all, the app: the command line (`cli`), the server (`serve`) and the viewer (`viewer/`, a page and its libraries). Nothing else in Domus imports it |
+| `app/` | On top of it all, the app: the command line (`cli`, with the video and prep steps' arguments in `video` and `prep`), the server (`serve`) and the viewer (`viewer/`, a page and its libraries). Nothing else in Domus imports it |
 | top level | The public API (`api`, `testing`), `create`, `shots` and the templates |
 
 The modules that moved there can still be imported by their old names (`domus.terrain`, `domus.video`, `domus.cli`,
@@ -94,9 +94,12 @@ trusts none, and the server never imports a site's code.
 
 ## The public API
 
-Site tools, a site's own tests and agents use `domus.api` and `domus.testing` ([docs/api.md](docs/api.md)): open a site,
-read its lot, house, layers, grid, ground and options, evaluate an option, build, check and export. What they offer changes only
-after a deprecation in an earlier release and a "For site projects" note in the changelog. The rest of the package is
+Site tools, a site's own tests and agents use `domus.api` and `domus.testing` ([docs/api.md](docs/api.md)): open or start
+a site, read its lot, house, layers, grid, ground and options, evaluate an option, and do what each command does, from
+fetching its data to building, checking and exporting it. Every command is a call into it: the command line reads the
+arguments and prints, and the server's jobs run the same commands. What they offer changes only after a deprecation in
+an earlier release and a "For site projects" note in the changelog; the video and prep steps (`site.video`,
+`site.prep`) are provisional until they're declared stable. The rest of the package is
 internal, so common can change behind the API without breaking a site's tools. A process can hold several sites:
 each part of Domus is handed the site it works on (`domus.project.site`), and each site keeps what Domus reads of it.
 
@@ -105,16 +108,16 @@ each part of Domus is handed the site it works on (`domus.project.site`), and ea
 The layout above came in seven phases, 0 to 6, each proved by identical builds of made-up and real sites before the
 next began: this layout and its made-up sites in CI, the public API, the settings schema and site formats, sites
 anywhere, the model as pure functions with builds that redo only what changed and trusted site extensions, the general
-tools that grew in real sites, and the package in folders. Beside them came a newer three.js in the viewer, `domus
-export` to glTF and IFC, and `domus shots`.
+tools that grew in real sites, and the package in folders. Then came four slices, proved the same way: a site's grid as
+a value of its own, with `domus.geo.crs` left as the grid maths; each part handed the site it works on; the app in
+`domus/app/`; and one route into Domus, every command a call into `domus.api` with its arguments read in one tree and
+its usage printed by `--help`. Beside them came a newer three.js in the viewer, `domus export` to glTF and IFC, and
+`domus shots`.
 
 What's next, each step proved the same way:
 
 | Work | What it brings |
 |---|---|
-| The site handed to each part | Every part that reads a site is given it; the command line and the server read the environment once. `domus.geo.crs` keeps only the grid maths and reads no site; a site's folder, output, settings and format live on its Site |
-| The `app` folder | The command line, the server and the viewer in `domus/app/`, which nothing else in Domus imports |
-| One route into Domus | Every command is a call into `domus.api`: the command line reads arguments and prints, and the server's endpoints call the same functions |
 | The old module names | They warn, then go before the repository is public |
 | One route for every change | A change to a site's data, from the viewer, an agent, a site tool or a check, goes one way: recorded with who, when and why, and undoable. A check's findings come as proposals a person accepts |
 | Observations | Readings from videos kept as data apart from the model, each set at every build against the element it checks by its id; accepting one changes the model through that route |

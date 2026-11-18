@@ -28,7 +28,6 @@ and a spacing found at either end of the range tried is marked, as the boards' m
 window or a door reads less clearly, or wrongly: its contrast is lower than its neighbours'.
 """
 
-import argparse
 import json
 
 import numpy as np
@@ -195,32 +194,21 @@ def band_line(row, above=None):
     return line
 
 
-def main(site):
-    """`domus prep boards`."""
-    ap = argparse.ArgumentParser(prog="domus prep boards", description=__doc__.split("\n\n")[0])
-    ap.add_argument("faces", nargs="*", help="faces in data/house/faces.json (all of them unless named)")
-    ap.add_argument("--along", type=float, nargs=2, metavar=("U0", "U1"),
-                    help="the part of the face to read, in metres along it (all of it unless given)")
-    ap.add_argument("--band", type=float, default=0.5, metavar="WIDTH",
-                    help="the bands' width along the face, in metres (0: one band)")
-    ap.add_argument("--heights", type=float, nargs=2, metavar=("Z0", "Z1"),
-                    help="the heights to read between (the photo's whole height unless given)")
-    ap.add_argument("--spacing", type=float, nargs=2, default=[0.08, 0.25], metavar=("MIN", "MAX"),
-                    help="the range of spacings to try, in metres")
-    ap.add_argument("--step", type=float, default=0.0002, help="metres between the spacings tried")
-    ap.add_argument("--above", type=float, metavar="HEIGHT", help="also give the first lap line at or above this height")
-    args = ap.parse_args()
+def measure_faces(site, names=(), along=None, band=0.5, heights=None, spacing=(0.08, 0.25), step=0.0002, above=None):
+    """`domus prep boards`: the weatherboards' spacing and lap lines' heights on the faces `names` in
+    data/house/faces.json (all of them unless named), read in bands `band` metres wide along the face (`along`,
+    from and to, all of it unless given) between `heights`, trying spacings in `spacing` (least and most) `step`
+    metres apart; with `above`, the first lap line at or above that height too."""
     index = faces(site)
-    for name in args.faces or sorted(index):
-        rows = measure(site, name, args.along, args.band, args.heights, args.spacing, args.step, index)
+    for name in list(names) or sorted(index):
+        rows = measure(site, name, along, band, heights, spacing, step, index)
         print(f"{name}: {len(rows)} band{'s' if len(rows) != 1 else ''} from {rows[0]['u'][0]:.2f} to "
               f"{rows[-1]['u'][1]:.2f} m along it")
         for row in rows:
-            print(band_line(row, args.above))
+            print(band_line(row, above))
         found = [r["spacing"] for r in rows if "spacing" in r]
         if len(found) > 1:
             print(f"{name}: spacing {np.median(found) * 1000:.1f} mm, the median of {len(found)} bands "
                   f"({min(found) * 1000:.1f} to {max(found) * 1000:.1f})")
         elif not found:
             print(f"{name}: no band has enough rows to read")
-    return 0
