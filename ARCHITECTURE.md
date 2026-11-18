@@ -51,7 +51,7 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 |---|---|
 | `geo/` | Grids and datums (`crs`: a site's `Grid`, made from its settings), rasters read on their own grids, GeoJSON, meshes, fits: none of it reads a site |
 | `model/` | The model's parts: the ground (`terrain` reads the site's, `tin` triangulates), the house and its looks, walls, small features, plants (`canopy` reads the site's, `vegetation` draws), drains |
-| `options/` | The wall options: `scheme` works them out, `design` reads a site's for it, `sketch` turns a drawing into one |
+| `options/` | The wall options: `scheme` works them out, `design` reads a site's for it, `sketch` turns a drawing into one, and `solids` builds one as closed solids with Manifold (its ground, walls, steps, cut and fill) |
 | `build/` | The build, and its cache |
 | `export/` | A built model for other software: glTF, and IFC through the optional IfcOpenShell |
 | `checks/` | `domus prep check`'s rules, and the viewer's checklist and video walk (`enrich`) |
@@ -74,8 +74,8 @@ with another default, and docs/site-format.md's tables are written from it. Impo
 the standard library, the pure layers (`geo`, the model's pure parts and the options' working out) free of the site
 and the app, and the app on top, where nothing imports it. The pure parts
 are the house and its looks, the walls and their looks, the small features, the plants (`vegetation`), the ground's
-triangulation (`tin`), the wall options' working out (`scheme`), the mesh helpers and the drains: the build, a workflow,
-reads the site (`terrain`, `canopy`, `design`) and hands them what they draw from.
+triangulation (`tin`), the wall options' working out (`scheme`) and their solids (`solids`), the mesh helpers and the
+drains: the build, a workflow, reads the site (`terrain`, `canopy`, `design`) and hands them what they draw from.
 
 ## The build
 

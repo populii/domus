@@ -17,6 +17,7 @@ dependencies = [
     "pycolmap>=4.2",
     "laspy[lazrs]>=2.7.0",
     "tomlkit>=0.13",
+    "manifold3d==3.5.5",
 ]
 
 [project.urls]
@@ -70,14 +71,14 @@ name = "The server uses the standard library only, and runs builds and jobs in p
 type = "forbidden"
 source_modules = ["domus.app.serve"]
 forbidden_modules = ["numpy", "scipy", "shapely", "rasterio", "pyproj", "PIL", "cv2", "av", "pycolmap", "laspy", "tomlkit",
-                     "domus.geo.crs", "domus.build", "domus.options.design", "domus.model.terrain"]
+                     "manifold3d", "domus.geo.crs", "domus.build", "domus.options.design", "domus.model.terrain"]
 
 [[tool.importlinter.contracts]]
 name = "The model's pure parts read no site and know nothing of the app"
 type = "forbidden"
 source_modules = ["domus.model.house", "domus.model.house_texture", "domus.geo.mesh", "domus.model.wall_looks",
                   "domus.model.walls", "domus.model.features", "domus.model.drains", "domus.model.tin",
-                  "domus.model.vegetation", "domus.options.scheme"]
+                  "domus.model.vegetation", "domus.options.scheme", "domus.options.solids"]
 forbidden_modules = ["domus.geo.crs", "domus.api", "domus.build", "domus.app", "domus.create",
                      "domus.options.design", "domus.options.sketch", "domus.project"]
 
@@ -86,7 +87,7 @@ name = "The pure layers read no site: geo, the model's pure parts and the option
 type = "forbidden"
 source_modules = ["domus.geo", "domus.model.house", "domus.model.house_texture", "domus.model.wall_looks", "domus.model.walls",
                   "domus.model.features", "domus.model.drains", "domus.model.tin", "domus.model.vegetation",
-                  "domus.options.scheme"]
+                  "domus.options.scheme", "domus.options.solids"]
 forbidden_modules = ["domus.project", "domus.api", "domus.testing", "domus.build", "domus.app", "domus.create",
                      "domus.shots", "domus.export", "domus.model.terrain", "domus.model.canopy", "domus.options.design",
                      "domus.options.sketch", "domus.checks", "domus.capture", "domus.prep", "domus.importers"]

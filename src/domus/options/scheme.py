@@ -42,6 +42,7 @@ from ..model.house import COMPASS
 from ..model.walls import bay_levels, line_normals
 
 LIDAR_TOLERANCE_M = 0.15     # height uncertainty of the existing ground, for the range on cut and fill
+BATTER_REACH_M = 6.0         # how far a batter reaches from a terrace's free edge
 PAVING_M = 0.2               # a paved terrace's paving, from its top to the soil: pavers on sand over a basecourse
 
 
@@ -380,26 +381,34 @@ class Design:
         # Batters from the free edges, out to where they meet the existing ground.
         cand = garden & ~inside_any
         if cand.any():
-            raise_to = np.full(len(e), -np.inf)
-            lower_to = np.full(len(e), np.inf)
-            ce, cn = e[cand], n[cand]
-            pts = shapely.points(ce, cn)
-            for t, free in zip(self.terraces, self.free, strict=True):
-                if free.is_empty:
-                    continue
-                d = shapely.distance(pts, free)
-                near = d < 6.0
-                if not near.any():
-                    continue
-                foot = shapely.get_coordinates(shapely.shortest_line(pts[near], free))[1::2]
-                ze = t.z(foot[:, 0], foot[:, 1])
-                idx = np.flatnonzero(cand)[near]
-                raise_to[idx] = np.maximum(raise_to[idx], ze - d[near] / t.batter)
-                lower_to[idx] = np.minimum(lower_to[idx], ze + d[near] / t.batter)
-            up = np.maximum(raise_to[cand] - h0[cand], 0)
-            down = np.maximum(h0[cand] - lower_to[cand], 0)
+            raise_to, lower_to = self.batters(e[cand], n[cand])
+            up = np.maximum(raise_to - h0[cand], 0)
+            down = np.maximum(h0[cand] - lower_to, 0)
             z[cand] = np.where(up >= down, h0[cand] + up, h0[cand] - down)
         return z.reshape(shape)
+
+    def batters(self, e, n):
+        """What the terraces' batters do at points (e, n) outside the terraces: the level they raise the ground to and
+        the level they cut it to, -inf and inf where none reaches. Each terrace's free edge raises a point to the
+        terrace's level at the edge's nearest point less the distance over the batter, and cuts it to that level plus
+        the distance, out to BATTER_REACH_M; the highest raise and the lowest cut are taken."""
+        e = np.ravel(np.asarray(e, float))
+        n = np.ravel(np.asarray(n, float))
+        raise_to = np.full(len(e), -np.inf)
+        lower_to = np.full(len(e), np.inf)
+        pts = shapely.points(e, n)
+        for t, free in zip(self.terraces, self.free, strict=True):
+            if free.is_empty:
+                continue
+            d = shapely.distance(pts, free)
+            near = d < BATTER_REACH_M
+            if not near.any():
+                continue
+            foot = shapely.get_coordinates(shapely.shortest_line(pts[near], free))[1::2]
+            ze = t.z(foot[:, 0], foot[:, 1])
+            raise_to[near] = np.maximum(raise_to[near], ze - d[near] / t.batter)
+            lower_to[near] = np.minimum(lower_to[near], ze + d[near] / t.batter)
+        return raise_to, lower_to
 
     def regraded(self, e, n, z=None, h0=None):
         """Where the option regrades the ground, at points (e, n): in its terraces and under its flights of steps,

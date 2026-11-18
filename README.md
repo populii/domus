@@ -472,7 +472,9 @@ follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 Domus stands on a lot of generous work: LINZ and its data partners (CC BY 4.0), OpenStreetMap contributors (ODbL), the
 Copernicus DEM (DLR e.V. and Airbus Defence and Space GmbH, provided under Copernicus by the European Union and ESA),
-three.js, three-mesh-bvh, camera-controls and three-viewport-gizmo (MIT) and COLMAP via pycolmap.
+three.js, three-mesh-bvh, camera-controls and three-viewport-gizmo (MIT), COLMAP via pycolmap, and Manifold via
+manifold3d (Apache-2.0), which carries Clipper2 (Boost Software License 1.0), nanobind (BSD 3-Clause) and oneTBB
+(Apache-2.0).
 
 Domus itself is under the [MIT licence](LICENSE): use it, change it and share it, as long as the licence notice goes
 with it. The bundled three.js, three-mesh-bvh, camera-controls and three-viewport-gizmo are MIT too, in the viewer's

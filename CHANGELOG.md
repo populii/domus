@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Domus depends on manifold3d 3.5.5 (Apache-2.0), the geometry library the build and the viewer are to share. A wall
+  option can be built as closed solids (`domus.options.solids`): its designed ground, its new walls and steps, and
+  the soil it cuts and fills, from the option's own shapes on the ground the build draws. They stand where the build's
+  rule puts the ground, to a few tenths of a millimetre on the made-up sites, and measure the cut and fill it counts,
+  to within a few thousandths of a per cent once that rule is read finely enough. Nothing a build writes changes yet.
+
 ## 2026.11.45
 
 - **For site projects:** every command is a call into the public API, so a site's tools can do what the commands do.
