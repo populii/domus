@@ -199,16 +199,22 @@ def context(site):
                           site.settings().get("services", {}), removed_limits(site))
 
 
-def evaluate(site, opt, existing=None, step=0.1, segments=None):
+def evaluate(site, opt, existing=None, step=0.1, segments=None, keep_solids=False):
     """Everything the viewer and the comparison table need about one option: scheme.evaluate on the site, its cut and
     fill measured as solids (domus.options.solids) with batters' cones of `segments` sides (solids.SEGMENTS unless
     given), so the table, the materials list and site.evaluate give the same. `segments=0` reads them on the grid
-    instead, for what needs the option worked out but not its soil."""
+    instead, for what needs the option worked out but not its soil. With `keep_solids` the solids come too, as
+    "solids", for the build to draw the option from."""
     ctx = context(site)
+    made = []
 
     def soil(d, walls):
         s = solids.option_solids(d, walls, ctx.existing_walls, segments=segments or solids.SEGMENTS)
+        made.append(s)
         return {**s.volumes(), "seal_m3": float(sum(p.volume() for what, part, p in s.named
                                                     if what == "fill" and part.startswith("seal")))}
 
-    return scheme.evaluate(opt, ctx, existing, step, None if segments == 0 else soil)
+    res = scheme.evaluate(opt, ctx, existing, step, None if segments == 0 else soil)
+    if keep_solids and made:
+        res["solids"] = made[0]
+    return res

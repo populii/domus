@@ -789,7 +789,8 @@ def test_a_paved_terrace_is_drawn_as_paving(site, at_site, tmp_path):
                         {"id": "bed", "kind": "planting", "level": low, "polygon_so": [[11, 6], [12, 6], [12, 12], [11, 12]]}]}
     cfg = s.settings()
     frame = build.Frame(build.site_origin(cfg, terrain.ground(s)))
-    layers, _, _ = build.option_layers(s, opt, design.evaluate(s, opt), frame, cfg["model"]["extent"], cfg, [])
+    layers, _, _ = build.option_layers(s, opt, design.evaluate(s, opt, keep_solids=True), frame, cfg["model"]["extent"], cfg,
+                                       [], existing_tin=terrain.drawn(s))
     skins = {x["id"]: x for x in layers if x.get("role") == "skin"}
     patio, bed = skins["option-paved-terrace-patio"], skins["option-paved-terrace-bed"]
     assert (patio["texture"], patio["colour"], patio["tint"]) == ("pavers.jpg", "#b9b2a5", None) and bed["texture"] == "bed.jpg"

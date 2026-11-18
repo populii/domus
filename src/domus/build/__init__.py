@@ -30,7 +30,7 @@ from ..geo import geojson, mesh
 from ..geo.georef import invert_affine
 from ..importers.nz import title
 from ..model import canopy, features, house, house_ifc, house_texture, terrain, vegetation, walls
-from ..options import design, scheme, sketch
+from ..options import design, scheme, sketch, solids
 from ..project import rasters
 from ..project.site import given
 from . import cache as buildcache
@@ -371,9 +371,11 @@ FILL_RGB = np.array([38, 104, 176], float)
 
 
 def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), existing_tin=None):
-    """Viewer layers, panel summary and drape textures for one wall option (domus.design). `lawns` are the
-    site's lawns (vegetation.lawns) and `existing_tin` the ground as it is: a lawn the option leaves alone stays
-    drawn, on the option's ground, and a new lawn within a metre of it is drawn as the same grass. Both take the
+    """Viewer layers, panel summary and drape textures for one wall option (domus.design), from `res`,
+    design.evaluate's with keep_solids: the option's ground is drawn from its solids. `lawns` are the site's lawns
+    (vegetation.lawns) and `existing_tin` the ground as it is (terrain.drawn), which the option's ground is round its
+    regrade area: a lawn the option leaves alone stays drawn, on the option's ground, and a new lawn within a metre of
+    it is drawn as the same grass. Both take the
     lawn's `<id>-plain.jpg`, its grass without its bare patches, which covers its `plain_box` (the caller sets
     that and paints it). The summary's `lawns_kept` lists the lawns drawn on the option's ground, and
     `lawn_pictures` the lawns whose grass a new lawn is drawn with."""
@@ -390,13 +392,25 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
              float(bb[:, 3].max() + 1.5)]
     patch = [round(v * 2) / 2 for v in patch]   # on the ground grid
     mask = [patch[0] + 0.6, patch[1] + 0.6, patch[2] - 0.6, patch[3] - 0.6]
-    kept = [w for w in existing_walls if w["id"] in res["keep_existing"]]
     wall_defs = [w["def"] for w in res["walls"]]
-    # The ground has a clean edge round the flights of steps, and runs level to the house's walls.
-    crisp = [(unary_union([st.poly for st in d.stairs]), False)] if d.stairs else []
-    if not design.house_outline(site).is_empty:
-        crisp.append((design.house_outline(site), True))
-    tin = terrain.build(patch, cfg["model"]["terrain_step_m"], wall_defs + kept, surface=d.drawn, edges=crisp, site=site)
+    # The ground with the option, as one solid over the patch: its designed pieces over the regrade area (domus.solids,
+    # as the point rule has it, to the millimetre) and the ground as it is round them. It's drawn as its top, with
+    # upright faces where the two meet at different heights, as where a batter runs into the regrade area's edge.
+    s = res["solids"]
+    whole = solids.option_ground(s, existing_tin.vertices, existing_tin.faces, patch, d.garden, d.stairs)
+    # Less what its walls, the walls it keeps and its flights take of it, where they stand on it (solids.walls_cut): over
+    # a wall as it's drawn (its capping course and posts too), down to the lower of its toe and its top, but for the
+    # soil over its body behind a shallower capping course; over a flight, down to the ramp under its treads. Under a
+    # wall's top the ground's upright faces on its outline lie in its faces, so they would show through them, and
+    # aren't drawn.
+    ground_model = terrain.ground(site)
+    kept = [w for w in existing_walls if w["id"] in res["keep_existing"]]
+    meshes = [(w["mesh"], w["def"]) for w in res["walls"]] + [(walls.mesh(w, ground_model)[0], w) for w in kept]
+    levels = [walls.wall_levels(w, ground_model) for _, w in meshes]
+    standing = [solids.standing(m.vertices, m.faces, pts, chain, toe, top, getattr(m, "soil_over", ()), getattr(m, "soil_over_m", 0.0))
+                for (m, _), (pts, _, chain, toe, top) in zip(meshes, levels, strict=True)]
+    cut = solids.walls_cut(standing, d.stairs, s.origin, float(whole.bounding_box()[5]) + 5.0)
+    tin = mesh.Mesh(*solids.surface(whole, s.origin, patch, cut, standing))
     uv = np.column_stack([(tin.vertices[:, 0] - e0) / (e1 - e0), (tin.vertices[:, 1] - n0) / (n1 - n0)])
     out = [{**mesh_json(tin, frame, "#9fb58a", f"{opt['short']}: designed ground"), "id": f"option-{oid}-ground",
             "role": "ground", "uv": r(uv, 5), **tag,
@@ -414,13 +428,9 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
             if not (site.output / picture).exists():
                 painters[picture](site.output / picture)
     # A lawn or a bed stops at the walls and steps that stand in it, and runs up to the house's wall. It meets a
-    # wall at the wall's own face and back, where the ground under it does (terrain.build), and keeps a little
+    # wall where the wall is drawn (its capping course and posts too), as the ground under it does, and keeps a little
     # clear of a flight of steps.
-    walled = []
-    for w in wall_defs:
-        line = terrain.wall_levels(w, site=site)[0]
-        walled.append(SPoly(np.vstack([line, mesh.offset_behind(line, walls.body_depth(w), w["side"])[::-1]])).buffer(0))
-    walled = unary_union(walled)
+    walled = unary_union([plan for plan, _, _ in standing[:len(res["walls"])]]) if res["walls"] else SPoly()
     stepped = unary_union([st.poly for st in d.stairs]).buffer(0.01)
     stand = unary_union([walled, stepped]) if wall_defs or d.stairs else None
     reach = d.garden.buffer(design.regrade_settings(site).get("house_margin_m", 0.6) + 0.03).intersection(design.title(site))
@@ -446,7 +456,7 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
         for q in polys:
             if q.geom_type != "Polygon" or q.area < 1e-3:
                 continue
-            v, f = drape(tin, q if host else skin_area(q, walled, beside))
+            v, f = solids.top(whole, s.origin, q if host else skin_area(q, walled, beside))
             m.add(v + [0, 0, 0 if host else 0.012], f)
         if not len(m):
             continue
@@ -483,11 +493,11 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
             here = here.difference(taken)
             here = here.buffer(-0.15).buffer(0.15).intersection(here)       # less the slivers a wall cuts off
         V, F = [], []
-        for part, ground_tin in ((here, tin), (lawn["poly"].difference(inside), existing_tin)):
+        for part, with_option in ((here, True), (lawn["poly"].difference(inside), False)):
             for q in getattr(part, "geoms", [part]):
-                if ground_tin is None or q.geom_type != "Polygon" or q.area < 1e-3:
+                if existing_tin is None or q.geom_type != "Polygon" or q.area < 1e-3:
                     continue
-                v, f = drape(ground_tin, q)
+                v, f = solids.top(whole, s.origin, q) if with_option else drape(existing_tin, q)
                 F.append(f + sum(len(x) for x in V))
                 V.append(v)
         if not V:
@@ -917,7 +927,7 @@ def add_options(b):
         cached = b.cache.get(f"option-{opt['id']}", k) if k else None
         if cached is None:
             before = buildcache.snapshot(b.site.output)
-            res = design.evaluate(b.site, opt)
+            res = design.evaluate(b.site, opt, keep_solids=True)
             opt_layers, opt_summary, opt_textures = option_layers(b.site, opt, res, frame, extent, cfg, wall_defs, lawns, b.tin)
             if k:
                 b.cache.put(f"option-{opt['id']}", k, [opt_layers, opt_summary, opt_textures], buildcache.written(b.site.output, before))

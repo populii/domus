@@ -147,6 +147,29 @@ def close_surface(vertices, faces, bottom):
     return solid(np.vstack([v, np.column_stack([v[:, :2], np.full(n, bottom)])]), np.vstack(tris))
 
 
+def close_between(vertices, faces, low):
+    """A height field of triangles (each facing up, none over another) closed into a solid down to the heights `low`
+    under its corners: its triangles on top, the same triangles at those heights under them, and its edge carried
+    straight down between the two. Each corner's `low` is under it."""
+    v = np.asarray(vertices, float)
+    f = np.asarray(faces, np.int64).reshape(-1, 3)
+    low = np.asarray(low, float)
+    a, b, c = (v[f[:, k], :2] for k in range(3))
+    f = f[(b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0]) > 0]   # with an area
+    f, source = _unpinch(f, len(v))
+    used = np.unique(f)
+    index = np.full(len(source), -1)
+    index[used] = np.arange(len(used))
+    f, v, low = index[f], v[source[used]], low[source[used]]
+    n = len(v)
+    tris = [f, f[:, ::-1] + n]
+    for loop in _edge_loops(f):
+        p = np.asarray(loop)
+        q = np.roll(p, -1)
+        tris += [np.column_stack([p, p + n, q + n]), np.column_stack([p, q + n, q])]
+    return solid(np.vstack([v, np.column_stack([v[:, :2], low])]), np.vstack(tris))
+
+
 def _border(f):
     """Each edge only one triangle has, in the direction it runs it: (from, to)."""
     edges = np.concatenate([f[:, [0, 1]], f[:, [1, 2]], f[:, [2, 0]]])
@@ -452,6 +475,204 @@ class Solids:
                 if hits:
                     out[i] = np.fmax(out[i], hits[0].position[2])
         return out.reshape(np.shape(e))
+
+
+def option_ground(s, vertices, faces, patch, garden, stairs=()):
+    """The ground with an option, as one solid over `patch` (E0, N0, E1, N1) about the solids' origin: its designed
+    pieces (Solids `s`) over the regrade area (`garden`), and outside it the ground as it is, given as the triangles
+    of the ground the build draws (`vertices` on the site's grid, `faces`), which reach past the patch. Under its
+    flights of steps (`stairs`, the design's) it's the ramp just under the treads, as the rule draws it
+    (Stair.under), where the soil under them is the ground the flight stands on (Stair.z): on a foot that slopes
+    across the flight, that's carried in level, and it would come through the lowest treads."""
+    o = s.origin
+    v = np.column_stack([np.asarray(vertices, float)[:, :2] - o, np.asarray(vertices, float)[:, 2]])
+    zb = float(np.floor(np.nanmin(v[:, 2]))) - 3.0
+    outside = section(box(*patch).difference(garden), o)
+    ground = close_surface(v, faces, zb) ^ prism(outside, zb - 1.0, float(np.nanmax(v[:, 2])) + 10.0)
+    flights = list(reversed(list(stairs)))          # as option_solids numbers them: the last flight a point is under
+    pieces = []
+    for what, part, piece in s.named:
+        if what != "designed":
+            continue
+        if part.startswith("steps ") and flights:
+            st = flights[int(part.split()[1])]
+            lo = piece.bounding_box()
+            a = st.a - o
+            piece = split_by_plane(prism(piece.project(), lo[2], lo[5] + 1.0), (a[0], a[1], st.foot - 0.03),
+                                   st.along * st.rise / st.length)[0]
+        pieces.append(piece)
+    return union([*pieces, ground])
+
+
+def _faces(m, origin, keep):
+    """A solid's triangles that `keep` (given each one's corners and its normal's height) chooses, as (vertices on the
+    site's grid, faces), the vertices only those they use."""
+    mesh = m.to_mesh64()
+    v = np.asarray(mesh.vert_properties, float)[:, :3]
+    f = np.asarray(mesh.tri_verts, np.int64).reshape(-1, 3)
+    corners = v[f]
+    n = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    nz = n[:, 2] / np.maximum(np.linalg.norm(n, axis=1), 1e-300)
+    f = f[keep(corners, nz)]
+    used, f = np.unique(f, return_inverse=True)
+    return np.column_stack([v[used, :2] + origin, v[used, 2]]), f.reshape(-1, 3)
+
+
+UPRIGHT = 1e-6      # a face whose normal rises less than this is upright: the ground's own slopes are far from it
+
+
+def surface(ground, origin, patch, cut=None, walls=()):
+    """The ground with an option (option_ground) as the viewer draws it: its top, and the upright faces where two of its
+    parts meet at different heights, as at the regrade area's edge where a batter runs into it, but not its bottom or
+    the patch's sides. (vertices on the site's grid, faces). Less `cut` (a solid about the origin: what stands on the
+    ground and covers it, as the walls and the flights do, walls_cut), with no upright face on a wall's drawn outline
+    under its head (`walls`, as walls_cut takes them): that lies in the wall's faces and would show through them. Over
+    its head it's the ground's own, where that stands over the wall beside it."""
+    x0, y0, x1, y1 = (patch[0] - origin[0], patch[1] - origin[1], patch[2] - origin[0], patch[3] - origin[1])
+    if cut is not None and not cut.is_empty():
+        ground = ground - cut
+
+    def keep(c, nz):
+        on_side = np.zeros(len(c), bool)
+        for axis, at in ((0, x0), (0, x1), (1, y0), (1, y1)):
+            on_side |= np.all(np.abs(c[:, :, axis] - at) < 1e-6, axis=1)
+        upright = np.abs(nz) <= UPRIGHT                 # as near upright as the arithmetic leaves a face cut upright
+        k = np.flatnonzero(upright & ~on_side)
+        mid = c[k].mean(axis=1)
+        e, n = mid[:, 0] + origin[0], mid[:, 1] + origin[1]
+        for plan, head, _ in walls:
+            near = shapely.distance(plan.boundary, shapely.points(e, n)) < 1e-5
+            if near.any():
+                on_side[k[near][mid[near, 2] < head(e[near], n[near])]] = True
+        return (nz > UPRIGHT) | (upright & ~on_side)
+    return _faces(ground, origin, keep)
+
+
+def _not_upright(vertices, faces):
+    """A mesh's triangles that aren't upright, as their corners (on the site's grid), and their normals."""
+    v = np.asarray(vertices, float)
+    t = v[np.asarray(faces, np.int64).reshape(-1, 3)]
+    n = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+    flat = np.abs(n[:, 2]) > 1e-6 * np.maximum(np.linalg.norm(n, axis=1), 1e-300)
+    return t[flat], n[flat]
+
+
+def footprint(vertices, faces):
+    """The plan a mesh covers from above (shapely, on the site's grid): its triangles that aren't upright, as one."""
+    t, _ = _not_upright(vertices, faces)
+    plan = shapely.unary_union(shapely.polygons(t[:, :, :2]))
+    return shapely.make_valid(plan).buffer(1e-6) if not plan.is_empty else plan
+
+
+def over(plan, origin, levels):
+    """Solids over `plan` (shapely, on the site's grid), about `origin`: one between each two of `levels` in turn, the
+    lowest first, each a height at points (e, n) or one height. They're worked out on the same triangles, constrained
+    to the plan's outline with a corner every 5 cm along it, where the heights are read, so each meets the next."""
+    pieces = [[] for _ in levels[1:]]
+    for part in shapely.get_parts(plan):
+        if part.geom_type != "Polygon" or part.area < 1e-9:
+            continue
+        dense = shapely.segmentize(part, 0.05)
+        tris = np.array([np.asarray(t.exterior.coords)[:3, :2] for t in shapely.get_parts(shapely.constrained_delaunay_triangles(dense))])
+        if not len(tris):
+            continue
+        a, b, c = tris[:, 0], tris[:, 1], tris[:, 2]
+        cw = (b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0]) < 0
+        tris[cw] = tris[cw][:, [0, 2, 1]]
+        xy, faces = np.unique(tris.reshape(-1, 2), axis=0, return_inverse=True)
+        z = [np.broadcast_to(np.asarray(h(xy[:, 0], xy[:, 1]) if callable(h) else h, float), len(xy)) for h in levels]
+        for k, (lo, hi) in enumerate(itertools.pairwise(z)):
+            pieces[k].append(close_between(np.column_stack([xy - origin, hi]), faces.reshape(-1, 3), lo))
+    return [union(p) for p in pieces]
+
+
+CUT_SLAB_M = 0.001      # the least a wall's cut takes of the ground under its top (walls_cut)
+
+
+def _highest(t, n):
+    """The highest of triangles (corners on the site's grid, none upright, and their normals) within a hair of points
+    (e, n), on their planes: a height at each point, NaN where none is."""
+    tree = shapely.STRtree(shapely.polygons(t[:, :, :2]))
+
+    def at(e, n_):
+        e, n_ = np.asarray(e, float), np.asarray(n_, float)
+        i, k = tree.query(shapely.points(e, n_), predicate="dwithin", distance=1e-5)
+        z = t[k, 0, 2] - (n[k, 0] * (e[i] - t[k, 0, 0]) + n[k, 1] * (n_[i] - t[k, 0, 1])) / n[k, 2]
+        out = np.full(len(e), np.nan)
+        np.fmax.at(out, i, z)
+        return out
+    return at
+
+
+def standing(vertices, faces, line, chain, toe, top, soil_over=(), soil_over_m=0.0):
+    """A wall as the ground with an option meets it, from its drawn mesh and its levels as walls.wall_levels gives
+    them: (its drawn plan, as footprint gives it; its head, the top of its mesh as it's drawn, its capping course and
+    posts included; the parts of its plan, each with its floor), the head and each floor a height at points (e, n) on
+    the site's grid. surface takes the plan and the head, walls_cut the head and the parts. A part's floor is the
+    lower of the wall's toe and its top at the nearest point of its line, but where the soil covers the wall as it's
+    built
+    (`soil_over`, the faces it covers, and `soil_over_m`, how far over them it comes: the body's top behind a
+    shallower capping course, walls.unit_mesh), it's that far over them: the ground stays there."""
+    line = shapely.LineString(np.asarray(line, float)[:, :2])
+    chain, top = np.asarray(chain, float), np.asarray(top, float)
+    low = np.minimum(np.asarray(toe, float), top)
+    f = np.asarray(faces, np.int64).reshape(-1, 3)
+    covered = np.zeros(len(f), bool)
+    covered[np.asarray(list(soil_over), np.int64)] = True
+    t, n = _not_upright(vertices, f)
+    keep = np.abs(n[:, 2]) > 1e-12
+    highest = _highest(t[keep], n[keep])
+
+    def along(levels, e, n_):
+        return np.interp(shapely.line_locate_point(line, shapely.points(e, n_)), chain, levels)
+
+    def head(e, n_):
+        z = highest(e, n_)
+        return np.where(np.isfinite(z), z, along(top, e, n_))
+
+    def floor(e, n_):
+        return along(low, e, n_)
+    plan = footprint(vertices, f)
+    if not covered.any():
+        return plan, head, [(plan, floor)]
+    tc, nc = _not_upright(vertices, f[covered])
+    soil = _highest(tc, nc)
+
+    def under_soil(e, n_):
+        z = soil(e, n_)
+        return np.where(np.isfinite(z), z, along(top, e, n_) - soil_over_m) + soil_over_m
+    buried = footprint(vertices, f[covered])
+    return plan, head, [(plan.difference(buried), floor), (buried, under_soil)]
+
+
+def walls_cut(walls, stairs, origin, ceiling):
+    """What the walls and flights that stand on an option's ground take of it, as one solid about `origin`. Over each
+    part of each wall's drawn plan (`walls`, as standing gives them), everything above the part's floor, so nothing of
+    the ground stands over a wall, its capping course and its posts included, while under a capping course standing
+    out from its face the ground stays at the toe, and where the soil covers the wall as it's built it stays. It's
+    taken in two parts, up to the wall's head, the top of it as it's drawn, and above it, so the faces it cuts in the
+    ground stop there: under it they lie in the wall's faces (surface leaves them out), and over it they're the
+    ground's own, where that stands over the wall beside it. Over each flight (`stairs`, the design's), everything
+    above the ramp just under its treads, inside the regrade area or out of it."""
+    parts = []
+    for _, head, pieces in walls:
+        for plan, floor in pieces:
+            def split(e, n, head=head, floor=floor):
+                return np.maximum(head(e, n), floor(e, n) + CUT_SLAB_M)
+            parts += over(plan, origin, [floor, split, ceiling])
+    for st in stairs:
+        a = st.a - origin
+        column = prism(section(st.poly.buffer(EDGE_M, join_style="mitre"), origin), st.foot - 5.0, ceiling)
+        parts.append(split_by_plane(column, (a[0], a[1], st.foot - 0.03), st.along * st.rise / st.length)[1])
+    return union(parts) if parts else mf.Manifold()
+
+
+def top(solid, origin, plan):
+    """The top of a solid within `plan` (a shapely plan on the site's grid), as (vertices on the site's grid, faces):
+    a lawn or a bed laid on the ground with an option (option_ground), just where its outline says."""
+    lo = solid.bounding_box()
+    piece = solid ^ prism(section(plan, origin), lo[2] - 1.0, lo[5] + 1.0)
+    return _faces(piece, origin, lambda c, nz: nz > 1e-9)
 
 
 def ground_triangles(existing, window, step=0.25):

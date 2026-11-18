@@ -175,6 +175,22 @@ def test_the_twin_check_finds_what_the_grid_doesnt_explain(tmp_path):
     assert made_up_sites.twin(demo, twin_build(tmp_path / "e", 100000.0, 100000.0, picture=(200, 30, 30))) != []
 
 
+def test_a_surface_triangulated_its_own_way_is_compared_as_a_surface(tmp_path):
+    """The same flat square drawn as two triangles, and as four about a corner of its own in its middle, as a solid's
+    top can be drawn from coordinates a hair apart: the same surface. With that middle corner 5 mm up, it isn't."""
+    def fan(root, rise):
+        model = json.loads((root / "model.json").read_text(encoding="utf-8"))
+        model["layers"][0]["positions"] = [0, 0, 0, 1, 0, 0, 1, 0, -1, 0, 0, -1, 0.5, rise, -0.5]
+        model["layers"][0]["indices"] = [0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4]
+        (root / "model.json").write_text(json.dumps(model), encoding="utf-8")
+        return root
+
+    flat = twin_build(tmp_path / "flat", 1500000.0, 5500000.0, top=0.0)
+    assert made_up_sites.twin(flat, fan(twin_build(tmp_path / "a", 100000.0, 100000.0, top=0.0), 0.0)) == []
+    off = made_up_sites.twin(flat, fan(twin_build(tmp_path / "b", 100000.0, 100000.0, top=0.0), 0.005))
+    assert any("surface is up to" in line for line in off)
+
+
 def test_the_report_holds_the_abroad_site_to_the_demo(tmp_path, capsys):
     for name in ("demo", "abroad"):
         (tmp_path / f"base-{name}.status").write_text("failed" if name == "abroad" else "ok", encoding="utf-8")

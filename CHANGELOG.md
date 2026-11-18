@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** an option's ground is drawn from its solids (`domus.options.solids`), the ones its cut and
+  fill are measured from: over its regrade area it stands just where the option puts it, to within a millimetre. It
+  was drawn from heights read on the terrain's grid and laid between them, and on the made-up sites it was off by up
+  to 0.14 m where it shows on most options, and 0.52 m on one. Its lawns, beds and paving lie on it, and so do the
+  lawns it keeps. Round its regrade area an option leaves the ground exactly as the site draws it. Beside the house
+  the old ground ran level to the house's walls and stood 2 cm off the site's own, and at the regrade area's edge it
+  smeared a batter's step across a grid cell, up to 0.16 m off; that step is now an upright face at the area's edge.
+  The numbers don't change.
+- **For site projects:** an option's ground stops at its walls and steps as they're drawn. Under a wall, its capping
+  course and its posts too, it's down at the wall's toe, or at its top where that's lower, so nothing of it comes
+  through a cap that stands out from the face or a post at the wall's end; behind a capping course shallower than
+  the wall it stays over the body's top, where the soil goes as the wall is built. Under a flight, in the regrade
+  area or out of it, it's at the ramp just under the treads, on a foot that slopes across the flight too. Lawns,
+  beds and paving stop where the walls are drawn. Where the ground stands over a wall's top beside it, its edge is
+  drawn from the top up.
+- `domus prep check through` can now find ground standing over a tread's edge beside a flight where an option's
+  terrace stands higher than the tread: the ground drawn before sloped down to the flight there, which the option
+  doesn't.
+
 ## 2026.11.59
 
 - **For site projects:** a site with ground fixes may see its ground inside them change once more, a little. Where

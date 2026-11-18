@@ -627,7 +627,7 @@ def heights(positions, indices, box, step=0.05):
 
 
 def same_surface(a, b, path):
-    """Two meshes with the same vertices but other triangles: the same surface within TWIN_M, where both have one."""
+    """Two meshes triangulated each its own way: the same surface within TWIN_M, where both have one."""
     import numpy as np
 
     pa, pb = np.asarray(a["positions"], float).reshape(-1, 3), np.asarray(b["positions"], float).reshape(-1, 3)
@@ -651,8 +651,10 @@ def twin_diffs(a, b, swap, path=""):
     `swap` maps the abroad site's own words (its grid's and datum's names, its title) to the demo's."""
     if isinstance(a, dict) and isinstance(b, dict):
         if "indices" in a and "positions" in a and a.get("indices") != b.get("indices"):
+            # Triangulated another way, as a solid's top can be from coordinates a hair apart: compared as surfaces,
+            # with its corners and their picture's coordinates going with its triangles
             yield from same_surface(a, b, path)
-            a, b = ({k: v for k, v in x.items() if k != "indices"} for x in (a, b))
+            a, b = ({k: v for k, v in x.items() if k not in ("indices", "positions", "uv")} for x in (a, b))
         for k in sorted(set(a) | set(b)):
             if k not in a or k not in b:
                 yield f"{path}/{k}: only in {'the demo' if k in a else 'abroad'}"

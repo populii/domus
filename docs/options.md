@@ -271,11 +271,17 @@ build paints.
 - Each wall's top, toe, exposed and retained heights, length and face area. Behind a wall the ground is
   the designed ground it holds, below the wall's top where the wall stands above it.
 - Each flight's risers and goings, flagged when they are steep (a riser over 0.19 m or a going under 0.25 m).
-- Clean edges in the drawn ground: at each wall, round each flight of steps, and where the ground meets the
-  house. The ground keeps its level up to the foot of a wall's face and up to its back, and a lawn, a bed or
-  paving runs right up to the wall, and to another of the scheme's lawns, beds or paving that lies against it. It stops at the
-  walls and steps that stand in it, and the ground runs on under a bay window. Nothing of the ground should
-  show through a wall or a tread.
+- The drawn ground: over the regrade area it's drawn from the option's solids, just where the option puts it, so it
+  has a clean edge at each wall and round each flight of steps, and keeps its level up to the foot of a wall's face
+  and up to its back. Under a wall as it's drawn, its capping course and posts too, it's down at the wall's toe (or
+  its top, where that's lower), as the wall covers it from its foot up; behind a capping course shallower than the
+  wall it stays over the body's top, where the soil goes as it's built, and where it stands over a wall's top beside
+  it, its edge shows from the top up. Under a flight, inside the regrade area or out of it, it's at the ramp just
+  under the treads. A lawn, a bed or paving lies on it, runs right up to the wall and to another of the scheme's
+  lawns, beds or paving that lies against it, and stops at the walls, as they're drawn, and the steps that stand in
+  it. Round the regrade area, beside the house too, the ground is drawn as the site draws it without the option, and
+  where a batter meets the area's edge above or below that ground, an upright face joins the two. Nothing of the
+  ground should show through a wall or a tread.
 - The lawns that are there (`kind` lawn in `data/site/trees.geojson`): where an option leaves a lawn alone it
   stays drawn, on the option's ground, less the option's own lawns and beds, its walls and steps, and
   any sliver under 0.3 m wide that a wall cuts off. It is drawn as its grass without the bare patches it has
