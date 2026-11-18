@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.59
 
 - **For site projects:** a site with ground fixes may see its ground inside them change once more, a little. Where
   four points lie on one circle, to within 10 micrometres, as the ground model's grid cells do and a regular
