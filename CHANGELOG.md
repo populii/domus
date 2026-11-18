@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.52
 
 - **For site projects:** observations: readings from videos kept as data apart from the model, in
   `data/observations.json` ([docs/observations.md](docs/observations.md)). Each says what was read (a mark in a
