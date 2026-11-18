@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.64
 
 - **For site projects:** two ground-fix points at one place, within 1 mm of each other in plan, from any features
   in `data/site/ground-fixes.geojson` (a line's own points too), keep the later in the file, in the fixed ground
