@@ -75,7 +75,8 @@ PNG = b"\x89PNG\r\n\x1a\n"
 PNG_IMAGE = {b"IHDR", b"PLTE", b"tRNS", b"IDAT", b"IEND"}      # the chunks that make up the image itself
 CONTENT_TYPES = {".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json",
                  ".geojson": "application/geo+json", ".html": "text/html", ".css": "text/css", ".png": "image/png",
-                 ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml"}
+                 ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml",
+                 ".wasm": "application/wasm"}
 
 # Run once the viewer has the model: the model takes the whole window.
 SETUP = """async () => {

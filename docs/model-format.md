@@ -25,6 +25,7 @@ Positions are in viewer metres: x east of the site's origin, y up from its heigh
 | `views` | The site's own view buttons: `{name: {pos, target}}` in viewer metres |
 | `snap` | Lines and points the drawing tools snap to |
 | `enrich` | The "Improve this model" checklist and the suggested walk, unless the site turns them off |
+| `regrade` | What the viewer works a sketch out with while it's drawn, as the build works an option out, on the `ground` layer: `area`, the regrade area's rings (x and z, even-odd: the house is a hole); `walls`, each existing wall's `id`, `line`, `face` and `back` (x and z), and along it `chain` (metres from its first point) and `toe` (the soil's level under it, y: the wall itself isn't soil); `defaults` (`upstand_m`, `batter`, `thickness_m`, `paving_m`, from `options/_site.toml`); and `rules`, the lengths the options' rules take (`reach_m`, how far a batter reaches; `held_m`, how far past a wall's back a terrace's edge is held; `wall_step_m`, `toe_probe_m` and `back_probe_m`, how a wall's levels are read; `sketch_back_m`, how deep the level ground behind a sketched wall is). Only on a site whose options have a `[regrade]` |
 
 ## Layers
 

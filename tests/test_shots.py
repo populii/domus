@@ -167,6 +167,8 @@ def test_the_server_gives_the_viewer_and_the_model_and_nothing_else(tmp_path):
         assert get(port, "/data/model.json")[:2] == (200, b'{"title": "made up"}')
         status, _, kind = get(port, "/vendor/three/three.module.js")
         assert status == 200 and kind == "text/javascript"
+        status, body, kind = get(port, "/vendor/manifold-3d/manifold.wasm")
+        assert status == 200 and kind == "application/wasm" and body[:4] == b"\0asm"
         for path in ("/healthz", "/api/db/sketches/current", "/vendor/", "/data/../secret.txt", "/data/..%2fsecret.txt",
                      "/../secret.txt"):
             assert get(port, path)[0] == 404, path

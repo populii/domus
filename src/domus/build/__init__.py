@@ -30,7 +30,7 @@ from ..geo import geojson, mesh
 from ..geo.georef import invert_affine
 from ..importers.nz import title
 from ..model import canopy, features, house, house_texture, terrain, vegetation, walls
-from ..options import design, scheme
+from ..options import design, scheme, sketch
 from ..project import rasters
 from ..project.site import given
 from . import cache as buildcache
@@ -792,6 +792,34 @@ def add_options(b):
                                    "frame": design.settings(b.site)["frame"]}
 
 
+def add_regrade(b):
+    """What the viewer needs to work a sketch out as the build works an option out, for its preview while you draw:
+    the regrade area, each existing wall's face and back and the soil's level along it (its toe: the wall itself isn't
+    soil), the options' defaults and the lengths their rules take. The ground they're worked out on is the ground
+    layer, which the viewer has already. In viewer metres; nothing on a site with no [regrade] for its options."""
+    if not design.options_site_path(b.site).exists() or "regrade" not in design.settings(b.site):
+        return
+    e0, n0, h0 = b.frame.e0, b.frame.n0, b.frame.h0
+
+    def plan(pts):
+        return [[round(float(e - e0), 3), round(float(n0 - n), 3)] for e, n in np.asarray(pts, float)[:, :2]]
+
+    rings = [plan(np.asarray(ring.coords)[:-1]) for part in shapely.get_parts(design.regrade_area(b.site))
+             if part.geom_type == "Polygon" for ring in (part.exterior, *part.interiors)]
+    ground = terrain.existing(b.site)
+    walls_out = []
+    for w in design.existing_walls(b.site):
+        face, back, chain, toe = scheme.wall_edges(w, ground)
+        walls_out.append({"id": w["id"], "line": plan(w["line"]), "face": plan(face), "back": plan(back),
+                          "chain": r(chain), "toe": r(np.asarray(toe, float) - h0)})
+    defaults = design.settings(b.site)["defaults"]
+    b.regrade = {"area": rings, "walls": walls_out,
+                 "defaults": {k: defaults[k] for k in ("upstand_m", "batter", "thickness_m", "paving_m")},
+                 "rules": {"reach_m": scheme.BATTER_REACH_M, "held_m": scheme.HELD_M, "wall_step_m": scheme.WALL_STEP_M,
+                           "toe_probe_m": scheme.TOE_PROBE_M, "back_probe_m": scheme.BACK_PROBE_M,
+                           "sketch_back_m": sketch.DEFAULT_BACK_M}}
+
+
 def shared_textures(site, layers):
     """The planted beds' and the grass's tiles, which options' layers share: an option taken from the last build
     doesn't paint them, so they're painted here if a layer uses one and it isn't there."""
@@ -1105,6 +1133,7 @@ def main(site, fresh=False, say=print):
     add_ifc(b)
     add_walls(b)
     add_options(b)
+    add_regrade(b)
     add_services(b)
     add_marks(b)
     add_vegetation(b)
@@ -1172,6 +1201,7 @@ def write_model(b):
         "views": cfg.get("views", {}),
         "snap": snap_targets(b.site, b.origin),
         **({"enrich": b.enrich} if b.enrich else {}),
+        **({"regrade": b.regrade} if getattr(b, "regrade", None) else {}),
     }
     (b.site.output / "model.json").write_text(json.dumps(model, separators=(",", ":")), encoding="utf-8")
     (b.site.output / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

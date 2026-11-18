@@ -57,6 +57,35 @@ def test_the_model_says_its_format(built):
     assert model(built)["format"] == MODEL_FORMAT
 
 
+def test_the_model_carries_what_a_sketch_is_worked_out_with(built, project):
+    """`regrade`, for the viewer to work a sketch out while it's drawn: the regrade area, each existing wall's face,
+    back and toe (the soil's level under it), the options' defaults and their rules' lengths, in viewer metres. The
+    ground it's worked out on is the ground layer."""
+    import pytest
+    from shapely.geometry import Polygon
+
+    from domus import design, terrain
+    from domus.options import scheme, sketch
+
+    m = model(built)
+    regrade = m["regrade"]
+    e0, n0, h0 = m["origin"]
+    outer, *holes = (Polygon([(e0 + x, n0 - z) for x, z in ring]) for ring in regrade["area"])
+    assert outer.area - sum(h.area for h in holes) == pytest.approx(design.regrade_area(project).area, rel=1e-5)
+    old = design.existing_walls(project)
+    face, back, chain, toe = scheme.wall_edges(old[0], terrain.existing(project))
+    wall = regrade["walls"][0]
+    assert [w["id"] for w in regrade["walls"]] == [w["id"] for w in old]
+    assert np.allclose([[e0 + x, n0 - z] for x, z in wall["face"]], face, atol=6e-4)
+    assert np.allclose([[e0 + x, n0 - z] for x, z in wall["back"]], back, atol=6e-4)
+    assert np.allclose(np.asarray(wall["toe"]) + h0, toe, atol=6e-4) and np.allclose(wall["chain"], chain, atol=6e-4)
+    defaults = design.settings(project)["defaults"]
+    assert regrade["defaults"] == {k: defaults[k] for k in ("upstand_m", "batter", "thickness_m", "paving_m")}
+    assert regrade["rules"] == {"reach_m": scheme.BATTER_REACH_M, "held_m": scheme.HELD_M, "wall_step_m": scheme.WALL_STEP_M,
+                                "toe_probe_m": scheme.TOE_PROBE_M, "back_probe_m": scheme.BACK_PROBE_M,
+                                "sketch_back_m": sketch.DEFAULT_BACK_M}
+
+
 def test_a_site_s_own_layers_are_placed_as_they_are():
     import pytest
 

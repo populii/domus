@@ -43,6 +43,10 @@ from ..model.walls import bay_levels, line_normals
 
 LIDAR_TOLERANCE_M = 0.15     # height uncertainty of the existing ground, for the range on cut and fill
 BATTER_REACH_M = 6.0         # how far a batter reaches from a terrace's free edge
+HELD_M = 0.15                # a terrace's edge is held, and gets no batter, this far past a wall's back or round steps
+WALL_STEP_M = 0.25           # a new wall's levels are worked out this often along it
+TOE_PROBE_M = 0.35           # its toe is the designed ground this far in front of its face
+BACK_PROBE_M = 0.1           # and the ground it holds this far behind its back
 PAVING_M = 0.2               # a paved terrace's paving, from its top to the soil: pavers on sand over a basecourse
 
 
@@ -329,8 +333,8 @@ class Design:
         self._garden_prepared = False
         # Terrace edges along a wall or a flight of steps are held by it; the rest are free and get a batter.
         self.free = [t.poly.exterior for t in self.terraces]
-        holds = [LineString(w["line"]).buffer(w["thickness"] + 0.15) for w in self.walls]
-        holds += [st.poly.buffer(0.15) for st in self.stairs]
+        holds = [LineString(w["line"]).buffer(w["thickness"] + HELD_M) for w in self.walls]
+        holds += [st.poly.buffer(HELD_M) for st in self.stairs]
         if holds:
             held = unary_union(holds)
             self.free = [edge.difference(held) for edge in self.free]
@@ -444,7 +448,7 @@ class Design:
         return out.reshape(shape)
 
     # --- walls -------------------------------------------------------------------------------
-    def wall_levels(self, spacing=0.25):
+    def wall_levels(self, spacing=WALL_STEP_M):
         """Each wall with `side`, `top`/`toe` (and their chains) from the designed ground: the top
         from the ground just behind it plus its upstand, the toe from the ground 0.35 m in front."""
         out = []
@@ -457,8 +461,8 @@ class Design:
                 right = self.sample(*(pts[:, :2] - nrm * 0.8).T)
                 w["side"] = 1 if np.nanmean(left - right) > 0 else -1
             nrm = nrm * w["side"]
-            back = pts[:, :2] + nrm * (w["thickness"] + 0.1)
-            front = pts[:, :2] - nrm * 0.35
+            back = pts[:, :2] + nrm * (w["thickness"] + BACK_PROBE_M)
+            front = pts[:, :2] - nrm * TOE_PROBE_M
             retained = self.sample(back[:, 0], back[:, 1])
             toe = self.sample(front[:, 0], front[:, 1])
             for st in self.stairs:      # beside a flight on a sloping foot: the ground under it at the wall's own face
@@ -497,22 +501,28 @@ def grid_in(poly, step):
     return E[m], N[m]
 
 
-def wall_body(w, ground=None):
-    """A wall's own plan, from its face to its back, and its toe along it: (plan, line, chain, toe). A new wall's
-    (levelled by Design.wall_levels) is `thickness` deep behind its face line, on its retained `side`. An existing
-    wall's (a domus.walls dict) is where the build draws it into `ground` (domus.tin.build): from its face's foot, half
-    any batter in front of its line, to its back, and its toe is `ground`'s at the foot. The plan reaches a micrometre
-    past its outline, so a point on the outline is the wall's on any grid, however its sums round."""
+def wall_edges(w, ground=None):
+    """A wall's face and back, and its toe along it: (face, back, chain, toe), the toe at each distance `chain` along
+    its line. A new wall's (levelled by Design.wall_levels) face is its line and its back `thickness` behind it, on its
+    retained `side`; its toe is known where Design.wall_levels sampled it. An existing wall's (a domus.walls dict) is
+    where the build draws it into `ground` (domus.tin.build): its face at the foot, half any batter in front of its
+    line, a point for each of its samples, and its toe `ground`'s there."""
     line = np.asarray(w["line"], float)[:, :2]
     if ground is None:
-        face, back, chain, toe = line, offset_behind(line, w["thickness"], w["side"]), w["toe_chain"], w["toe"]
-    else:
-        pts, nrm, chain, _, _ = walls_mod.wall_levels(w, ground)
-        half = 0.5 * w.get("batter", 0.0)
-        face = pts - nrm * half
-        back = pts + nrm * half + offset_behind(pts, w["thickness"], w["side"]) - pts
-        toe = ground.sample(face[:, 0], face[:, 1])
-    return Polygon(np.vstack([face, back[::-1]])).buffer(1e-6), LineString(line), chain, toe
+        return line, offset_behind(line, w["thickness"], w["side"]), w["toe_chain"], w["toe"]
+    pts, nrm, chain, _, _ = walls_mod.wall_levels(w, ground)
+    half = 0.5 * w.get("batter", 0.0)
+    face = pts - nrm * half
+    back = pts + nrm * half + offset_behind(pts, w["thickness"], w["side"]) - pts
+    return face, back, chain, ground.sample(face[:, 0], face[:, 1])
+
+
+def wall_body(w, ground=None):
+    """A wall's own plan, from its face to its back, and its toe along it: (plan, line, chain, toe), from wall_edges.
+    The plan reaches a micrometre past its outline, so a point on the outline is the wall's on any grid, however its
+    sums round."""
+    face, back, chain, toe = wall_edges(w, ground)
+    return Polygon(np.vstack([face, back[::-1]])).buffer(1e-6), LineString(np.asarray(w["line"], float)[:, :2]), chain, toe
 
 
 def _on_toes(bodies, e, n, z):

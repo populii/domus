@@ -175,13 +175,16 @@ KEEP_FREE = 1024 * 1024 * 1024      # an upload that would leave less room than 
 HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "same-origin",
-    # Nothing loads from, or goes to, another host, and no other site can frame the app.
-    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+    # Nothing loads from, or goes to, another host, and no other site can frame the app. 'wasm-unsafe-eval' lets the
+    # viewer compile its own WebAssembly (Manifold, in vendor/manifold-3d): it allows no eval of script.
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; "
+                               "style-src 'self' 'unsafe-inline'; "
                                "img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' data: blob:; "
                                "worker-src 'self' blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
 }
-# Text files this big or bigger go out gzipped to a browser that takes it: the demo's model.json shrinks to a quarter.
-GZIP_TYPES = {".css", ".geojson", ".html", ".js", ".json", ".mjs", ".svg"}
+# Text files this big or bigger go out gzipped to a browser that takes it: the demo's model.json shrinks to a quarter,
+# and Manifold's WebAssembly to two fifths.
+GZIP_TYPES = {".css", ".geojson", ".html", ".js", ".json", ".mjs", ".svg", ".wasm"}
 GZIP_MIN = 1024
 SCAN_NAME = re.compile(r"^[A-Za-z0-9-]{1,40}\.(webm|mp4|json)$")
 NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")

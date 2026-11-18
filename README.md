@@ -477,5 +477,5 @@ manifold3d (Apache-2.0), which carries Clipper2 (Boost Software License 1.0), na
 (Apache-2.0).
 
 Domus itself is under the [MIT licence](LICENSE): use it, change it and share it, as long as the licence notice goes
-with it. The bundled three.js, three-mesh-bvh, camera-controls and three-viewport-gizmo are MIT too, in the viewer's
-`vendor` folder.
+with it. The bundled three.js, three-mesh-bvh, camera-controls and three-viewport-gizmo are MIT too, and Manifold's
+WebAssembly (manifold-3d) is Apache-2.0, all in the viewer's `vendor` folder with their licences.

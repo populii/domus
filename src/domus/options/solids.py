@@ -48,11 +48,10 @@ from shapely.geometry import Polygon, box
 
 from ..geo.mesh import offset_behind, resample_line
 from ..model import walls as walls_mod
-from .scheme import BATTER_REACH_M
+from .scheme import BATTER_REACH_M, WALL_STEP_M, wall_edges
 
 SEGMENTS = 128          # the sides of a batter's cone
 EDGE_M = 1e-6           # how far a solid reaches past the part of the plan it's worked out in, so no two share a face
-WALL_SPACING_M = 0.25   # a new wall's toe is known this often along it (Design.wall_levels)
 MARGIN_M = 1.0          # how far past the regrade area the ground is taken
 CONFLICT_STEP_M = 0.02  # where batters disagree, how finely the larger change is found (scheme takes it point by point)
 
@@ -319,14 +318,11 @@ def wall_soil_line(w, ground=None):
     """A wall's face, its back and its toe at points along it, as scheme.wall_body works out its plan and the soil
     under it: a new wall's (levelled by Design.wall_levels, `ground` None), or an existing wall's on `ground`."""
     if ground is None:
-        pts, chain = resample_line(np.asarray(w["line"], float)[:, :2], WALL_SPACING_M)
+        pts, chain = resample_line(np.asarray(w["line"], float)[:, :2], WALL_STEP_M)
         face = pts[:, :2]
         return face, offset_behind(face, w["thickness"], w["side"]), np.interp(chain, w["toe_chain"], w["toe"])
-    pts, nrm, _, _, _ = walls_mod.wall_levels(w, ground)
-    half = 0.5 * w.get("batter", 0.0)
-    face = pts - nrm * half
-    back = pts + nrm * half + offset_behind(pts, w["thickness"], w["side"]) - pts
-    return face, back, ground.sample(face[:, 0], face[:, 1])
+    face, back, _, toe = wall_edges(w, ground)
+    return face, back, toe
 
 
 def _widened(face, back, by):

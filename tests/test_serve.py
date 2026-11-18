@@ -91,6 +91,43 @@ def test_every_response_says_what_may_load(server):
     assert r.getheader("X-Content-Type-Options") == "nosniff"
 
 
+def test_the_viewer_may_compile_its_own_webassembly_which_goes_out_gzipped(server):
+    """Manifold (vendor/manifold-3d) is WebAssembly: the page may compile it, and still eval no script."""
+    policy = call(server, "GET", "/healthz")[2].getheader("Content-Security-Policy")
+    script = next(part for part in policy.split(";") if part.strip().startswith("script-src")).split()
+    assert "'wasm-unsafe-eval'" in script and "'unsafe-eval'" not in script
+    status, body, r = call(server, "GET", "/vendor/manifold-3d/manifold.wasm", headers={"Accept-Encoding": "gzip"})
+    assert status == 200 and r.getheader("Content-Type") == "application/wasm" and r.getheader("Content-Encoding") == "gzip"
+    wasm = gzip.decompress(body)
+    assert wasm[:4] == b"\0asm" and len(body) < 0.45 * len(wasm)
+    assert (serve.VIEWER / "vendor" / "manifold-3d" / "LICENSE").read_text(encoding="utf-8").lstrip().startswith("Apache License")
+
+
+def test_a_browser_compiles_manifold_under_the_servers_policy(server, tmp_path):
+    """The viewer's page, served as domus serve sends it, can load Manifold and work a boolean out with it."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    with sync_api.sync_playwright() as p:
+        if not os.path.exists(p.chromium.executable_path):
+            pytest.skip("Playwright's Chromium isn't installed: uv run playwright install chromium")
+        browser = p.chromium.launch()
+        try:
+            page = browser.new_page()
+            errors = []
+            page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+            page.goto(f"http://127.0.0.1:{server}/healthz")
+            volume = page.evaluate("""async () => {
+                const wasm = await (await import("/vendor/manifold-3d/manifold.js")).default();
+                wasm.setup();
+                const a = wasm.Manifold.cube([2, 2, 2]), b = wasm.Manifold.cube([2, 2, 2]).translate([1, 0, 0]);
+                const both = a.intersect(b), v = both.volume();
+                [a, b, both].forEach((m) => m.delete());
+                return v;
+            }""")
+        finally:
+            browser.close()
+    assert volume == pytest.approx(4.0) and not errors
+
+
 def test_big_text_goes_out_gzipped_to_a_browser_that_takes_it(server, tmp_path):
     # The fixture's model is too small to be worth it.
     r = call(server, "GET", "/data/model.json", headers={"Accept-Encoding": "gzip"})[2]

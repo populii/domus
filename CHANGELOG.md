@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The viewer carries Manifold too: its WebAssembly (manifold-3d 3.5.5, Apache-2.0, the same version as the build's)
+  is in the viewer's `vendor` folder. `domus serve` lets the page compile it (`'wasm-unsafe-eval'` in its
+  Content-Security-Policy, which still allows no eval of script) and sends it gzipped, about 205 KB, and `domus shots`
+  serves it as WebAssembly. Nothing in the viewer uses it yet.
+- A built model carries what the viewer needs to work a sketch out the way the build works an option out, for a
+  preview while you draw: `regrade` in `model.json`, with the regrade area, each existing wall's face, back and toe,
+  the options' defaults and the lengths their rules take ([docs/model-format.md](docs/model-format.md)). The rest of
+  the model is unchanged.
 - Domus depends on manifold3d 3.5.5 (Apache-2.0), the geometry library the build and the viewer are to share. A wall
   option can be built as closed solids (`domus.options.solids`): its designed ground, its new walls and steps, and
   the soil it cuts and fills, from the option's own shapes on the ground the build draws. They stand where the build's
