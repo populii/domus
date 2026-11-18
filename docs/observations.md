@@ -7,6 +7,9 @@ now, by the element's id. It shows the difference in the viewer, coloured agains
 changes the expected value follows; when a clip is solved again the reading follows; and when a target is renamed or
 removed, the build says which observation lost it.
 
+A placement, a clip placed another way, is measured against the model's ground at every build, so two placements of
+one clip say which agrees with the ground as it is today.
+
 An observation that disagrees with the model can be proposed: Domus proposes setting the target to what was read, and
 a person accepts or rejects it through the change route ([changes.md](changes.md)). Nothing applies itself.
 
@@ -33,9 +36,9 @@ A site keeps its observations in `data/observations.json`:
 | Key | What it is |
 |---|---|
 | `id` | Its own id: letters, digits, `.`, `-` and `_` |
-| `kind` | `level`, a height; `point`, a position; or `placement`, a reconstruction placed another way, shown beside the model |
+| `kind` | `level`, a height; `point`, a position; or `placement`, a reconstruction placed another way, shown beside the model and measured against its ground |
 | `source` | What was read. For a level or a point, a mark in a clip's picks: `{"picks": "walk", "mark": "w1-east-top"}`, read from `data/video/picks/walk-site.csv` as `domus video pick` last solved it (`picks` can also name another CSV there). For a placement, its clouds in `data/video/` and how they're moved: `{"clouds": [...], "dz_m", "turn_deg", "pivot": [E, N]}` |
-| `target` | What it checks, below, or `null` for a reading shown by itself. A placement has none |
+| `target` | What it checks, below, or `null` for a reading shown by itself. A placement has none: it's measured against the ground (below) |
 | `uncertainty_m` | How sure the reading is, in metres |
 | `name`, `note` | Its label, and anything else to say about it |
 | `lift_m` | How far above the reading its label stands: 0.15 unless given |
@@ -63,23 +66,35 @@ Each observation is read afresh and given a state:
 | `compared` | It gives no uncertainty, so only the difference is shown | plain |
 | `reading` | It has no target, so its reading is shown by itself, with its note | plain |
 | `lost target` | Its target isn't in the model any more, or has no value there; the build says which | grey, dashed |
-| `no reading` | Its picks or its mark aren't there, or the mark wasn't solved; the build says which | none |
-| `placement` | A reconstruction placed another way | a cloud |
+| `no reading` | Its picks, its mark or its clouds aren't there, the mark wasn't solved, or the clouds see too little open ground; the build says which | none |
 
 For a level the difference is the reading less the model's value. For a point it's the distance in plan, with its
-east and north parts. The viewer's layer group **Observations** holds a label for each reading (hidden until it's
-switched on), named by `[labels] readings`, such as `W1's top, east end: 42.12 (model 42.07, +0.05 m, ±0.03)`, and
-each placement's cloud. `domus video export` writes the placements' clouds to `data/video/compare.npz`, moved as they
-say. `summary.json` reports each observation under `observations`: its state, `measured`, `expected`,
-`difference` (and a point's `offset`), `uncertainty_m`, `target` and `source`. A build that finds a lost target says
-so:
+east and north parts.
+
+A placement is measured as `domus prep check clouds` measures a placed cloud: its clouds (`<tag>-site`, `<tag>-dense`
+or a scan, `<tag>-scan`), read as that check reads them (a scan has no cameras, so its points aren't kept to near
+them), moved as the placement says, and their ground (in each 0.25 m cell, the lowest fifth of its flat points)
+against the ground as the build draws it, on open ground, away from the house, walls, features and low plants. Its
+`measured` and `difference` are the median of those cells' heights above the model's ground, `spread_m` the middle
+half of them (the third quartile less the first) and `cells` how many there were; it needs ten. On the made-up
+`format4` site (`tools/made_up_sites.py`), whose clip lies on the lawn as the demo's ground has it, the placement
+0.3 m up reads about +0.29 m over 257 cells and the one turned a degree about -0.01 m: the one that agrees with
+today's ground is the second.
+
+The viewer's layer group **Observations** holds a label for each reading (hidden until it's switched on), named by
+`[labels] readings`, such as `W1's top, east end: 42.12 (model 42.07, +0.05 m, ±0.03)`, or for a placement
+`The walk, 0.3 m higher (made up): ground +0.29 m (257 cells, spread 0.00 m)` at the middle of the ground it covers,
+and each placement's cloud. `domus video export` writes the placements' clouds to `data/video/compare.npz`, moved as
+they say. `summary.json` reports each observation under `observations`: its state, `measured`, `expected`,
+`difference` (and a point's `offset`, a placement's `spread_m` and `cells`), `uncertainty_m`, `target` and `source`.
+A build that finds a lost target says so:
 
 ```text
 observation w1-top: lost target: walls-existing has no W1
 ```
 
-`domus prep check observations` lists them all (`site.check(["observations"])`). It warns for one that's `near`,
-lost its target or has no reading, and fails for one that's `off`.
+`domus prep check observations` lists them all (`site.check(["observations"])`), placements with the rest. It warns
+for one that's `near`, lost its target or has no reading, and fails for one that's `off`.
 
 ## Accepting what was read
 

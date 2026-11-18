@@ -429,8 +429,8 @@ domus video plot walk-colmap
 `export` keeps the points inside the model's extent and near the cameras, thins them to one a 2 cm cell, and writes
 `data/video/points.npz` with every phone scan's too. `plot` draws the clip in plan over the photo, with the camera's
 path, to `data/video/checks/walk-colmap-plan.jpg`. `[video.keep]` trusts only part of a cloud, and a placement in
-`data/observations.json` shows another placement of a clip beside it when you can't yet say which is right
-([7.6](#76-observations-readings-that-check-the-model)).
+`data/observations.json` shows another placement of a clip beside it when you can't yet say which is right, each
+measured against the model's ground at every build ([7.6](#76-observations-readings-that-check-the-model)).
 
 ### 6.7 Check it
 

@@ -33,6 +33,15 @@
   | `raster.DEM`, `raster.DSM`, `raster.AERIAL`, `raster.NIR`, `raster.shift(key)` | `domus.project.rasters.path(site, "dem")` and so on, and `rasters.shift(site, key)` |
   | `raster.dem()`, `raster.dsm()`, `raster.aerial()`, `raster.nir()` | `rasters.dem(site)` and so on, or `site.ground()` in `domus.api` for the ground |
   | A part called without its site, such as `design.frame()`, `terrain.ground()` or `options.load(path)` | The same, handed the site: first, as `design.frame(site)`; as `site=` for `design.Design`, `terrain.wall_levels` and `terrain.build`; or after the rest, as `options.load(path, site)`, `design.Terrace(cfg, defaults, site)` and `build`'s `aerial_sampler(E, N, site)` and `ground_photo_sampler(E, N, site)` |
+- **For site projects:** a placement observation is measured at every build, as `domus prep check clouds` measures a
+  placed cloud: its clouds moved as it says, and their ground (each 0.25 m cell's lowest flat points) against the
+  ground as the build draws it, on open ground. Its `measured` (and `difference`) is the median height above the
+  model's ground, with `spread_m` (the middle half of the cells) and `cells`, and its state is ok, near or off against
+  its `uncertainty_m`, else compared, as a level's is. The viewer labels it (`The walk, 0.3 m higher (made up):
+  ground +0.29 m (257 cells, spread 0.00 m)`), `summary.json` reports it, and `domus prep check observations` warns or
+  fails for it as for a level, so two placements of one clip say which agrees with today's ground. One whose clouds
+  aren't there, or see fewer than ten cells of open ground, has no reading and says why. The made-up `format4` site's
+  clip now has its placed cloud, so its two placements are measured ([docs/observations.md](docs/observations.md)).
 - The viewer, when a model's data doesn't load, says to build it with `domus build` (or `domus --site PATH build`) and
   reload. It said to run `python -m domus.build`, which hasn't run since the build became a package in 2026.11.38.
 

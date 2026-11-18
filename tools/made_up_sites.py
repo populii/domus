@@ -30,7 +30,9 @@ The sites, all in the sea, so none is a real place:
   format4  The demo as a site in format 4 (Domus 2026.11.51 and before) with what format 5 changed: a clip's
            readings in [[video.question_marks]], one mark read off two clips' picks, and two placements of a clip in
            [[video.compare]], one of them with its made-up cloud as `domus video export` writes it, all of which
-           format 5 keeps as observations. It stays as it is for good too.
+           format 5 keeps as observations. Its clip's placed cloud lies on the lawn as the demo's ground has it, so
+           the placement 0.3 m up reads 0.3 m above the ground and the one turned a degree about none. It stays as it
+           is for good too.
   left     The demo with its options' frame run the other way, north along the lot's east boundary from its
            south-east corner, so the lot lies on the frame line's left ([frame] side = "left"). Its options are the
            demo's, with s counted from that end, so its walls and terraces stand where the demo's do.
@@ -496,6 +498,26 @@ turn_deg = 1.0
 """
 
 
+def write_placed_cloud(root, tag="walk-colmap", up=0.0):
+    """A clip's made-up placed reconstruction, data/video/<tag>-site.npz, as `domus video place` writes one: points
+    5 cm apart over a patch of the demo's lawn, `up` metres above its ground, seen in four frames each, and five
+    cameras a hand's height above the ground south of it."""
+    import numpy as np
+
+    from domus.project import demo
+
+    x0, y0 = demo.X0, demo.Y0
+    e, n = (a.ravel() for a in np.meshgrid(np.arange(x0 + 8, x0 + 12.001, 0.05), np.arange(y0 + 24, y0 + 28.001, 0.05)))
+    noise = np.random.default_rng(5).normal(0.0, 0.002, len(e))
+    xyz = np.column_stack([e, n, demo.ground(e, n) + up + noise])
+    ce = np.linspace(x0 + 8, x0 + 12.5, 5)
+    cameras = np.column_stack([ce, np.full(5, y0 + 23.0), demo.ground(ce, np.full(5, y0 + 23.0)) + 1.5])
+    (root / "data" / "video").mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(root / "data" / "video" / f"{tag}-site.npz", xyz=xyz,
+                        rgb=np.tile(np.array([[96, 128, 70]], np.uint8), (len(xyz), 1)),
+                        nview=np.full(len(xyz), 4, np.uint16), cameras=cameras)
+
+
 def make_format_4(root):
     """The demo, said the way a format 4 site that keeps a clip's readings and placements in its settings says it: two
     clips' picks (data/video/picks/<clip>-site.csv), three question marks reading them, and two comparisons, the first
@@ -524,6 +546,7 @@ def make_format_4(root):
     np.savez_compressed(root / "data" / "video" / "compare.npz", mm=np.round((xyz - origin) * 1000).astype(np.int32),
                         rgb=np.tile(np.array([[96, 128, 70]], np.uint8), (len(xyz), 1)), set=np.zeros(len(xyz), np.uint8),
                         ids=np.array(["walk-up"]), origin=origin)
+    write_placed_cloud(root)
 
 
 def make_left(root):

@@ -1145,7 +1145,7 @@ def add_observations(b):
     for o in found:
         if o["state"] in ("lost target", "no reading"):
             b.say(f"observation {o['id']}: {o['state']}: {o['why']}")
-    placed = {o["id"]: o for o in found if o["state"] == "placement"}
+    placed = {o["id"]: o for o in found if o["kind"] == "placement"}
     cfile = b.site.path / "data" / "video" / "compare.npz"
     if placed and cfile.exists():
         cp = np.load(cfile)

@@ -267,3 +267,58 @@ def test_a_walls_toe_is_read_as_the_build_takes_it_and_set_as_its_own(observed):
     assert p["intents"][0]["kind"] == "props" and len(toes) == 2 and toes[0] == round(float(toe[0]) - 0.04, 3)
     s.accept(p["id"], say=quiet)
     assert s.layer("walls-existing")[0]["properties"]["toe_m"] == toes and by_id(s)["w1-toe"]["difference"] == 0.0
+
+
+def placements(root, *found):
+    """The observations in `root` with these placements of the made-up clip walk-colmap added."""
+    data = json.loads((root / "data" / "observations.json").read_text(encoding="utf-8"))
+    data["observations"] += [{"kind": "placement", "source": {"clouds": ["walk-colmap-site"]}, **o} for o in found]
+    (root / "data" / "observations.json").write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_two_placements_of_a_clip_say_which_agrees_with_todays_ground(observed):
+    """A placement is measured as the clouds check measures a placed cloud: its cloud moved as it says, its ground
+    against the drawn ground on open ground. The clip as placed lies on the demo's lawn; the same 0.3 m up doesn't."""
+    made_up_sites.write_placed_cloud(observed)
+    placements(observed, {"id": "as-placed", "name": "The walk as placed", "uncertainty_m": 0.05},
+               {"id": "raised", "name": "The walk 0.3 m up", "uncertainty_m": 0.05,
+                "source": {"clouds": ["walk-colmap-site"], "dz_m": 0.3}},
+               {"id": "unfilmed", "name": "No cloud", "source": {"clouds": ["nothing-site"]}},
+               {"id": "uncamerad", "name": "No cameras", "source": {"clouds": ["lone-dense"]}})
+    np.savez_compressed(observed / "data" / "video" / "lone-dense.npz", xyz=np.zeros((1, 3)), pairs=np.full(1, 2))
+    s = api.open_site(observed)
+    found = by_id(s)
+    low, high = found["as-placed"], found["raised"]
+    assert low["state"] == "ok" and abs(low["measured"]) < 0.03 and low["difference"] == low["measured"]
+    assert high["state"] == "off" and high["measured"] == pytest.approx(low["measured"] + 0.3, abs=0.005)
+    assert low["cells"] > 200 and low["spread_m"] < 0.02 and high["cells"] == low["cells"]
+    assert (found["unfilmed"]["state"], found["unfilmed"]["why"]) == \
+        ("no reading", "its cloud, data/video/nothing-site.npz, isn't there")
+    assert (found["uncamerad"]["state"], found["uncamerad"]["why"]) == \
+        ("no reading", "its clip's cameras, data/video/lone-site.npz, aren't there")
+    # As the clouds check reads the same cloud, as placed.
+    clouds = api.open_site(observed).check(["clouds"], tags=["walk-colmap"])["findings"]
+    assert f"open ground: {low['cells']} cells, median {low['measured']:+.3f} m" in clouds[0]["detail"]
+    report = api.open_site(observed).check(["observations"])
+    levels = {f["object"]: f["level"] for f in report["findings"]}
+    assert (levels["as-placed"], levels["raised"], levels["unfilmed"], levels["uncamerad"]) == ("info", "fail", "warn", "warn")
+    s.build(say=quiet)
+    model = json.loads((s.output / "model.json").read_text(encoding="utf-8"))
+    items = {it["text"].split(":")[0]: it for it in next(x for x in model["layers"] if x["id"] == "observations")["items"]}
+    assert items["The walk 0.3 m up"]["text"] == (f"The walk 0.3 m up: ground {high['measured']:+.2f} m ({high['cells']} "
+                                                 f"cells, spread {high['spread_m']:.2f} m, ±0.05)")
+    assert items["The walk 0.3 m up"]["tone"] == "off" and items["The walk as placed"]["tone"] == "ok"
+    reported = {r["id"]: r for r in json.loads((s.output / "summary.json").read_text(encoding="utf-8"))["observations"]}
+    assert {k: reported["raised"][k] for k in ("state", "measured", "difference", "spread_m", "cells")} == \
+        {k: high[k] for k in ("state", "measured", "difference", "spread_m", "cells")}
+    with pytest.raises(DomusError, match="has no target to set"):
+        s.propose_observation("raised", say=quiet)
+
+
+def test_the_format_4_sites_placements_are_measured(made_up):
+    """The format4 made-up site's two placements of one clip: 0.3 m up reads about that above the ground, and turned a
+    degree reads about none."""
+    found = by_id(api.open_site(made_up / "format4"))
+    assert found["walk-up"]["state"] == found["walk-turned"]["state"] == "compared"
+    assert found["walk-up"]["measured"] == pytest.approx(0.3, abs=0.03)
+    assert found["walk-turned"]["measured"] == pytest.approx(0.0, abs=0.03)

@@ -327,6 +327,62 @@ def check_plumb(site, tags, findings):
 
 # --------------------------------------------------------------------------- clouds
 
+CLOUD_REACH_M = 6.0      # m, a placed cloud's points are read within this of its clip's cameras
+MIN_CLOUD_POINTS = 200   # fewer points than this, and a cloud's ground isn't read
+MIN_OPEN_CELLS = 10      # fewer open-ground cells than this, and a cloud's ground isn't compared
+
+
+def placed_cloud(m, name):
+    """A placed cloud's points, as the clouds check reads them: data/video/<name>.npz, a dense cloud's (<tag>-dense)
+    points seen by two pairs of frames or more and a placed reconstruction's (<tag>-site) or a scan's seen in three
+    frames or more, inside its box in [video.keep], and, but for a scan's, within CLOUD_REACH_M of its clip's cameras
+    (in <tag>-site.npz, which must be there). None where the cloud's file isn't there."""
+    path = video_dir(m.site) / f"{name}.npz"
+    if not path.exists():
+        return None
+    d = np.load(path)
+    sup = d["pairs"] if "pairs" in d else d["nview"]
+    xyz = d["xyz"][sup >= (2 if name.endswith("-dense") else 3)]
+    box = m.cfg.get("video", {}).get("keep", {}).get(name)
+    if box:
+        xyz = xyz[(xyz[:, 0] > box[0]) & (xyz[:, 1] > box[1]) & (xyz[:, 0] < box[2]) & (xyz[:, 1] < box[3])]
+    if not name.endswith("-scan"):      # a scan measures depth directly and has no cameras
+        cams = np.load(video_dir(m.site) / f"{name.rsplit('-', 1)[0]}-site.npz")["cameras"]
+        xyz = xyz[cKDTree(cams).query(xyz)[0] < CLOUD_REACH_M]
+    return xyz
+
+
+def ground_cells(xyz):
+    """A cloud's ground, as the clouds check reads it: its flat points (the normal of their twelve nearest within about
+    37 degrees of vertical), and in each 0.25 m cell with six of them or more, the median of the lowest fifth. Rows of
+    (E, N, height) at the cells' centres."""
+    if len(xyz) < MIN_CLOUD_POINTS:
+        return np.empty((0, 3))
+    tree = cKDTree(xyz)
+    _, idx = tree.query(xyz, k=min(12, len(xyz)))
+    nb = xyz[idx] - xyz[idx].mean(1, keepdims=True)
+    nz = np.abs(np.linalg.eigh(np.einsum("nki,nkj->nij", nb, nb))[1][:, 2, 0])
+    flat = xyz[nz > 0.8]
+    key = np.floor(flat[:, :2] / 0.25).astype(np.int64)
+    order = np.lexsort((flat[:, 2], key[:, 1], key[:, 0]))
+    key, flat = key[order], flat[order]
+    brk = np.r_[0, np.flatnonzero(np.any(key[1:] != key[:-1], axis=1)) + 1, len(key)]
+    cells = []
+    for a, b in itertools.pairwise(brk):
+        if b - a >= 6:
+            cells.append(((key[a, 0] + 0.5) * 0.25, (key[a, 1] + 0.5) * 0.25,
+                          float(np.median(flat[a:a + max((b - a) // 5, 1) + 1, 2]))))
+    return np.array(cells) if cells else np.empty((0, 3))
+
+
+def open_ground(m, cells, raised=None):
+    """Each ground cell's height above the drawn ground, and which are on open ground, not under the model's objects
+    or low plants: (residuals, open mask)."""
+    raised = m.raised_footprint() if raised is None else raised
+    r = cells[:, 2] - m.tin_z(cells[:, 0], cells[:, 1])
+    return r, np.isfinite(r) & ~shapely.contains_xy(raised, cells[:, 0], cells[:, 1])
+
+
 def check_clouds(m, tags, findings, plots):
     fails = 0
     raised = m.raised_footprint()
@@ -336,39 +392,14 @@ def check_clouds(m, tags, findings, plots):
     names = (m.hf["house-walls"]["properties"].get("faces") if m.has_house else None) or [f"wall-{i}" for i in range(len(planes))]
     for tag in tags:
         for kind in ("dense", "site"):
-            path = video_dir(m.site) / f"{tag}-{kind}.npz"
-            if not path.exists():
+            xyz = placed_cloud(m, f"{tag}-{kind}")
+            if xyz is None or len(xyz) < MIN_CLOUD_POINTS:
                 continue
-            d = np.load(path)
-            sup = d["pairs"] if "pairs" in d else d["nview"]
-            xyz = d["xyz"][sup >= (2 if kind == "dense" else 3)]
-            box = m.cfg.get("video", {}).get("keep", {}).get(f"{tag}-{kind}")
-            if box:
-                xyz = xyz[(xyz[:, 0] > box[0]) & (xyz[:, 1] > box[1]) & (xyz[:, 0] < box[2]) & (xyz[:, 1] < box[3])]
-            cams = np.load(video_dir(m.site) / f"{tag}-site.npz")["cameras"]
-            xyz = xyz[cKDTree(cams).query(xyz)[0] < 6.0]
-            if len(xyz) < 200:
+            c = ground_cells(xyz)
+            if not len(c):
                 continue
-            tree = cKDTree(xyz)
-            _, idx = tree.query(xyz, k=min(12, len(xyz)))
-            nb = xyz[idx] - xyz[idx].mean(1, keepdims=True)
-            nz = np.abs(np.linalg.eigh(np.einsum("nki,nkj->nij", nb, nb))[1][:, 2, 0])
-            flat = xyz[nz > 0.8]
-            key = np.floor(flat[:, :2] / 0.25).astype(np.int64)
-            order = np.lexsort((flat[:, 2], key[:, 1], key[:, 0]))
-            key, flat = key[order], flat[order]
-            brk = np.r_[0, np.flatnonzero(np.any(key[1:] != key[:-1], axis=1)) + 1, len(key)]
-            cells = []
-            for a, b in itertools.pairwise(brk):
-                if b - a >= 6:
-                    cells.append(((key[a, 0] + 0.5) * 0.25, (key[a, 1] + 0.5) * 0.25,
-                                  float(np.median(flat[a:a + max((b - a) // 5, 1) + 1, 2]))))
-            if not cells:
-                continue
-            c = np.array(cells)
-            r = c[:, 2] - m.tin_z(c[:, 0], c[:, 1])
-            open_ = np.isfinite(r) & ~shapely.contains_xy(raised, c[:, 0], c[:, 1])
-            if open_.sum() >= 10:
+            r, open_ = open_ground(m, c, raised)
+            if open_.sum() >= MIN_OPEN_CELLS:
                 share = float(np.mean(np.abs(r[open_]) > TOL_GROUND))
                 level = "fail" if share > 0.5 or abs(np.median(r[open_])) > 0.1 else "info"
                 fails += level == "fail"
