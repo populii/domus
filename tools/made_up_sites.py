@@ -9,8 +9,9 @@ The sites, all in the sea, so none is a real place:
   demo     What `domus demo` writes: a sloping lot, a small house, a block wall, a drain, trees, a fence and two
            wall options.
   richer   The demo with more of what real sites have: house parts (a porch and its steps, a deck and its
-           balustrade, a chimney and a tank), levels along the drain, a sewer at an assumed depth, and a right of
-           way listed before the lot.
+           balustrade, a chimney and a tank), levels along the drain, a sewer at an assumed depth, a right of way
+           listed before the lot, and two trees over the drive beside it, with the paving under them painted into
+           the aerial photo (data/site/paved-under-canopy.geojson and a paving picture).
   abroad   The demo moved onto the British National Grid (EPSG:27700), rasters and all. The same site on another grid
            builds the same model, from the site's origin: the report holds the head's build of it to the demo's
            within 1.5 mm (`twin`), and fails if it isn't.
@@ -74,7 +75,8 @@ def append(path, text):
 
 
 def enrich(root):
-    """The demo, with house parts, drain levels, a drain at an assumed depth, and a lot that isn't listed first."""
+    """The demo, with house parts, drain levels, a drain at an assumed depth, a lot that isn't listed first, and trees
+    over the drive beside it."""
     from domus import demo
 
     x0, y0 = demo.X0, demo.Y0
@@ -119,6 +121,54 @@ def enrich(root):
     append(root / "data" / "site.toml", '\n[boundary]\nmain = "lot"\n\n[services]\nassumed_depth_m = { sewer = 0.7 }\n'
                                         '\n[services.notes.drain]\ntext = "Invert {lo} to {hi}, made up ({span})."\n'
                                         'confidence = "made up"\n')
+    trees_over_the_drive(root)
+
+
+# Two made-up trees over the drive east of the lot, which the demo's aerial photo shows as paving from x0 + 22 on: each
+# tree's place east and north of x0, y0, its crown's radius and its height, in metres.
+DRIVE_TREES = [(22.9, 12.0, 2.2, 7.0), (24.1, 19.5, 1.8, 6.0)]
+
+
+def trees_over_the_drive(root):
+    """Two trees over the drive: their crowns and shade in the aerial photo, the trees in trees.geojson, the paving
+    under them to paint in (paved-under-canopy.geojson) and a picture of the paving for its grain."""
+    import numpy as np
+    import rasterio
+    from PIL import Image
+
+    from domus import demo
+
+    x0, y0 = demo.X0, demo.Y0
+    rng = np.random.default_rng(11)
+    path = root / "data" / "aerial" / "aerial.tif"
+    with rasterio.open(path) as src:
+        rgb, profile, t = src.read().astype(np.float32), src.profile, src.transform
+    E, N = np.meshgrid(t.c + (np.arange(rgb.shape[2]) + 0.5) * t.a, t.f + (np.arange(rgb.shape[1]) + 0.5) * t.e)
+    drive = E > x0 + 22
+    for dx, dy, r, _ in DRIVE_TREES:
+        # The crown's shade on the drive, the sun to the north-east, with spots of light through it; then the crown.
+        shade = drive & (np.hypot(E - (x0 + dx - 0.8), N - (y0 + dy - 1.2)) < 1.1 * r)
+        rgb[:, shade] *= np.where(rng.random(int(shade.sum())) < 0.15, 0.85, 0.55)
+        crown = np.hypot(E - (x0 + dx), N - (y0 + dy)) < r
+        rgb[:, crown] = np.array([[52], [88], [44]], np.float32) + rng.normal(0, 9, (3, int(crown.sum())))
+    with rasterio.open(path, "w", **profile) as dst:
+        dst.write(rgb.clip(0, 255).round().astype(np.uint8))
+    site = root / "data" / "site"
+    trees = read_json(site / "trees.geojson")
+    for k, (dx, dy, r, h) in enumerate(DRIVE_TREES, start=1):
+        ring = [[round(x0 + dx + r * math.cos(a), 2), round(y0 + dy + r * math.sin(a), 2)]
+                for a in (2 * math.pi * i / 12 for i in range(12))]
+        trees["features"].append(feat("Polygon", [[*ring, ring[0]]], id=f"drive-tree-{k}", kind="tree",
+                                      name=f"Tree over the drive {k}", height_m=h, crown_base_m=1.8, trunk_diameter_m=0.3,
+                                      look="broadleaf", colour="#3f6b35", confidence="made up", source="made up"))
+    write_json(site / "trees.geojson", trees)
+    area = feat("Polygon", box(x0 + 22.2, y0 + 7.0, x0 + 26.5, y0 + 24.0), id="drive-under-trees",
+                name="The drive under the trees (made up)", source="made up")
+    write_json(site / "paved-under-canopy.geojson", demo.fc("paved-under-canopy", [area]))
+    grain = 150 + rng.normal(0, 12, (160, 240)) + np.kron(rng.normal(0, 8, (16, 24)), np.ones((10, 10)))
+    (root / "data" / "features").mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.repeat(grain[..., None], 3, axis=2).clip(0, 255).astype(np.uint8)).save(
+        root / "data" / "features" / "paving.jpg", quality=85)
 
 
 def move_abroad(root):

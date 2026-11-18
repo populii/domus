@@ -83,10 +83,29 @@ SITE = Table("data/site.toml", {
         "shift_m": Map("Moves a raster from where its file puts it: `aerial = [east, north]` in metres, for a photo "
                        "that sits off the ground model and the house", Key("[east, north] in metres", [0.0, 0.0]), "raster"),
     }),
-    "aerial": Table("How the aerial photo is named in the viewer", {
+    "aerial": Table("How the aerial photo is named in the viewer, and how paving under trees is painted into it", {
         "key": Key("Its texture's key", "aerial"),
         "label": Key("Its name", "Aerial photo"),
         "label_raw": Key("Its name before the paving under trees is painted in", "Aerial photo as taken"),
+        "paving": Table("Painting in the paving the photo sees through trees or deep shade, in "
+                        "data/site/paved-under-canopy.geojson", {
+            "grey": Key("A pixel is grey if its colours spread by less than this share of its brightest", 0.18),
+            "sun_green": Key("The paving in sun: the grey pixels in the area less green than this (green less the mean "
+                             "of red and blue, over the brightness)", 0.04),
+            "sun_percentile": Key("Its sunlit brightness: this percentile of theirs", 75),
+            "sun_share": Key("Its sunlit colour: the median of those pixels at least this share of that brightness", 0.85),
+            "foliage_green": Key("Foliage: how green a pixel is where it starts to count as foliage, and where it counts "
+                                 "fully", [0.02, 0.1]),
+            "foliage_dark": Key("Foliage too: how dark a pixel that isn't grey is, as a share of the sunlit brightness, "
+                                "where it starts to count and where it counts fully", [0.6, 0.4]),
+            "foliage_blur_m": Key("How far foliage is softened, in metres", 0.15),
+            "shade_dark": Key("Shade: how dark the paving is, as a share of the sunlit brightness, where it starts to be "
+                              "lifted to it and where it's lifted fully", [0.95, 0.7]),
+            "shade_blur_m": Key("How far the brightness is smoothed to find shade, in metres", 0.4),
+            "shade_detail": Key("How much of the photo's detail paving lifted out of shade keeps (the rest is the "
+                                "dapple of the crowns' light)", 0.5),
+            "feather_m": Key("How far the painting fades out at the area's edges, in metres", 0.25),
+        }),
     }),
     "drapes": Tables("A scanned plan to lay on the ground", Table("A drape", {
         "key": Key("Its texture's key", REQUIRED),

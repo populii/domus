@@ -159,12 +159,24 @@ def aerial_sampler(E, N):
 
 
 def paved_under_canopy():
-    """data/site/paved-under-canopy.geojson: paving the aerial photo sees through tree crowns and deep shade,
-    as a shapely polygon, or None."""
+    """data/site/paved-under-canopy.geojson: where the aerial photo sees paving through tree crowns and deep shade,
+    as a shapely polygon (the file's polygons together), or None."""
     from shapely.geometry import shape
 
-    feats = geojson.read_optional(crs.ROOT / "data" / "site" / "paved-under-canopy.geojson")
-    return shape(feats[0]["geometry"]) if feats else None
+    areas = [shape(f["geometry"]) for f in geojson.read_optional(crs.ROOT / "data" / "site" / "paved-under-canopy.geojson")]
+    if not areas:
+        return None
+    return areas[0] if len(areas) == 1 else unary_union(areas)
+
+
+def paving_grain():
+    """The site's paving texture (data/features/paving.jpg, features.MATERIALS) in grey, and the metres one copy
+    covers, or None if the site has none."""
+    folder = crs.ROOT / "data" / "features"
+    name = features.texture_file("paving", folder)
+    if name is None:
+        return None
+    return np.asarray(Image.open(folder / name).convert("L"), np.float32), features.MATERIALS["paving"][2]
 
 
 def _blur(a, sigma_px):
@@ -173,64 +185,91 @@ def _blur(a, sigma_px):
     return cv2.GaussianBlur(np.ascontiguousarray(a, np.float32), (0, 0), sigma_px)
 
 
-def _photo_classes(rgb):
-    """Brightness, greenness and greyness of aerial pixels."""
+def _photo_classes(rgb, grey_spread=0.18):
+    """Brightness, greenness and greyness of aerial pixels: greenness is green less the mean of red and blue, over
+    the brightness, and a pixel is grey if its colours spread by less than `grey_spread` of its brightest."""
     L = rgb.mean(axis=2)
     green = (rgb[..., 1] - 0.5 * (rgb[..., 0] + rgb[..., 2])) / np.maximum(L, 1)
-    grey = (rgb.max(axis=2) - rgb.min(axis=2)) / np.maximum(rgb.max(axis=2), 1) < 0.18
+    grey = (rgb.max(axis=2) - rgb.min(axis=2)) / np.maximum(rgb.max(axis=2), 1) < grey_spread
     return L, green, grey
 
 
-def _drive_in_sun(drive, px=0.08):
-    """The driveway's sunlit brightness and colour in the aerial: the upper quartile of the grey,
-    not green pixels over it, and the median colour of those."""
-    import shapely
+def _ends(paving, key, default):
+    """A [where it starts, where it's full] setting of [aerial.paving]: two different numbers."""
+    value = paving.get(key, default)
+    if not isinstance(value, (list, tuple)) or len(value) != 2 or value[0] == value[1]:
+        raise DomusError(f"[aerial.paving] {key} = {value!r} in data/site.toml: give two different numbers, where it "
+                         "starts and where it's full")
+    return value[0], value[1]
 
-    e0, n0, e1, n1 = drive.bounds
+
+def _paving_in_sun(photo, area, paving, px=0.08):
+    """The paving's sunlit brightness and colour in the photo (`photo(E, N)`, RGB): the sun_percentile of the
+    brightness of the grey pixels in `area` that are less green than sun_green, and the median colour of those at
+    least sun_share of that bright ([aerial.paving], `paving`)."""
+    e0, n0, e1, n1 = area.bounds
     E, N = np.meshgrid(np.arange(e0, e1, px), np.arange(n0, n1, px))
-    rgb = aerial_sampler(E, N).astype(np.float32)
-    L, green, grey = _photo_classes(rgb)
-    paving = shapely.contains_xy(drive, E, N) & grey & (green < 0.04)
-    lsun = np.percentile(L[paving], 75)
-    return lsun, np.median(rgb[paving & (L > 0.85 * lsun)], axis=0)
+    rgb = photo(E, N).astype(np.float32)
+    L, green, grey = _photo_classes(rgb, paving.get("grey", 0.18))
+    sunlit = shapely.contains_xy(area, E, N) & grey & (green < paving.get("sun_green", 0.04))
+    if not sunlit.any():
+        raise DomusError("The aerial photo sees no paving in sun in data/site/paved-under-canopy.geojson, to take the "
+                         "paving's colour from: take in some of the same paving in sun, or see [aerial.paving] in "
+                         "docs/site-format.md")
+    lsun = np.percentile(L[sunlit], paving.get("sun_percentile", 75))
+    return lsun, np.median(rgb[sunlit & (L > paving.get("sun_share", 0.85) * lsun)], axis=0)
+
+
+def paint_paving(photo, E, N, area, paving=None, grain=None):
+    """The aerial photo with paving shown where the photo sees tree crowns or deep shade on it: the photo was taken
+    from above in sun, while under the trees, where the model is seen from, the paving shows. `photo(E, N)` gives the
+    photo's RGB at a grid of points on the site's grid (E, N), `area` is where it sees paving through the trees
+    (paved_under_canopy()), `paving` holds [aerial.paving]'s settings (their defaults where it has none) and `grain`
+    is the paving texture in grey with the metres one copy covers (paving_grain()), or None for none.
+
+    Inside `area`, pixels that are foliage (greener than foliage_green, or not grey and darker than foliage_dark of
+    the paving's sunlit brightness: crowns lean in the photo, so they are found by colour, not from the trees'
+    outlines) take the paving's own sunlit colour from the photo (_paving_in_sun), with the texture's grain; paving
+    in shade (darker than shade_dark of the sunlit brightness, once smoothed over shade_blur_m) is lifted to that
+    colour keeping shade_detail of the photo's detail (the rest is the dapple of the crowns' light). Each of those
+    settings is two numbers: where it starts, and where it's full. It all fades out over feather_m at the area's
+    edges. Elsewhere the photo is unchanged."""
+    paving = {} if paving is None else paving
+    rgb = photo(E, N).astype(np.float32)
+    px = abs(E[0, 1] - E[0, 0])
+    inside = shapely.contains_xy(area, E, N).astype(np.float32)
+    L, green, grey = _photo_classes(rgb, paving.get("grey", 0.18))
+    lsun, base = _paving_in_sun(photo, area, paving)
+    # Foliage: green, or darker than the paving in shade and not grey.
+    g0, g1 = _ends(paving, "foliage_green", [0.02, 0.1])
+    d0, d1 = _ends(paving, "foliage_dark", [0.6, 0.4])
+    foliage = np.clip((green - g0) / (g1 - g0), 0, 1)
+    foliage = np.maximum(foliage, (~grey) * np.clip((d0 * lsun - L) / ((d0 - d1) * lsun), 0, 1))
+    foliage = _blur(foliage, paving.get("foliage_blur_m", 0.15) / px).clip(0, 1)
+    # Shade on the paving: lift the slow brightness to the sunlit level, keep the detail.
+    Lb = _blur(L, paving.get("shade_blur_m", 0.4) / px)
+    s0, s1 = _ends(paving, "shade_dark", [0.95, 0.7])
+    shade = np.clip((s0 * lsun - Lb) / ((s0 - s1) * lsun), 0, 1)
+    detail = paving.get("shade_detail", 0.5)
+    lifted = base * ((1 - detail) + detail * L / np.maximum(Lb, 1))[..., None]
+    if grain is None:
+        surface = base * np.ones(E.shape + (1,), np.float32)
+    else:
+        tex, (tu, tv) = grain
+        ty = ((N / tv) % 1 * tex.shape[0]).astype(int).clip(0, tex.shape[0] - 1)
+        tx = ((E / tu) % 1 * tex.shape[1]).astype(int).clip(0, tex.shape[1] - 1)
+        surface = base * (_blur(tex, 0.5 * tex.shape[1] * px / tu)[ty, tx] / tex.mean())[..., None]
+    out = rgb * (1 - shade[..., None]) + lifted * shade[..., None]
+    out = out * (1 - foliage[..., None]) + surface * foliage[..., None]
+    w = _blur(inside, paving.get("feather_m", 0.25) / px)[..., None]
+    return (rgb * (1 - w) + out * w).clip(0, 255).astype(np.uint8)
 
 
 def ground_photo_sampler(E, N):
-    """The aerial photo with paving shown where the photo sees tree crowns or deep shade on it: the
-    photo was taken from above in sun, while from the ground the drive under the trees is light
-    concrete. Inside paved_under_canopy(), pixels that are
-    foliage (green, or dark and not grey: crowns lean in the photo, so they are found by colour,
-    not from the mapped crown outlines) take the drive's own sunlit colour from the photo with
-    the paving texture's grain (data/features/paving.jpg at its size, features.MATERIALS);
-    shaded paving is lifted to that colour keeping half the photo's detail (the rest is the
-    dapple of the crowns' light). Feathered over about 0.25 m at the drive's edges. Elsewhere
-    the photo is unchanged."""
-    import shapely
-
-    rgb = aerial_sampler(E, N).astype(np.float32)
-    px = abs(E[0, 1] - E[0, 0])
-    drive = paved_under_canopy()
-    inside = shapely.contains_xy(drive, E, N).astype(np.float32)
-    L, green, grey = _photo_classes(rgb)
-    lsun, base = _drive_in_sun(drive)
-    # Foliage: green, or darker than the drive in shade and not grey.
-    foliage = np.clip((green - 0.02) / 0.08, 0, 1)
-    foliage = np.maximum(foliage, (~grey) * np.clip((0.6 * lsun - L) / (0.2 * lsun), 0, 1))
-    foliage = _blur(foliage, 0.15 / px).clip(0, 1)
-    # Shade on the paving: lift the slow brightness to the sunlit level, keep the detail.
-    Lb = _blur(L, 0.4 / px)
-    shade = np.clip((0.95 * lsun - Lb) / (0.25 * lsun), 0, 1)
-    lifted = base * (0.5 + 0.5 * L / np.maximum(Lb, 1))[..., None]
-    tu, tv = features.MATERIALS["paving"][2]
-    tex = np.asarray(Image.open(crs.ROOT / "data" / "features" / features.MATERIALS["paving"][1]).convert("L"), np.float32)
-    ty = ((N / tv) % 1 * tex.shape[0]).astype(int).clip(0, tex.shape[0] - 1)
-    tx = ((E / tu) % 1 * tex.shape[1]).astype(int).clip(0, tex.shape[1] - 1)
-    grain = _blur(tex, 0.5 * tex.shape[1] * px / tu)[ty, tx] / tex.mean()
-    surface = base * grain[..., None]
-    out = rgb * (1 - shade[..., None]) + lifted * shade[..., None]
-    out = out * (1 - foliage[..., None]) + surface * foliage[..., None]
-    w = _blur(inside, 0.25 / px)[..., None]
-    return (rgb * (1 - w) + out * w).clip(0, 255).astype(np.uint8)
+    """The aerial photo with the paving under the site's trees painted in (paint_paving): the areas in
+    data/site/paved-under-canopy.geojson, [aerial.paving] in data/site.toml and the site's paving texture."""
+    return paint_paving(aerial_sampler, E, N, paved_under_canopy(), crs.settings().get("aerial", {}).get("paving", {}),
+                        paving_grain())
 
 
 PAPER = np.array([238, 236, 228], np.float32)

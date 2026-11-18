@@ -37,6 +37,27 @@ def test_the_richer_site_has_what_the_demo_lacks(sites):
     assert len(levels) == 2 and levels[0]["properties"]["invert_m"] > levels[1]["properties"]["invert_m"]
 
 
+def test_the_richer_site_paints_in_the_drive_under_its_trees(sites, at_site):
+    import numpy as np
+    from shapely.geometry import shape
+
+    from domus import build, demo
+
+    root = sites / "richer"
+    at_site(root)
+    area = build.paved_under_canopy()
+    trees = [shape(f["geometry"]) for f in layer(root, "trees")["features"] if f["properties"]["id"].startswith("drive-tree")]
+    assert len(trees) == 2 and all(area.intersects(t) for t in trees) and build.paving_grain() is not None
+    x0, y0 = demo.X0, demo.Y0
+    E, N = np.meshgrid(x0 + 20 + (np.arange(125) + 0.5) * 0.08, y0 + 26 - (np.arange(250) + 0.5) * 0.08)
+    raw, painted = build.aerial_sampler(E, N).astype(int), build.ground_photo_sampler(E, N).astype(int)
+    green = lambda rgb: (rgb[:, 1] - (rgb[:, 0] + rgb[:, 2]) / 2) / rgb.mean(axis=1)
+    crown = (np.hypot(E - (x0 + 22.9), N - (y0 + 12.0)) < 1.4) & (E > x0 + 23.0)        # inside the area and the crown
+    assert green(raw[crown]).mean() > 0.4 and np.abs(green(painted[crown])).mean() < 0.06
+    far = E > x0 + 27.8                                                                   # over 1.2 m east of the area
+    assert (painted[far] == raw[far]).all()
+
+
 def test_the_abroad_site_is_the_demo_on_another_grid(sites):
     root, demo = sites / "abroad", sites / "demo"
     assert settings(root)["crs"]["epsg"] == 27700

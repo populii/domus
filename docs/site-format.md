@@ -64,10 +64,22 @@ gives them in `[datums.<datum>]` and `[house]` reads with them there, and `domus
 | `rasters.nir` | `"data/aerial/nir.tif"` | The near-infrared photo, red and near-infrared bands |
 | `rasters.canopy` | `"data/sources/canopy.geojson"` | The tree crowns `domus canopy` maps |
 | `rasters.shift_m.<raster>` | `[0.0, 0.0]` | Moves a raster from where its file puts it: `aerial = [east, north]` in metres, for a photo that sits off the ground model and the house |
-| `[aerial]` | | How the aerial photo is named in the viewer |
+| `[aerial]` | | How the aerial photo is named in the viewer, and how paving under trees is painted into it |
 | `aerial.key` | `"aerial"` | Its texture's key |
 | `aerial.label` | `"Aerial photo"` | Its name |
 | `aerial.label_raw` | `"Aerial photo as taken"` | Its name before the paving under trees is painted in |
+| `[aerial.paving]` | | Painting in the paving the photo sees through trees or deep shade, in data/site/paved-under-canopy.geojson |
+| `aerial.paving.grey` | `0.18` | A pixel is grey if its colours spread by less than this share of its brightest |
+| `aerial.paving.sun_green` | `0.04` | The paving in sun: the grey pixels in the area less green than this (green less the mean of red and blue, over the brightness) |
+| `aerial.paving.sun_percentile` | `75` | Its sunlit brightness: this percentile of theirs |
+| `aerial.paving.sun_share` | `0.85` | Its sunlit colour: the median of those pixels at least this share of that brightness |
+| `aerial.paving.foliage_green` | `[0.02, 0.1]` | Foliage: how green a pixel is where it starts to count as foliage, and where it counts fully |
+| `aerial.paving.foliage_dark` | `[0.6, 0.4]` | Foliage too: how dark a pixel that isn't grey is, as a share of the sunlit brightness, where it starts to count and where it counts fully |
+| `aerial.paving.foliage_blur_m` | `0.15` | How far foliage is softened, in metres |
+| `aerial.paving.shade_dark` | `[0.95, 0.7]` | Shade: how dark the paving is, as a share of the sunlit brightness, where it starts to be lifted to it and where it's lifted fully |
+| `aerial.paving.shade_blur_m` | `0.4` | How far the brightness is smoothed to find shade, in metres |
+| `aerial.paving.shade_detail` | `0.5` | How much of the photo's detail paving lifted out of shade keeps (the rest is the dapple of the crowns' light) |
+| `aerial.paving.feather_m` | `0.25` | How far the painting fades out at the area's edges, in metres |
 | `[[drapes]]` | | A scanned plan to lay on the ground |
 | `drapes[].key` | required | Its texture's key |
 | `drapes[].label` | required | Its name in the viewer |
@@ -202,8 +214,15 @@ at the top of each module give the full detail: `model/features.py` for fences, 
 - **`title.geojson`**: From `domus title`: the lot's title (`kind` `title`, with `title_no`, `estate`, `type`) and the
   easements on or near it (`kind` `easement`, with `intent` and `on_lot`). Wall options flag a wall that runs into an easement.
 - **`ground-fixes.geojson`**: Polygons where the LiDAR isn't used, and 3D lines and points that stand in for it.
-- **`paved-under-canopy.geojson`**: A Polygon of paving the aerial sees through trees or deep shade. It's painted
-  in as paving, using `data/features/paving.jpg`.
+- **`paved-under-canopy.geojson`**: Polygons round paving that trees hang over, such as a drive under a tree's crown.
+  An aerial photo, taken from above in sun, shows the crowns and their shade there, which the model would lay on the
+  ground under its own trees. Inside the polygons the build paints the paving in: what the photo shows as foliage takes
+  the paving's own colour in sun, read from the photo where it sees the same paving in sun, with the grain of
+  `data/features/paving.jpg` if the site has one, and paving in shade is lifted to that colour, keeping some of the
+  photo's dapple. The viewer keeps the photo as taken as well (`[aerial] label_raw`). Draw one wherever crowns or deep
+  shade hide paving in the photo: round the paving, not the crowns, which lean in the photo and are found by their
+  colour, and take in some of that paving in sun. Lawns and beds under trees stay out of it. `[aerial.paving]` in
+  `data/site.toml` holds what's taken for paving in sun, foliage and shade, for a photo that needs other numbers.
 
 ### Changing the layers
 

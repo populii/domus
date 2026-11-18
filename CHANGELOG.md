@@ -17,6 +17,13 @@
   copies `domus site upgrade` keeps, the frames taken from videos and the reconstructions' working files. It keeps
   everything a person made, the sketches saved in the viewer (`.domus/viewer.db`) among it. A folder that has a
   `.gitignore` already keeps its own, as `site/` in a copy of Domus does. docs/new-site.md lists what's left out.
+- **For site projects:** the paving painted into the aerial photo under trees, `data/site/paved-under-canopy.geojson`,
+  is documented in [docs/site-format.md](docs/site-format.md#layers), and what it takes in the photo for paving in sun,
+  for foliage and for shade, and how far it smooths and fades them, are settings: `[aerial.paving]` in
+  `data/site.toml`. Their defaults are the numbers it always used, so a site builds as before. The file can hold more
+  than one polygon, where only its first counted; a site without a picture of its paving (`data/features/paving.jpg`)
+  gets the paving's colour without its grain, where its build stopped; and an area where the photo sees none of its
+  paving in sun says so.
 
 ## 2026.11.38
 
