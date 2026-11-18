@@ -11,6 +11,9 @@
   as IfcWall and its steps as IfcStair in an IFC. docs/export.md says what each holds.
 - A wall option's walls carry their toe levels, `toe_min` and `toe_max`, in the model and in `site.evaluate`, as the
   existing walls do.
+- The direction gizmo's handles are all one size, W was smaller, and the two facing away keep most of their colour,
+  where they were faded to half, so W and S read as clearly as N and E. Domus's copy of three-viewport-gizmo takes a
+  `fade` setting for that.
 
 ## 2026.11.39
 

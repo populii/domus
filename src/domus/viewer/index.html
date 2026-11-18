@@ -3250,8 +3250,9 @@ function cssColour(name) {
 // View gizmo (three-viewport-gizmo), left of the navigation pad: click a side to look from it, drag it to turn the view. The axes are
 // the compass: x east, z south, y up. There is no view from below, as the orbit stops at the horizon. It takes the page's theme:
 // north and south in the accent, east and west in the amber, up in the ink, on the panel's ground, its letters in the display
-// face, filling most of each circle (`fill`, a setting Domus added to its copy of the library), and it's drawn again
-// in the other theme's colours when the theme changes.
+// face, filling most of each circle (`fill`, a setting Domus added to its copy of the library); every handle is the same
+// size, and the ones facing away keep most of their colour (`fade`, another), so W and S read as well as N and E. It's
+// drawn again in the other theme's colours when the theme changes.
 function gizmoOptions() {
   const accent = cssColour("--accent"), onAccent = cssColour("--accent-ink"), amber = cssColour("--warn");
   const ink = cssColour("--ink"), panel = cssColour("--panel");
@@ -3259,11 +3260,11 @@ function gizmoOptions() {
     ({ label, color, labelColor, scale, opacity, hover: { color: hover, labelColor: hover === ink ? panel : onAccent, scale: scale + 0.04, opacity: 1 } });
   return {
     container: $("stage"), placement: "top-right", offset: { right: 58, top: 10 }, size: 84, type: "sphere",
-    className: "viewgizmo", animated: !reduceMotion,
+    className: "viewgizmo", animated: !reduceMotion, fade: 0.85,
     font: { family: css.getPropertyValue("--font-display").trim() || "sans-serif", weight: 700, fill: 0.95 },
     background: { enabled: true, color: panel, opacity: 0.85, hover: { color: accent, opacity: 0.14 } },
-    x: handle("E", amber, onAccent, 0.77, ink), nx: handle("W", amber, onAccent, 0.62, ink, 0.9),
-    nz: handle("N", accent, onAccent, 0.77, ink), z: handle("S", accent, onAccent, 0.77, ink, 0.9),
+    x: handle("E", amber, onAccent, 0.77, ink), nx: handle("W", amber, onAccent, 0.77, ink),
+    nz: handle("N", accent, onAccent, 0.77, ink), z: handle("S", accent, onAccent, 0.77, ink),
     y: handle("Up", ink, panel, 0.77, accent),
     ny: { enabled: false },
   };

@@ -1,5 +1,6 @@
-// three-viewport-gizmo 2.2.0 (MIT, see LICENSE), with one change by Domus: `font.fill` (0.7 unless given) is the share of
-// a sphere handle's width a label may take, so the viewer's direction letters can be bigger in their circles.
+// three-viewport-gizmo 2.2.0 (MIT, see LICENSE), with two changes by Domus: `font.fill` (0.7 unless given) is the share
+// of a sphere handle's width a label may take, so the viewer's direction letters can be bigger in their circles; and
+// `fade` (0.5 unless given) is how much of its opacity a sphere handle facing away keeps.
 var oe = Object.defineProperty;
 var re = (s, e, t) => e in s ? oe(s, e, { enumerable: !0, configurable: !0, writable: !0, value: t }) : s[e] = t;
 var m = (s, e, t) => re(s, typeof e != "symbol" ? e + "" : e, t);
@@ -43,11 +44,11 @@ const Ee = [
   ["y", 1, 4],
   ["z", 2, 5]
 ], Ct = /* @__PURE__ */ new U();
-function Ot({ isSphere: s }, e, t) {
+function Ot({ isSphere: s, fade: Fd = 0.5 }, e, t) {
   s && (Ct.set(0, 0, 1).applyQuaternion(t.quaternion), Ee.forEach(([n, i, o]) => {
     const a = Ct[n];
     let l = e[i], d = l.userData.opacity;
-    l.material.opacity = mt(a >= 0 ? d : d / 2, 0, 1), l = e[o], d = l.userData.opacity, l.material.opacity = mt(a >= 0 ? d / 2 : d, 0, 1);
+    l.material.opacity = mt(a >= 0 ? d : d * Fd, 0, 1), l = e[o], d = l.userData.opacity, l.material.opacity = mt(a >= 0 ? d * Fd : d, 0, 1);
   }));
 }
 const Ae = (s, e, t = 10) => Math.abs(s.clientX - e.x) < t && Math.abs(s.clientY - e.y) < t, Dt = /* @__PURE__ */ new ae(), Pt = /* @__PURE__ */ new Q(), Gt = (s, e, t, n) => {
