@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.56
 
 - **For site projects:** the house's IFC changes through the change route ([docs/changes.md](docs/changes.md#the-houses-ifc)),
   with intents on its elements, each named by its GlobalId or its Domus id: `ifc-move` and `ifc-rotate` an element
