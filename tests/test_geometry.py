@@ -289,9 +289,9 @@ def test_ground_fixes_far_along_a_grid_keep_every_point(tmp_path):
     from domus.model import tin
 
     # A made-up 6 x 5 m fix area on a made-up ground model: a 3D line, resampled every 0.25 m as read_fixes does, and
-    # three points, the last on the line's middle corner (one place given twice). At coordinates in the millions, as a
-    # New Zealand site's are, every point is a corner of the fixed ground's triangles but the one given twice, the
-    # ground at each fix point is its level, and the triangles are those the same fixes make near the grid's start.
+    # three points, the last on the line's middle corner (one place given twice, kept once). At coordinates in the
+    # millions, as a New Zealand site's are, every point is a corner of the fixed ground's triangles, the ground at
+    # each fix point is its level, and the triangles are those the same fixes make near the grid's start.
     class Wavy:
         def __init__(self, e0, n0):
             self.e0, self.n0 = e0, n0
@@ -317,10 +317,51 @@ def test_ground_fixes_far_along_a_grid_keep_every_point(tmp_path):
         ground = tin.Ground(Wavy(e0, n0), areas, fixes)
         assert np.abs(ground.sample(fixes[:, 0], fixes[:, 1]) - fixes[:, 2]).max() < 0.001
         xy, faces = ground.triangles.vertices[:, :2], ground.triangles.faces
-        left = np.setdiff1d(np.arange(len(xy)), faces)
-        assert len(left) == 1 and (xy == xy[left[0]]).all(axis=1).sum() == 2      # the place given twice
+        assert len(np.setdiff1d(np.arange(len(xy)), faces)) == 0
+        assert len(np.unique(fixes[:, :2], axis=0)) == len(fixes)                  # the place given twice, once
         made.append({frozenset(s) for s in faces.tolist()})
     assert made[0] == made[1]
+
+
+def test_two_ground_fixes_at_one_place_keep_the_later(tmp_path):
+    from domus.geo.mesh import surface_z
+    from domus.model import tin
+
+    # A made-up fix area at the demo's coordinates: a line whose levels step at one of its corners, 40 mm up; a point
+    # on that corner 30 mm higher still; the line's end given again at its height; and a point given twice, 0.5 mm
+    # apart and 2 mm apart in height. At each place only the later is kept, and the fixed ground and the ground the
+    # build draws take it alike; the two that disagree by more than 5 mm are named, with their heights.
+    e0, n0 = 1500000.0, 5500000.0
+
+    def at(e, n, *z):
+        return [e0 + e, n0 + n, *z]
+
+    layer = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"id": "fix-area"}, "geometry": {
+            "type": "Polygon", "coordinates": [[at(10, 20), at(16, 20), at(16, 25), at(10, 25), at(10, 20)]]}},
+        {"type": "Feature", "properties": {"id": "fix-line"}, "geometry": {"type": "LineString", "coordinates": [
+            at(10.4, 20.3, 41.6), at(13.1, 22.2, 42.3), at(13.1, 22.2, 42.34), at(15.6, 24.7, 42.0)]}},
+        {"type": "Feature", "properties": {"id": "fix-point"}, "geometry": {"type": "Point", "coordinates": at(13.1, 22.2, 42.37)}},
+        {"type": "Feature", "properties": {"id": "fix-again"}, "geometry": {"type": "MultiPoint", "coordinates": [
+            at(15.6, 24.7, 42.0), at(11.2, 24.1, 42.9), at(11.2005, 24.1, 42.902)]}}]}
+    path = tmp_path / "ground-fixes.geojson"
+    path.write_text(json.dumps(layer), encoding="utf-8")
+    clashes = []
+    areas, fixes = tin.read_fixes(path, clashes)
+    assert clashes == [("fix-line", 42.3, "fix-line", 42.34, 1), ("fix-line", 42.34, "fix-point", 42.37, 1)]
+    assert "fix-line and fix-point give one place two heights, 42.340 and 42.370 m" in tin.clash_text(clashes[1])
+    for (e, n), h in (((13.1, 22.2), 42.37), ((15.6, 24.7), 42.0), ((11.2005, 24.1), 42.902)):
+        here = np.hypot(fixes[:, 0] - (e0 + e), fixes[:, 1] - (n0 + n)) < 0.001
+        assert here.sum() == 1 and fixes[here, 2][0] == pytest.approx(h)
+
+    class Slope:
+        def sample(self, e, n):
+            return 40.0 + 0.1 * (np.asarray(n, float) - n0)
+
+    ground = tin.Ground(Slope(), areas, fixes)
+    drawn = tin.build((e0 + 8, n0 + 18, e0 + 18, n0 + 27), 0.5, ground, (e0, n0))
+    e, n = np.array([e0 + 13.1]), np.array([n0 + 22.2])
+    assert ground.sample(e, n)[0] == pytest.approx(42.37) and surface_z(drawn.vertices, drawn.faces, e, n)[0] == pytest.approx(42.37)
 
 
 def test_a_pad_far_along_a_grid_is_drawn_through_all_its_points():

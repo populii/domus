@@ -221,6 +221,9 @@ def check_sanity(m, findings):
         if n > 1:
             findings.append(("sanity", "duplicate", k, f"id used {n} times"))
             fails += 1
+    # ground fixes that give one place two heights: the later is kept, so it's a warning
+    for clash in terrain.fix_clashes(m.site):
+        findings.append(("sanity", "warn", clash[2], terrain.clash_text(clash)))
     return fails
 
 

@@ -95,6 +95,33 @@ def test_check_finds_a_duplicate_id_on_the_demo(site, built, project):
     assert [f for f in findings if f[1] == "duplicate"]
 
 
+def test_two_ground_fixes_at_one_place_are_warned_of(tmp_path, at_site):
+    from domus import build
+    from domus.checks import model as check
+    from domus.project import demo
+
+    # A copy of the demo with a made-up ground fix: a taped line, and a spot level on one of its corners 30 mm higher.
+    # The build warns, and the sanity check reports it, naming both and their heights; the later is kept.
+    root = tmp_path / "fixes"
+    demo.write(root, say=lambda *_: None)
+    x0, y0 = demo.X0, demo.Y0
+    layer = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"id": "lawn-ground", "name": "Lawn (made up)"}, "geometry": {
+            "type": "Polygon", "coordinates": [[[x0 + 10, y0 + 23], [x0 + 14, y0 + 23], [x0 + 14, y0 + 27], [x0 + 10, y0 + 27],
+                                                [x0 + 10, y0 + 23]]]}},
+        {"type": "Feature", "properties": {"id": "lawn-tape"}, "geometry": {"type": "LineString", "coordinates": [
+            [x0 + 10.5, y0 + 23.5, 41.4], [x0 + 12.0, y0 + 25.0, 41.3], [x0 + 13.5, y0 + 26.5, 41.2]]}},
+        {"type": "Feature", "properties": {"id": "lawn-spot"}, "geometry": {"type": "Point", "coordinates": [x0 + 12.0, y0 + 25.0, 41.33]}}]}
+    (root / "data" / "site" / "ground-fixes.geojson").write_text(json.dumps(layer), encoding="utf-8")
+    site = at_site(root)
+    said = ("ground fixes: lawn-tape and lawn-spot give one place two heights, 41.300 and 41.330 m; the later in the file, "
+            "lawn-spot's 41.330 m, is kept. Make them agree, or take one out.")
+    assert build.fix_warnings(site) == [f"Warning: data/site/ground-fixes.geojson: {said}"]
+    findings = []
+    check.check_sanity(check.Model(site), findings)
+    assert [f for f in findings if f[1] == "warn"] == [("sanity", "warn", "lawn-spot", said)]
+
+
 def test_a_missing_settings_file_says_so(site, prep_json, project):
     prep_json.unlink(missing_ok=True)
     with pytest.raises(DomusError, match="from-documents"):

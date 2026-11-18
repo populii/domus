@@ -236,7 +236,9 @@ at the top of each module give the full detail: `model/features.py` for fences, 
   easements on or near it (`kind` `easement`, with `intent` and `on_lot`). Wall options flag a wall that runs into an easement.
 - **`ground-fixes.geojson`**: Polygons where the LiDAR isn't used, and 3D lines and points that stand in for it.
   Where four points lie on one circle, as a regular pattern's do, the ground between them is cut along the pair
-  closer in height.
+  closer in height. Two fix points within 1 mm of each other in plan, from any features (a line's own points too),
+  are one place, where the later in the file is kept; where their heights are more than 5 mm apart, the build warns
+  and `domus prep check sanity` reports it, naming both features and the two heights.
 - **`paved-under-canopy.geojson`**: Polygons round paving that trees hang over, such as a drive under a tree's crown.
   An aerial photo, taken from above in sun, shows the crowns and their shade there, which the model would lay on the
   ground under its own trees. Inside the polygons the build paints the paving in: what the photo shows as foliage takes

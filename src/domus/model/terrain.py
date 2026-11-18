@@ -12,7 +12,7 @@ from ..project import rasters
 from ..project.site import cached
 from . import tin
 from . import walls as walls_mod
-from .tin import Ground, contours, cut_cells, distance_to_polyline, grid, outline_points  # noqa: F401
+from .tin import Ground, clash_text, contours, cut_cells, distance_to_polyline, grid, outline_points  # noqa: F401
 from .walls import bay_levels, line_normals  # noqa: F401 (as they were, here)
 
 
@@ -24,6 +24,13 @@ def fixes_path(site):
 def read_fixes(site, path=None):
     """tin.read_fixes: the fix areas and points, from the site's data/site/ground-fixes.geojson unless given."""
     return tin.read_fixes(fixes_path(site) if path is None else path)
+
+
+def fix_clashes(site):
+    """The site's ground fixes that give one place two heights (tin.read_fixes' clashes), each kept at the later."""
+    clashes = []
+    tin.read_fixes(fixes_path(site), clashes)
+    return clashes
 
 
 @cached

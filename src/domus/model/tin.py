@@ -18,7 +18,7 @@ import itertools
 
 import numpy as np
 import shapely
-from scipy.spatial import Delaunay
+from scipy.spatial import Delaunay, cKDTree
 from shapely.ops import unary_union
 
 from ..geo import geojson
@@ -26,6 +26,8 @@ from ..geo.mesh import Mesh, Surface, cross2, delaunay_by_height, offset_behind,
 from .walls import body_depth, wall_levels
 
 TIE_M = 1e-5        # four points this near one circle lie on it exactly, but for rounding: a grid cell's, a regular pattern's
+SAME_PLACE_M = 0.001    # fix points this near each other in plan are one place, where the later in the file is kept
+APART_M = 0.005         # and heights this far apart there disagree, which the build and the sanity check say
 
 
 def grid(extent, step):
@@ -115,23 +117,66 @@ class DrawnGround:
         return h
 
 
-def read_fixes(path):
+def read_fixes(path, clashes=None):
     """Fix areas (polygon rings) and fix points (lines resampled every 0.25 m, points and multipoints)
-    from a GeoJSON file, or none if there's no file at `path`."""
-    areas, points = [], [np.empty((0, 3))]
+    from a GeoJSON file, or none if there's no file at `path`.
+
+    Fix points within SAME_PLACE_M of each other in plan, from any features, are one place, and only the later in the
+    file is kept there, so the fixed ground and the ground the build draws hold the same one. A step in a line's heights,
+    two of its vertices at one place, keeps the later's height the same way. With `clashes`, a list, each two features
+    that give a place heights more than APART_M apart are added to it, as (the earlier feature, its height, the later,
+    its height, how many places): a feature by its id, or its place in the file, and at several places the two heights
+    farthest apart."""
+    areas, points, owners = [], [np.empty((0, 3))], [np.empty(0, int)]
     if not path.exists():
         return areas, points[0]
-    for f in geojson.read(path)["features"]:
+    features = geojson.read(path)["features"]
+    found = {}
+
+    def apart(a, ha, b, hb):
+        gap = abs(ha - hb)
+        if gap > APART_M:
+            was = found.get((a, b), (0.0, 0.0, 0.0, 0))
+            found[(a, b)] = (gap, ha, hb, was[3] + 1) if gap > was[0] else (*was[:3], was[3] + 1)
+
+    for k, f in enumerate(features):
         g = f["geometry"]
         if g["type"] == "Polygon":
             areas.append(np.asarray(g["coordinates"][0], float)[:, :2])
-        elif g["type"] == "LineString":
-            points.append(resample_line(g["coordinates"], 0.25)[0])
+            continue
+        if g["type"] == "LineString":
+            line = np.asarray(g["coordinates"], float)
+            step = np.hypot(*np.diff(line[:, :2], axis=0).T) <= SAME_PLACE_M
+            for i in np.flatnonzero(step) if line.shape[1] > 2 else ():
+                apart(k, line[i, 2], k, line[i + 1, 2])
+            p = resample_line(line[np.append(~step, True)], 0.25)[0]
         elif g["type"] == "Point":
-            points.append(np.asarray([g["coordinates"]], float))
+            p = np.asarray([g["coordinates"]], float)
         elif g["type"] == "MultiPoint":
-            points.append(np.asarray(g["coordinates"], float).reshape(-1, 3))
-    return areas, np.vstack(points)
+            p = np.asarray(g["coordinates"], float).reshape(-1, 3)
+        else:
+            continue
+        points.append(p)
+        owners.append(np.full(len(p), k))
+    pts, owner = np.vstack(points), np.concatenate(owners)
+    last = np.arange(len(pts))              # the latest point at each one's place
+    for i, j in cKDTree(pts[:, :2]).query_pairs(SAME_PLACE_M) if len(pts) else ():
+        last[min(i, j)] = max(last[min(i, j)], i, j)
+    for i in np.flatnonzero(last != np.arange(len(pts))):
+        apart(owner[i], pts[i, 2], owner[last[i]], pts[last[i], 2])
+    if clashes is not None:
+        names = [str((f.get("properties") or {}).get("id", f"feature {k + 1}")) for k, f in enumerate(features)]
+        clashes += [(names[a], float(ha), names[b], float(hb), n) for (a, b), (_, ha, hb, n) in sorted(found.items())]
+    return areas, pts[last == np.arange(len(pts))]
+
+
+def clash_text(clash):
+    """What's said of two features that give a place two heights (read_fixes' `clashes`)."""
+    earlier, h0, later, h1, places = clash
+    who = f"{later} gives" if earlier == later else f"{earlier} and {later} give"
+    where = "one place two heights," if places == 1 else f"{places} places two heights each, as far apart as"
+    return (f"ground fixes: {who} {where} {h0:.3f} and {h1:.3f} m; the later in the file, {later}'s {h1:.3f} m, is kept. "
+            "Make them agree, or take one out.")
 
 
 

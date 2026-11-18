@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** two ground-fix points at one place, within 1 mm of each other in plan, from any features
+  in `data/site/ground-fixes.geojson` (a line's own points too), keep the later in the file, in the fixed ground
+  and in the ground the build draws alike. Before, each kept whichever its triangulation met first, and the two
+  could differ. Where their heights are more than 5 mm apart, the build warns and `domus prep check sanity`
+  reports it, naming both features and the two heights, so you can make them agree or take one out. Where they
+  agree, nothing is said. A step in one line's heights, two of its vertices at one place, is taken the same way.
+
 ## 2026.11.63
 
 - **For site projects:** a wall round a sharp corner, a turn of more than 120 degrees, keeps its thickness round it.

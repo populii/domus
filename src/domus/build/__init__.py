@@ -586,9 +586,16 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
     return out, summ, tex
 
 
+def fix_warnings(site):
+    """A warning for each two of the site's ground fixes that give one place two heights: the later is kept."""
+    return [f"Warning: data/site/ground-fixes.geojson: {terrain.clash_text(c)}" for c in terrain.fix_clashes(site)]
+
+
 def add_ground(b):
     """Ground."""
     cfg, extent, frame, ground, labels, layers = b.cfg, b.extent, b.frame, b.ground, b.labels, b.layers
+    for line in fix_warnings(b.site):
+        b.say(line)
     tin = terrain.drawn(b.site)     # the existing walls cut in: the ground the wall options are worked out on, too
     e0, n0, e1, n1 = extent
     uv = np.column_stack([(tin.vertices[:, 0] - e0) / (e1 - e0), (tin.vertices[:, 1] - n0) / (n1 - n0)])
