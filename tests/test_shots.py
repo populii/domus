@@ -117,6 +117,17 @@ def test_a_plan_says_what_the_model_lacks(bad, summary, says):
         shots.plan(spec(bad), model(**summary))
 
 
+def test_a_shot_can_colour_its_option_by_cut_and_fill():
+    s = spec({"name": "a", "option": "a-one-wall", "cutfill": True, "view": "Plan"}, {"name": "now", "cutfill": False})
+    assert s["shots"][0]["cutfill"] is True and "cutfill" not in s["shots"][1]
+    assert shots.plan(s, model()) == [{"name": "a", "option": "a-one-wall", "view": "Plan", "cutfill": True},
+                                      {"name": "now", "option": "", "view": "Overview"}]
+    with pytest.raises(DomusError, match="Shot a: cutfill is true or false"):
+        spec({"name": "a", "option": "a-one-wall", "cutfill": "yes"})
+    with pytest.raises(DomusError, match="Shot now: cutfill colours a wall option's ground .* so it needs an option"):
+        spec({"name": "now", "cutfill": True})
+
+
 def test_only_the_sites_own_groups_hide():
     with pytest.raises(DomusError, match="no group Option: A. One wall to hide: the groups are Ground, Other, Vegetation"):
         shots.plan(spec({"name": "a"}, hide=["Option: A. One wall"]), model())
@@ -246,3 +257,25 @@ def test_pictures_of_the_demo(chromium, built, tmp_path):
     (path, _), = shots.take(s, built, timeout_s=240, say=said.append)
     bare = np.asarray(Image.open(path).convert("RGB"), dtype=int)
     assert (np.abs(bare - pictures["now"]).max(axis=2) > 40).mean() > 0.02
+
+
+def test_a_picture_of_an_option_coloured_by_its_cut_and_fill(chromium, built, tmp_path):
+    """cutfill colours the option's ground as the viewer's switch does, blue where it's filled, and each shot sets the
+    switch, so the colours don't carry into the next."""
+    import numpy as np
+
+    s = shots.check_spec({"window": [480, 300], "scale": 2, "shots": [
+        {"name": "b", "option": "b-two-tiers", "view": "Plan"},
+        {"name": "b-cut-fill", "option": "b-two-tiers", "cutfill": True, "view": "Plan"},
+        {"name": "b-again", "option": "b-two-tiers", "view": "Plan"},
+    ]}, tmp_path)
+    taken = shots.take(s, built, timeout_s=240, say=lambda line: None)
+    assert [(p.name, showing) for p, showing in taken] == [
+        ("b.png", "B. Two tiers"), ("b-cut-fill.png", "B. Two tiers"), ("b-again.png", "B. Two tiers")]
+    plain, coloured, again = (np.asarray(Image.open(p).convert("RGB"), dtype=int) for p, _ in taken)
+    assert (np.abs(coloured - plain).max(axis=2) > 40).mean() > 0.02, "the option's ground isn't coloured"
+    assert (np.abs(again - plain).max(axis=2) > 40).mean() < 0.002, "the colours carried into the next shot"
+    # The demo's option B fills far more than it cuts, so its ground turns blue where it's filled: on the demo about 2%
+    # of the picture, where the picture without the colours has under half a per cent of blue.
+    bluish = lambda image: ((image[..., 2] - image[..., 0]) > 30).mean()
+    assert bluish(coloured) > bluish(plain) + 0.01

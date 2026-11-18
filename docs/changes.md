@@ -1,17 +1,19 @@
 # Changes to a site's data
 
-Every change to a site's data goes one way. The viewer, an agent, a site's tool or a check says what to change as an
+A change to a site's data goes one way. The viewer, an agent, a site's tool or a check says what to change as an
 **intent**, such as "move wall W1 0.5 m east" or "set this level to 42.10". Domus checks it against the site, applies
 it to the file it changes, records it in `.domus/edits/` with who made it, when and why, and says what to build again.
 Every edit can be undone. A check's or a tool's findings come as **proposals**, which a person accepts or rejects:
 nothing applies itself.
 
 The files it changes are a site's layers (`data/site/*.geojson`), its settings (`data/site.toml` and
-`options/_site.toml`), and the house kept as an IFC file (`data/house.ifc`, [below](#the-houses-ifc)). The examples
-here are on the made-up demo (`domus demo`).
+`options/_site.toml`), and the house kept as an IFC file (`data/house.ifc`, [below](#the-houses-ifc)). The commands
+that bring public data in (`domus fetch`, `canopy`, `marks`, `title` and `points`), `domus scan`, `domus site upgrade`
+and the viewer's **Make it an option**, which writes a new option's file, write their own files, outside this route.
+The examples here are on the made-up demo (`domus demo`), but for the house's IFC, on the richer made-up site.
 
-This route is provisional for now ([api.md](api.md#provisional-the-change-route)): it may still change from one release
-to the next without a deprecation.
+The route is part of the public API's promise ([api.md](api.md#every-change-one-way)): what it takes and records keeps
+working from one release to the next, so a site's tools and agents can build on it.
 
 ## Intents
 
@@ -80,7 +82,7 @@ Each edit is recorded in `.domus/edits/<sequence>-<kind>.json`, with the files a
 ```json
 {"id": "0001", "kind": "move", "who": "sam", "when": "2026-11-18T08:59:43Z",
  "why": "Measured from the boundary peg with a tape.",
- "intents": [{"kind": "move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5, 0.0]}],
+ "intents": [{"kind": "move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5, 0]}],
  "summary": ["walls-existing: W1 moved by (+0.500, +0.000) m"],
  "files": [{"path": "data/site/walls-existing.geojson",
             "before": "15a793798e0be7faa0e8c632840d37dbddf2c29db7c44e5dc5788ed1d7c88ef1",
@@ -119,10 +121,11 @@ recorded as an edit of its own, so undoing the undo makes the change again. `--b
 ## The house's IFC
 
 A site whose house is kept as an IFC file (`data/house.ifc`, [site-format.md](site-format.md#the-house-as-an-ifc-file))
-changes it on this route too, with intents on its elements. Each names an element by its GlobalId or its Domus id
-(`ref` in its `Domus` property set, which is its Tag too: a part's id in `house.geojson`, a wall face's, `roof` or
-`eaves`), and a storey the same way (`floor`, or `lower` and `upper`). IfcOpenShell's API applies them, and the file is
-written whole.
+changes it on this route too, with intents on its elements. The examples are on the richer made-up site
+(`tools/made_up_sites.py`), whose house has a chimney and a tank, once `domus house ifc` has written its file. Each
+names an element by its GlobalId or its Domus id (`ref` in its `Domus` property set, which is its Tag too: a part's id
+in `house.geojson`, a wall face's, `roof` or `eaves`), and a storey the same way (`floor`, or `lower` and `upper`).
+IfcOpenShell's API applies them, and the file is written whole.
 
 | Kind | What it does | Example |
 |---|---|---|

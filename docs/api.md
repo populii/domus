@@ -1,15 +1,18 @@
 # The public API
 
 Site tools, a site's own tests and agents read a site through `domus.api`, and test it with `domus.testing`. The
-examples in [`site/`](../site/README.md) use both.
+examples in [`site/`](../site/README.md) use both. On the made-up demo (`domus demo sites/demo`, then
+`domus --site sites/demo build`):
 
 ```python
 from domus import api
 
-site = api.open_site("site")
-print(site.title, round(site.lot().area), "m2")
+site = api.open_site("sites/demo")
+print(site.title, round(site.lot().area), "m2")          # Demo site (made up) 660 m2
 for option in site.options():
-    print(option["name"], site.evaluate(option)["volumes"]["cut_m3"])
+    print(option["name"], site.evaluate(option)["volumes"]["cut_m3"], "m3 cut")
+# A. One low wall 0.9 m3 cut
+# B. Two tiers 0.2 m3 cut
 site.export("site.glb")         # the built model for other software, glTF or IFC; option= an option's id shows it
 ```
 
@@ -19,6 +22,11 @@ What `domus.api` and `domus.testing` offer keeps working from one release to the
 deprecation warning in an earlier release, and a "For site projects" note in [CHANGELOG.md](../CHANGELOG.md). The rest
 of the `domus` package is internal: it can change in any release, so a site tool that reaches into it may need
 changing with it.
+
+Three parts are **provisional**, as [PEP 411](https://peps.python.org/pep-0411/) means it: public and documented, but
+they may change from one release to the next without a deprecation until they're declared stable. They're the video
+and prep steps, observations, and the house kept as an IFC file, each in a section of its own below that says why.
+Everything else here, the one route for every change to a site's data among it, is covered by the promise.
 
 ## Opening a site
 
@@ -63,7 +71,30 @@ Everything is on the site's own grid (`[crs] epsg` in `data/site.toml`), with he
 
 ## Changing a site
 
-Each of these does what the command does, and writes the site's files; the site reads them afresh afterwards.
+### Every change, one way
+
+A change to a site's data, its layers, its settings or the house's IFC, goes one way ([changes.md](changes.md)): it's
+said as an intent, such as `{"kind": "move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5, 0]}`, checked
+against the site, applied to the file it changes the safe way, recorded in `.domus/edits/` with who, when and why,
+and undoable. A check's or a tool's findings are proposals a person accepts or rejects. The viewer's **Site** tab and
+agents work through these too.
+
+| | What it does |
+|---|---|
+| `site.edit(intent, why, who=None, dry_run=False)` | Applies `intent` (an intent, a list of them as one edit, or a JSON file holding either), recorded with `why`, which it needs, and `who` (this computer's user unless given), as `domus site edit FILE --why ... --apply` does. Gives the record; `dry_run` only says what would change |
+| `site.undo(edit, who=None, why=None)` | Undoes an edit by its number, while each file it changed is still as it left it, as `domus site undo` does; the undo is an edit too. Gives its record |
+| `site.edits()` | The records, oldest first, each with `in_effect`, and `undone_by` once undone, as `domus site edits` lists them |
+| `site.propose(intents, why, source)` | Proposes a change for a person to accept or reject, checked against the site now. Gives the proposal |
+| `site.proposals(state=None)` | The proposals, oldest first, or those in `state` (`open`, `accepted` or `rejected`), as `domus site proposals` lists them |
+| `site.accept(proposal, who=None)` | Accepts a proposal by its id, as `domus site accept` does: its intents applied as an edit whose basis is the proposal. Gives the edit's record |
+| `site.reject(proposal, why, who=None)` | Rejects a proposal by its id, recording why, as `domus site reject` does. Gives the proposal |
+
+`edit`, `undo`, `propose`, `accept` and `reject` take `say`, as the commands' calls do.
+
+### What the commands change
+
+Each of these does what the command does, and writes the site's files; the site reads them afresh afterwards. `shift`,
+`edit` and `regrade` are edits on the route above, recorded and undoable; the others write their own files.
 
 | | What it does |
 |---|---|
@@ -75,7 +106,7 @@ Each of these does what the command does, and writes the site's files; the site 
 | `site.scan(file, tag, control=None, epsg=None, up=None)` | Brings in a phone or tablet LiDAR scan, as `domus scan` does, placed on the grid by `control`, a CSV of points in both (with `up`, `"y"` or `"z"`, the scan's vertical axis taken as true), or by `epsg` for a file already on a grid. Gives the file it wrote, `data/video/<tag>-scan.npz` ([phone-lidar.md](phone-lidar.md)) |
 | `site.upgrade(dry_run=False)` | Writes the site's migrations into its own files, as `domus site upgrade` does, keeping the files as they were in `.domus/upgrade/`; with `dry_run`, only says what would change |
 | `site.trust(revoke=False)` | Lets this machine's builds run the site's extensions as they are now, as `domus site trust` does, or stops them, with `revoke`. Gives each file and its SHA-256 |
-| `site.shift(spec, backup=None, apply=False)` | Moves named features of the site's layers by one vector, as `domus site shift` does. `spec` is a dict or a JSON file; without `apply` it only says what would change, and with it the change is an edit as `site.edit()` makes one (below), recorded so it can be undone, its reason `why=` or else the spec's basis, with each file's copy as it was in `backup`, a fresh folder, if it's given |
+| `site.shift(spec, backup=None, apply=False)` | Moves named features of the site's layers by one vector, as `domus site shift` does. `spec` is a dict or a JSON file; without `apply` it only says what would change, and with it the change is an edit as `site.edit()` makes one (above), recorded so it can be undone, its reason `why=` or else the spec's basis, with each file's copy as it was in `backup`, a fresh folder, if it's given |
 | `site.edit(spec, backup=None, apply=False)` | Changes, adds and deletes named features of the site's layers, as `domus site edit` does with a spec in its older form, the same way |
 | `site.regrade(clouds, spec, backup=None, apply=False)` | Gives ground-fix points and lines the levels a placed cloud (or a list of them) shows, as `domus site regrade` does, the same way |
 
@@ -83,7 +114,7 @@ Each of these does what the command does, and writes the site's files; the site 
 
 **`site.edit()` takes either of two things, told apart by its first argument.** An intent, a dict with a `kind` such as
 `{"kind": "move", ...}`, or a list of them, or a JSON file holding either, goes the one route every change to a site's
-data takes, `site.edit(intent, why, who=None, dry_run=False)` (below). Anything else is a spec in the older form,
+data takes, `site.edit(intent, why, who=None, dry_run=False)` (above). Anything else is a spec in the older form,
 `{layer file: [changes]}`, and `site.edit(spec, backup=None, apply=False)` works with it as it always has, by position
 or by name: its second argument is then the backup folder and its third whether to apply it.
 
@@ -99,9 +130,8 @@ as a house part a build can't draw, are printed as they were.
 `site.video` runs the steps of `domus video` ([video.md](video.md)): `site.video.place("walk-colmap")` places a
 reconstruction as `domus video place walk-colmap` does. `site.prep` runs those of `domus prep`
 ([from-documents.md](from-documents.md)) the same way: `site.prep.profile("0,2 4,2", offsets=[0, 1])`. They're
-**provisional**, as [PEP 411](https://peps.python.org/pep-0411/) means it: public and documented, but a step may change
-from one release to the next without a deprecation until they're declared stable. The promise above doesn't cover them
-yet.
+provisional ([the promise](#the-promise)) because their arguments are the commands' options one for one: a step's call
+changes whenever its command's options do, and many of the steps, grown from real sites' own tools, are still settling.
 
 Each step is a method named after it: `auto`, `frames`, `reconstruct`, `reconstruct_chain`, `two_lens`, `merge`,
 `split`, `link`, `link_picks`, `place`, `pick`, `dense`, `export`, `plot`, `sheet`, `crop` and `picks_edit`. Its
@@ -117,33 +147,26 @@ The prep steps are `plan_pages`, `plan_georef`, `plan_trace`, `ifc`, `feature_te
 box or a line's points can be pairs or the command's text. `domus prep check` is `site.check()`, above. Most read
 what to do from `data/prep.json`, and `profile`, `cloud` and `cloud_plan` give what they found.
 
-## Provisional: the change route
+## Provisional: observations
 
-Every change to a site's data goes one way ([changes.md](changes.md)): it's said as an intent, such as `{"kind":
-"move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5, 0]}`, checked against the site, applied to the file it
-changes the safe way, recorded in `.domus/edits/` with who, when and why, and undoable. A check's or a tool's findings
-are proposals a person accepts or rejects. These are **provisional**, as the video and prep steps are: public and
-documented, but they may change from one release to the next without a deprecation until they're declared stable.
+Observations are readings from videos kept apart from the model, each set against the element it checks at every
+build ([observations.md](observations.md)). They're provisional ([the promise](#the-promise)) because they're the
+newest part: they came in 2026.11.52, and what they read and check is still growing (placements were first measured
+against the ground in 2026.11.63).
 
 | | What it does |
 |---|---|
-| `site.edit(intent, why, who=None, dry_run=False)` | Applies `intent` (an intent, a list of them as one edit, or a JSON file holding either), recorded with `why`, which it needs, and `who` (this computer's user unless given), as `domus site edit FILE --why ... --apply` does. Gives the record; `dry_run` only says what would change |
-| `site.undo(edit, who=None, why=None)` | Undoes an edit by its number, while each file it changed is still as it left it, as `domus site undo` does; the undo is an edit too. Gives its record |
-| `site.edits()` | The records, oldest first, each with `in_effect`, and `undone_by` once undone, as `domus site edits` lists them |
-| `site.propose(intents, why, source)` | Proposes a change for a person to accept or reject, checked against the site now. Gives the proposal |
-| `site.proposals(state=None)` | The proposals, oldest first, or those in `state` (`open`, `accepted` or `rejected`), as `domus site proposals` lists them |
-| `site.accept(proposal, who=None)` | Accepts a proposal by its id, as `domus site accept` does: its intents applied as an edit whose basis is the proposal. Gives the edit's record |
-| `site.reject(proposal, why, who=None)` | Rejects a proposal by its id, recording why, as `domus site reject` does. Gives the proposal |
 | `site.observations()` | The site's observations ([observations.md](observations.md)), each as read now: `measured` from its source, `expected` from the model by its target's id, the `difference` and its `state` |
 | `site.propose_observation(observation)` | Proposes setting an observation's target to what it read, as `domus site propose` does. Gives the proposal |
 
-`edit`, `undo`, `propose`, `propose_observation`, `accept` and `reject` take `say`, as the commands' calls do.
+`propose_observation` takes `say`, as the commands' calls do.
 
 ## Provisional: the house as an IFC file
 
-The house can be kept as an IFC file, `data/house.ifc`, which the build draws it from when `[house] source = "ifc"`
-([site-format.md](site-format.md#the-house-as-an-ifc-file)). This is **provisional**, as the change route is: it may
-change from one release to the next without a deprecation until it's declared stable.
+The house can be kept as an IFC file, `data/house.ifc`, which is its one source when `[house] source = "ifc"`
+([site-format.md](site-format.md#the-house-as-an-ifc-file)). It's provisional ([the promise](#the-promise)) because the
+file became the house's one source only in 2026.11.64, and what its description follows is still growing: site-format.md
+lists what it doesn't follow yet.
 
 | | What it does |
 |---|---|

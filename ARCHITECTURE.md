@@ -51,16 +51,16 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 |---|---|
 | `geo/` | Grids and datums (`crs`: a site's `Grid`, made from its settings), rasters read on their own grids, GeoJSON, meshes, fits: none of it reads a site |
 | `model/` | The model's parts: the ground (`terrain` reads the site's, `tin` triangulates), the house and its looks, the house kept as an IFC file (`house_ifc`, written and read with IfcOpenShell), and the house as every part of Domus reads it (`house_source`: `house.geojson` and `[house]`, or that file), walls, small features, plants (`canopy` reads the site's, `vegetation` draws), drains |
-| `options/` | The wall options: `scheme` works them out, `design` reads a site's for it, `sketch` turns a drawing into one, `solids` builds one as closed solids with Manifold (its ground, walls, steps, cut and fill), which its soil is measured from and the build draws its ground from, and `preview` works a sketch out as solids from what a built model gives the viewer, the reference the viewer's JavaScript copy is held to |
+| `options/` | The wall options: `scheme` works them out, `design` reads a site's for it, `sketch` turns a drawing into one, `solids` builds one as closed solids with Manifold (its ground, walls, steps, cut and fill), which its soil is measured from and the build draws its ground from, `materials` lists what it takes to build, and `preview` works a sketch out as solids from what a built model gives the viewer, the reference the viewer's JavaScript copy is held to |
 | `build/` | The build, and its cache |
 | `export/` | A built model for other software: glTF, and IFC through the optional IfcOpenShell |
 | `checks/` | `domus prep check`'s rules, the observations read against the model (`observations`), and the viewer's checklist and video walk (`enrich`) |
 | `capture/` | Videos into placed clouds, and phone scans |
 | `prep/` | A site's documents and photos into its data |
 | `importers/` | Places into site folders: New Zealand's (`nz/`), anywhere's (`osm`) |
-| `project/` | The site folder: the Site each part is handed (its folder, output, settings, format and grid) and its rasters, its settings' schema, formats and upgrades, trusted extensions, the one route for changes to its data (`intents`, `ifc_intents` for the house's IFC, `changes`: recorded, undoable, and proposed for a person to accept), its observations' file (`observations`), `domus new` and the demo |
+| `project/` | The site folder: the Site each part is handed (its folder, output, settings, format and grid) and its rasters, its settings' schema, formats and upgrades, trusted extensions, the one route for changes to its data (`intents`, `ifc_intents` for the house's IFC, `changes`: recorded, undoable, and proposed for a person to accept; `edits`, the older shift, edit and regrade on that route), its observations' file (`observations`), `domus new` and the demo |
 | `app/` | On top of it all, the app: the command line (`cli`, with the video and prep steps' arguments in `video` and `prep`), the server (`serve`) and the viewer (`viewer/`, a page and its libraries, and its sketch preview: `sketch-core.js`, a JavaScript copy of the build's rules for a sketch, run with Manifold in `sketch-worker.js`). Nothing else in Domus imports it |
-| top level | The public API (`api`, `testing`), `create`, `shots` and the templates |
+| top level | The public API (`api`, `testing`), the errors a person can put right (`errors`), `create`, `shots` and the templates |
 
 Each module is imported by its place in the table, such as `domus.model.terrain`, `domus.capture.georef_sfm` or
 `domus.app.cli`.
@@ -69,12 +69,13 @@ Each module is imported by its place in the table, such as `domus.model.terrain`
 
 Every setting a site can hold is declared once, with its default and a line of help, in `domus.project.schema`, and the
 code reads settings through it. The tests fail on a setting the code reads that the schema doesn't declare, or reads
-with another default, and docs/site-format.md's tables are written from it. Import rules in pyproject.toml, checked in CI, keep the server on
-the standard library, the pure layers (`geo`, the model's pure parts and the options' working out) free of the site
-and the app, and the app on top, where nothing imports it. The pure parts
-are the house and its looks, the walls and their looks, the small features, the plants (`vegetation`), the ground's
-triangulation (`tin`), the wall options' working out (`scheme`) and their solids (`solids`), the mesh helpers and the
-drains: the build, a workflow, reads the site (`terrain`, `canopy`, `design`) and hands them what they draw from.
+with another default, and docs/site-format.md's tables are written from it. Import rules in pyproject.toml, checked in
+CI, keep the server on the standard library, the pure layers (`geo`, the model's pure parts and the options' working
+out) free of the site and the app, and the app on top, where nothing imports it. The pure parts are the house and its
+looks, the walls and their looks, the small features, the plants (`vegetation`), the ground's triangulation (`tin`),
+the wall options' working out (`scheme`), their solids (`solids`) and their materials lists (`materials`), the mesh
+helpers and the drains: the build, a workflow, reads the site (`terrain`, `canopy`, `design`) and hands them what they
+draw from.
 
 ## The build
 
@@ -83,6 +84,38 @@ drains: the build, a workflow, reads the site (`terrain`, `canopy`, `design`) an
 built from (the Domus code, the site's files, and for an option its own file and what it takes from the others). A
 part whose key hasn't changed is taken whole, so a cached build is byte for byte a fresh one; proofs use
 `domus build --fresh` anyway.
+
+## One geometry library
+
+Manifold works out the shapes in the build and in the browser alike. An option's soil is measured from closed solids
+of what it digs out and brings in (`domus.options.solids`), from the ground as the build draws it, and its ground is
+drawn from those solids too. Walls and steps, an option's and the existing ones, are drawn as closed solids, and the
+IFC export marks them closed. In the viewer a sketch is worked out as solids while it's drawn and dragged, by a
+JavaScript copy of the build's rules for a sketch (`app/viewer/sketch-core.js`, in a worker of its own); the tests
+work a corpus of made-up sketches (`tests/sketch_corpus.json`) out both ways, so the copy is held to the build's
+reference (`domus.options.preview`).
+
+## Changes to a site's data
+
+A site's curated data, its layers, its settings and the house's IFC, changes one way (`domus.project.changes`,
+[docs/changes.md](docs/changes.md)). Each change is an intent (`domus.project.intents`, and `ifc_intents` for the
+house's IFC), checked against the site, each file it changes written the safe way, all of them or none, and recorded
+in `.domus/edits/` with who, when and why, each file's SHA-256 before and after, and the intents that undo it. The
+viewer's **Site** tab, `domus site`, a site's tools and agents (through `site.edit()`) all make changes that way. What
+a check or a tool finds to change is a proposal (`.domus/proposals/`), which a person accepts, as an edit, or rejects:
+nothing applies itself. The commands that bring public data in write their own files.
+
+Observations sit beside the model rather than in it ([docs/observations.md](docs/observations.md)): each is a reading,
+from a clip's picks or a placement, tied by an id to the element it checks. Every build reads both sides afresh, so
+solving a clip again or changing the model carries the observation with it, and a reading becomes part of the model
+only through a proposal a person accepts.
+
+## The house
+
+Every part of Domus reads the house through one accessor, `domus.model.house_source`: from `house.geojson` and
+`[house]`, or, with `[house] source = "ifc"`, from the house's IFC file, which then holds the house's whole description
+and is its one source ([docs/site-format.md](docs/site-format.md#the-house-as-an-ifc-file)). Domus writes the file only
+with IfcOpenShell, and changes its elements through the change route, the file kept as it was before each edit.
 
 ## A site's own code
 
@@ -94,15 +127,16 @@ trusts none, and the server never imports a site's code.
 ## The public API
 
 Site tools, a site's own tests and agents use `domus.api` and `domus.testing` ([docs/api.md](docs/api.md)): open or start
-a site, read its lot, house, layers, grid, ground and options, evaluate an option, and do what each command does, from
-fetching its data to building, checking and exporting it. Every command is a call into it: the command line reads the
-arguments and prints, and the server's jobs run the same commands. What they offer changes only after a deprecation in
-an earlier release and a "For site projects" note in the changelog; the video and prep steps (`site.video`,
-`site.prep`) are provisional until they're declared stable. The rest of the package is
-internal, so common can change behind the API without breaking a site's tools. A process can hold several sites:
-each part of Domus is handed the site it works on (`domus.project.site`), and each site keeps what Domus reads of it.
+a site, read its lot, house, layers, grid, ground and options, evaluate an option, change its data through the change
+route, and do what each command does, from fetching its data to building, checking and exporting it. Every command is
+a call into it: the command line reads the arguments and prints, and the server's jobs run the same commands. What
+they offer changes only after a deprecation in an earlier release and a "For site projects" note in the changelog.
+Three parts are provisional until they're declared stable, and docs/api.md says why: the video and prep steps
+(`site.video`, `site.prep`), the observations and the house kept as an IFC file. The rest of the package is internal,
+so common can change behind the API without breaking a site's tools. A process can hold several sites: each part of
+Domus is handed the site it works on (`domus.project.site`), and each site keeps what Domus reads of it.
 
-## Where it's heading
+## How it got here
 
 The layout above came in seven phases, 0 to 6, each proved by identical builds of made-up and real sites before the
 next began: this layout and its made-up sites in CI, the public API, the settings schema and site formats, sites
@@ -111,17 +145,6 @@ tools that grew in real sites, and the package in folders. Then came six slices,
 a value of its own, with `domus.geo.crs` left as the grid maths; each part handed the site it works on; the app in
 `domus/app/`; one route into Domus, every command a call into `domus.api` with its arguments read in one tree and its
 usage printed by `--help`; a warning wherever site code used a name that was going, or called a part without its
-site; and the removal of those names and calls. Beside them came a newer three.js in the viewer, `domus export` to
-glTF and IFC, `domus shots`, one route for every change to a site's data: from the viewer, an agent, a site tool or a
-check, each change is an intent, recorded
-with who, when and why and undoable, and a check's findings are proposals a person accepts or rejects
-([docs/changes.md](docs/changes.md)); observations, readings from videos kept as data apart from the model, each set
-at every build against the element it checks by its id, and accepted into the model through that route
-([docs/observations.md](docs/observations.md)); and the house kept as an IFC file, written only by IfcOpenShell,
-which the build draws the house from when the site says so (`[house] source = "ifc"`), and whose elements are
-changed through that route too, the file kept as it was before each edit. And one geometry library, Manifold, in the
-build and the browser: an option's soil is measured from its solids and its ground drawn from them, its walls and steps
-are closed solids, and the viewer works a sketch out as solids while it's drawn, held to the build by a corpus of
-sketches both must agree on.
-
-What's next is the repository going public.
+site; and, in 2026.11.63, the removal of those names and calls. Beside them came a newer three.js in the viewer,
+`domus export` to glTF and IFC, `domus shots`, the change route, observations, the house kept as an IFC file and then
+as its one source, and Manifold in the build and the browser.

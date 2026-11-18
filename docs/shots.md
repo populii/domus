@@ -22,8 +22,8 @@ image doesn't include Playwright: take pictures on a machine that has it, with `
 ## A spec
 
 On the made-up demo site (`domus demo sites/demo`, then `domus --site sites/demo build`), this takes the site as it
-is, each of its two wall options from above, option A from beyond the lot's north side, and option B in plan and from
-beyond its north-west corner:
+is, each of its two wall options from above, option A from beyond the lot's north side, and option B in plan, with its
+ground coloured by its cut and fill, and from beyond its north-west corner:
 
 ```json
 {
@@ -36,7 +36,7 @@ beyond its north-west corner:
     {"name": "a", "option": "a-one-wall", "view": "Overview"},
     {"name": "b", "option": "b-two-tiers", "view": "Overview"},
     {"name": "a-from-the-north", "option": "a-one-wall", "pos_so": [-6, 11, 46], "target_so": [12, 11, 41]},
-    {"name": "b-plan", "option": "b-two-tiers", "view": "Plan"},
+    {"name": "b-plan", "option": "b-two-tiers", "cutfill": true, "view": "Plan"},
     {"name": "b-from-the-north-west", "option": "b-two-tiers", "pos_en": [1499988, 5500046, 50], "target_en": [1500012, 5500020, 41]}
   ]
 }
@@ -59,6 +59,7 @@ Each shot:
 |---|---|
 | `name` | The picture's file name without `.png`: letters, digits, `-` and `_`. A picture already there is replaced |
 | `option` | The wall option shown, by its id: its file's name in `options/` without `.toml`, such as `a-one-wall`. `""`, or none, is the site as it is |
+| `cutfill` | `true` colours the option's ground by its cut and fill, as the viewer's **Colour the ground by cut and fill** does: orange where it's cut and blue where it's filled, stronger the deeper up to a metre, with a fine line every 0.25 m, on the plain relief. It needs an `option`. `false` unless given |
 | `view` | A view button's name: `Overview`, `Plan` or one of the site's own, `[views]` in `data/site.toml` |
 | `pos`, `target` | Where the camera stands and what it looks at, in viewer metres: x east, y up and z south of the model's origin, as `[views]` gives them |
 | `pos_so`, `target_so` | The same in the wall options' frame: s along the frame's boundary, o in from it, and a height on the site's datum |
@@ -89,9 +90,11 @@ true vertical scale.
 Each picture is the whole window, showing the model alone: the panel, the title block, the navigation pad and the
 option buttons are hidden, and the compass stays in the top right corner. Everything else is as the viewer draws it,
 in its light colours: the ground with its first drape, usually the aerial photo, the labels on the model, the layers
-it shows at first but for the groups `hide` names, and for an option, its walls, lawns, beds and contours. Sketches
-drawn in the viewer aren't shown. Each shot is taken once the viewer has loaded every picture and point cloud the model
-names and has drawn the model since, not after a fixed wait.
+it shows at first but for the groups `hide` names, and for an option, its walls, lawns, beds and contours. With
+`cutfill` the ground is the plain relief, coloured where the option moves soil, and the option's lawns and beds step
+aside for the colours, as they do in the viewer. Sketches drawn in the viewer aren't shown. Each shot is taken once
+the viewer has loaded every picture and point cloud the model names and has drawn the model since, not after a fixed
+wait.
 
 A picture is a PNG with the image and nothing else: no text, time, EXIF or colour profile. Chromium writes none of
 these today, and Domus keeps only the image's own chunks (`IHDR`, `PLTE`, `tRNS`, `IDAT` and `IEND`) in case it ever
@@ -104,3 +107,9 @@ with a photo: `window.siteViewer`. `siteViewer.setCamera(pos, target)` moves the
 `await siteViewer.drawn()` waits until every picture and point cloud the page has asked for has arrived, any camera
 move has finished, and the model has been drawn since. `domus shots` uses both, and clicks the viewer's own buttons
 for options, views and layer groups.
+
+## The README's pictures
+
+The pictures of the made-up sites in the README are taken with `domus shots` too. Each one's site, window and shot is
+listed in [`images/readme-pictures.json`](images/readme-pictures.json), and `uv run python tools/readme_pictures.py`
+takes them all again ([CONTRIBUTING.md](../CONTRIBUTING.md#docs-and-the-changelog) says when and how).

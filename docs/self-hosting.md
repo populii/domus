@@ -20,7 +20,7 @@ Commands need the site named: `docker exec domus domus --site /sites/<name> buil
 | Variable | Default | What it does |
 |---|---|---|
 | `DOMUS_PORT` | `8765` | Port to serve on |
-| `DOMUS_TRUST_PROXY` | `0` | `1` takes the user's name from `X-Forwarded-User`, for labelling sketches. Set it only behind a login proxy that sets that header itself |
+| `DOMUS_TRUST_PROXY` | `0` | `1` takes the user's name from `X-Forwarded-User`, for labelling sketches and recording who accepted, rejected or undid a change. Set it only behind a login proxy that sets that header itself |
 | `DOMUS_LINZ_KEY` | unset | Free LINZ Data Service key, for real boundaries and buildings in New Zealand. Without it, and for addresses elsewhere, address lookups go to OpenStreetMap |
 | `DOMUS_SITES` | unset | A folder of sites: one container serves them all, as below |
 | `DOMUS_ALLOWED_HOSTS` | unset | Comma-separated host names the server answers to, such as `domus.example.com`. IP addresses and localhost always work; any other name gets a 403 |
@@ -55,8 +55,10 @@ docker exec -it domus domus build
 ```
 
 Copy a real boundary into `/site` first and use `--boundary /site/lot.geojson` if you have one. Reload the
-page after a build. `create` and `fetch` are the only commands that go out to the internet: to LINZ's public AWS
-buckets and data service, or OpenStreetMap with no key. To edit a site's files, use the folder on the host.
+page after a build. `create`, `fetch`, `marks`, `title` and `points` are the only commands that go out to the
+internet: to LINZ's data service and its public AWS buckets, OpenStreetMap without a key, the Copernicus ground
+model's open copy on AWS outside New Zealand, and OpenTopography for a point cloud. To edit a site's files, use the
+folder on the host.
 
 Video reconstruction runs in the container too, on the CPU, and a long clip takes a good while: see [video.md](video.md).
 

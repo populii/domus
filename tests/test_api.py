@@ -15,18 +15,18 @@ from domus.errors import DomusError
 
 # The promise: these stay, from one release to the next. Removing or renaming one needs a deprecation first.
 PUBLIC = {"DomusError", "Site", "clip", "create", "demo", "fit_affine", "linz_query", "new", "open_site", "resample_line"}
-SITE_METHODS = {"build", "check", "edit", "evaluate", "export", "fetch", "fetch_marks", "fetch_points", "fetch_title", "frame",
-                "grid", "ground", "house_walls", "layer", "lot", "map_canopy", "options", "output", "path", "regrade", "scan",
-                "settings", "shift", "shots", "title", "trust", "upgrade", "video", "prep"}
-# Provisional, as the video and prep steps are (docs/api.md): the one route for every change to a site's data, and the
-# house kept as an IFC file.
-CHANGE_METHODS = {"accept", "edits", "proposals", "propose", "reject", "undo", "write_house_ifc"}
+SITE_METHODS = {"accept", "build", "check", "edit", "edits", "evaluate", "export", "fetch", "fetch_marks", "fetch_points",
+                "fetch_title", "frame", "grid", "ground", "house_walls", "layer", "lot", "map_canopy", "options", "output", "path",
+                "proposals", "propose", "regrade", "reject", "scan", "settings", "shift", "shots", "title", "trust", "undo",
+                "upgrade", "video", "prep"}
+# Provisional, as the video and prep steps are (docs/api.md says why): the observations, and the house kept as an IFC file.
+PROVISIONAL = {"house", "observations", "propose_observation", "write_house_ifc"}
 
 
 def test_the_promised_names_are_all_there():
     assert set(api.__all__) == PUBLIC
     assert all(hasattr(api, name) for name in PUBLIC)
-    assert SITE_METHODS | CHANGE_METHODS <= set(dir(api.Site)) | {"path"}
+    assert SITE_METHODS | PROVISIONAL <= set(dir(api.Site)) | {"path"}
 
 
 def test_a_deprecation_is_put_at_the_line_outside_domus_that_led_to_it():

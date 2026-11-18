@@ -14,13 +14,15 @@ SPEC.json, all but `shots` optional (docs/shots.md has more, and examples on the
      "hide": ["Vegetation"],       layer groups to switch off, as the viewer's Layers list names them
      "out": "pictures",            the folder for the pictures, from the spec's own folder (the default)
      "shots": [{"name": "now", "view": "Overview"},
-               {"name": "a", "option": "a-one-wall", "pos_so": [-6, 11, 46], "target_so": [12, 11, 41]}]}
+               {"name": "a", "option": "a-one-wall", "pos_so": [-6, 11, 46], "target_so": [12, 11, 41]},
+               {"name": "a-cut-fill", "option": "a-one-wall", "cutfill": true, "view": "Plan"}]}
 
-A shot names its picture, `<name>.png`, and shows a wall option by its id (`option`; "" or none, the site as it is). Its
-camera is a view button's name (`view`: Overview, Plan or one of `[views]` in data/site.toml), or where it stands and
-what it looks at: in viewer metres (`pos`, `target`: x east, y up and z south of the model's origin), in the wall
-options' frame (`pos_so`, `target_so`: s, o and a height) or on the site's grid (`pos_en`, `target_en`: E, N and a
-height). With none of these it's the Overview.
+A shot names its picture, `<name>.png`, and shows a wall option by its id (`option`; "" or none, the site as it is).
+`cutfill`, true, colours that option's ground by its cut and fill, as the viewer's "Colour the ground by cut and fill"
+does. The shot's camera is a view button's name (`view`: Overview, Plan or one of `[views]` in data/site.toml), or
+where it stands and what it looks at: in viewer metres (`pos`, `target`: x east, y up and z south of the model's
+origin), in the wall options' frame (`pos_so`, `target_so`: s, o and a height) or on the site's grid (`pos_en`,
+`target_en`: E, N and a height). With none of these it's the Overview.
 
 Each picture is the whole window showing the model alone: the panel, the title block, the navigation pad and the
 option buttons are hidden, and the view's compass stays in the top right corner. Its PNG holds the image and nothing
@@ -67,7 +69,7 @@ SPEC_KEYS = {"window", "scale", "hide", "out", "shots"}
 # frame (s, o, height) or the site's grid (E, N, height).
 CAMERA = {"pos": ("pos", "viewer"), "pos_so": ("pos", "so"), "pos_en": ("pos", "en"),
           "target": ("target", "viewer"), "target_so": ("target", "so"), "target_en": ("target", "en")}
-SHOT_KEYS = {"name", "option", "view", *CAMERA}
+SHOT_KEYS = {"name", "option", "cutfill", "view", *CAMERA}
 INSTALL = ("Pictures need Playwright and its Chromium, an optional extra. In a copy of Domus: uv sync --extra shots, "
            "then uv run playwright install chromium (or pip install playwright, then playwright install chromium; on "
            "Linux, playwright install --with-deps chromium also installs the libraries it needs).")
@@ -87,13 +89,21 @@ SETUP = """async () => {
   }
   return true;
 }"""
-# Run for each shot, through the viewer's own controls: the option's button, the groups' switches in the Layers list
-# (after the option, which shows and hides some layers of its own), then the view's button or the camera. It waits
-# until the model has been drawn so (siteViewer.drawn), and gives what the viewer says it's showing.
-SHOT = """async ({ option, hide, view, pos, target }) => {
+# Run for each shot, through the viewer's own controls: the option's button, the "Colour the ground by cut and fill"
+# switch, set as the shot says (each shot sets it, so one shot's colours don't carry into the next), the groups'
+# switches in the Layers list (after the option, which shows and hides some layers of its own), then the view's button
+# or the camera. It waits until the model has been drawn so (siteViewer.drawn), and gives what the viewer says it's
+# showing.
+SHOT = """async ({ option, cutfill, hide, view, pos, target }) => {
   const button = [...document.querySelectorAll("#optionBar button[data-opt]")].find((b) => b.dataset.opt === option);
   if (button) button.click();
   else if (option) throw new Error(`This model has no wall option ${option}.`);
+  const colour = document.getElementById("cutfillToggle");
+  if (cutfill && !colour) throw new Error("This viewer can't colour the ground by cut and fill.");
+  if (colour && colour.checked !== cutfill) {
+    colour.checked = cutfill;
+    colour.dispatchEvent(new Event("change"));
+  }
   for (const name of hide) {
     const group = [...document.querySelectorAll("#layers details.group")]
       .find((g) => g.querySelector(".group-name")?.textContent === name);
@@ -178,6 +188,11 @@ def check_spec(spec, base):
         option = shot.get("option", "")
         if not isinstance(option, str):
             raise DomusError(f"Shot {name}: option is a wall option's id, or \"\" for the site as it is")
+        cutfill = shot.get("cutfill", False)
+        if not isinstance(cutfill, bool):
+            raise DomusError(f"Shot {name}: cutfill is true or false")
+        if cutfill and not option:
+            raise DomusError(f"Shot {name}: cutfill colours a wall option's ground by its cut and fill, so it needs an option")
         given = {k: CAMERA[k] for k in shot if k in CAMERA}
         out_shot = {"name": name, "option": option, "view": None, "pos": None, "target": None}
         if "view" in shot:
@@ -195,6 +210,8 @@ def check_spec(spec, base):
                     raise DomusError(f"Shot {name} needs one of {end}, {end}_so and {end}_en"
                                      + (f", not {' and '.join(keys)}" if keys else ""))
                 out_shot[end] = (CAMERA[keys[0]][1], _point(shot, keys[0]))
+        if cutfill:
+            out_shot["cutfill"] = True
         checked.append(out_shot)
     return {"window": list(window), "scale": float(scale), "hide": list(dict.fromkeys(hide)), "out": base / out,
             "shots": checked}
@@ -229,8 +246,9 @@ def to_viewer(kind, point, origin, frame=None):
 
 
 def plan(spec, model):
-    """The spec's shots as the page takes them, checked against the built model: each with its option and either its
-    view's name or its camera's `pos` and `target` in viewer metres."""
+    """The spec's shots as the page takes them, checked against the built model: each with its option (and `cutfill`,
+    true, where its ground is coloured by its cut and fill) and either its view's name or its camera's `pos` and
+    `target` in viewer metres."""
     options = [o["id"] for o in model["summary"].get("options", [])]
     views = list(dict.fromkeys([*VIEWS, *model.get("views", {})]))
     hideable = groups(model)
@@ -253,7 +271,8 @@ def plan(spec, model):
             if kind == "so" and frame is None:
                 frame = options_frame(model, name)
             cameras[end] = to_viewer(kind, point, model["origin"], frame)
-        shots.append({"name": name, "option": shot["option"], "view": shot["view"], **cameras})
+        shots.append({"name": name, "option": shot["option"], "view": shot["view"], **cameras,
+                      **({"cutfill": True} if shot.get("cutfill") else {})})
     return shots
 
 
@@ -414,8 +433,8 @@ def take(spec, model_dir, timeout_s=TIMEOUT_S, say=print):
                 page.wait_for_function(SETUP, timeout=deadline.ms())
                 for shot in shots:
                     step = f"shot {shot['name']}"
-                    arg = {"option": shot["option"], "hide": spec["hide"], "view": shot["view"],
-                           "pos": shot.get("pos"), "target": shot.get("target")}
+                    arg = {"option": shot["option"], "cutfill": shot.get("cutfill", False), "hide": spec["hide"],
+                           "view": shot["view"], "pos": shot.get("pos"), "target": shot.get("target")}
                     showing = page.wait_for_function(SHOT, arg=arg, timeout=deadline.ms()).json_value()
                     png = bare_png(page.screenshot(type="png", timeout=deadline.ms()))
                     path = spec["out"] / f"{shot['name']}.png"

@@ -1,0 +1,18 @@
+{"pictures": [
+  {"name": "hero", "site": "demo", "window": [1280, 600], "option": "b-two-tiers",
+   "pos_en": [1500031, 5500041, 49], "target_en": [1500011, 5500019, 41.8]},
+  {"name": "compare-now", "site": "demo", "window": [960, 600], "option": "",
+   "pos_en": [1500031, 5500041, 49], "target_en": [1500011, 5500019, 41.8]},
+  {"name": "compare-a", "site": "demo", "window": [960, 600], "option": "a-one-wall",
+   "pos_en": [1500031, 5500041, 49], "target_en": [1500011, 5500019, 41.8]},
+  {"name": "compare-b", "site": "demo", "window": [960, 600], "option": "b-two-tiers",
+   "pos_en": [1500031, 5500041, 49], "target_en": [1500011, 5500019, 41.8]},
+  {"name": "screenshot-cut-and-fill", "site": "demo", "window": [960, 600], "option": "b-two-tiers", "cutfill": true,
+   "pos_en": [1500031, 5500041, 49], "target_en": [1500011, 5500019, 41.8]},
+  {"name": "screenshot-site", "site": "richer", "window": [1280, 600], "option": "",
+   "pos_en": [1500038, 5500044, 56], "target_en": [1500012, 5500014, 42]},
+  {"name": "screenshot-block-walls", "site": "richer", "window": [960, 600], "option": "d-block-tiers",
+   "pos_en": [1500010, 5500037, 45], "target_en": [1500011, 5500022, 41.5]},
+  {"name": "house-parts", "site": "richer", "window": [1280, 720], "option": "",
+   "pos_en": [1500011, 5500033, 47], "target_en": [1500009, 5500011, 45.3]}
+]}

@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- `domus shots` can colour a wall option's ground by its cut and fill: `"cutfill": true` on a shot does what the
+  viewer's **Colour the ground by cut and fill** does, orange where the option cuts and blue where it fills, and the
+  option's lawns and beds step aside for the colours. Each shot sets it, so one shot's colours don't carry into the
+  next ([docs/shots.md](docs/shots.md)).
+- **For site projects:** the one route for every change to a site's data is covered by the public API's promise:
+  `site.edit()` with intents, `site.undo()`, `edits()`, `propose()`, `proposals()`, `accept()` and `reject()` keep
+  working from one release to the next, and change only after a deprecation in an earlier release and a note here, as
+  the rest of `domus.api` does ([docs/api.md](docs/api.md#every-change-one-way)). A site's tools and agents can build
+  on it as the viewer does. The video and prep steps, the observations (`site.observations()`,
+  `site.propose_observation()`) and the house kept as an IFC file (`site.house()`, `site.write_house_ifc()`) stay
+  provisional, and docs/api.md says why.
+- The README, AGENTS.md, CONTRIBUTING.md, ARCHITECTURE.md and the docs say what Domus does today. The README has
+  screenshots of the made-up sites, among them scheme B's cut and fill, its pictures are taken again with
+  `domus shots` as PNGs, and its numbers for the demo's schemes are today's. ARCHITECTURE.md describes the change
+  route, observations, the house's one source and Manifold in the build and the viewer. Examples that didn't run on
+  the made-up demo as written do now, and docs/options.md's example option is the demo's scheme B.
+- `tools/readme_pictures.py` takes the README's pictures of the made-up sites again with one command, from what
+  `docs/images/readme-pictures.json` lists for each: its site, its window and its shot
+  ([CONTRIBUTING.md](CONTRIBUTING.md#docs-and-the-changelog)).
+
 ## 2026.11.64
 
 - **For site projects:** two ground-fix points at one place, within 1 mm of each other in plan, from any features

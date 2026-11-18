@@ -94,7 +94,7 @@ uv run domus --site sites/demo serve
 | Step | What it writes | It worked if |
 |---|---|---|
 | `domus demo sites/demo` | A complete made-up site: settings, layers, rasters, two wall options | It prints `Wrote the demo site to ...` |
-| `domus --site sites/demo build` | The model in `sites/demo/viewer/data/` | It prints `wrote .../model.json (2.1 MB) and textures` in a few seconds |
+| `domus --site sites/demo build` | The model in `sites/demo/viewer/data/` | It prints `wrote .../model.json (2.5 MB) and textures` in well under a minute |
 | `domus --site sites/demo serve` | Nothing: it serves the viewer | It prints `Viewer on http://127.0.0.1:8765/`, and the page shows the house |
 
 The demo is in the sea, so it's nobody's house. Use it to try anything before you do it to a real site.
@@ -114,8 +114,8 @@ Python goes through `docker exec -i <container> /app/.venv/bin/python -`, as the
 out of `/site`, or clear them up afterwards.
 
 Every command and step prints its usage with `--help` and does nothing else, and `domus video` and `domus prep` list
-their steps. A command run where there's no site project says so. The plan, IFC and house-texture steps read
-everything from `data/prep.json`. This file gives the usage of each of them.
+their steps. A command run where there's no site project says so. The plan, IFC and texture steps read what to do from
+the site's `data/prep.json`, which [docs/from-documents.md](docs/from-documents.md) describes.
 
 ### The environment variables you'll meet
 
@@ -714,15 +714,17 @@ and drop properties (`props`), add and delete features, set settings (`setting`)
 would change and writes nothing; with it, each file is copied, written, read back and checked to have changed only as
 asked, and the edit is recorded in `.domus/edits/` with who, when and why. `domus site edits` lists the edits, and
 `domus site undo N` puts one back, as long as nothing has changed its files since. From Python, `site.edit(intent, why)`
-and `site.undo(n)`.
+and `site.undo(n)`, which the public API's promise covers, so a tool can build on them.
 
 Three older commands are edits the same way; `BACKUP`, a fresh folder for the files as they were, is optional:
 
-- `domus site shift SPEC.json [BACKUP]` moves named features by one vector: `{"shift": [dE, dN], "dz": 0.06, "basis":
-  "...", "files": {"walls-existing.geojson": ["W2", "W3"]}}`.
+- `domus site shift SPEC.json [BACKUP]` moves named features by one vector, east and north, and `dz` up if given:
+  `{"shift": [0.05, -0.02], "dz": 0.06, "basis": "Re-surveyed from the boundary pegs.", "files":
+  {"walls-existing.geojson": ["W1"]}}`.
 - `domus site edit SPEC.json [BACKUP]` with a spec in its older form sets named features' vertices and properties, adds
-  and deletes them: `{"house.geojson": [{"id": "window-3", "so": [[10.0, 4.3], [11.1, 4.3]], "props": {"basis":
-  "..."}}, {"id": "old-thing", "delete": true}]}`. `so`/`soz` are in the wall options' frame, `en`/`enz` on the grid.
+  and deletes them: `{"house.geojson": [{"id": "window", "so": [[14.5, 9.0], [14.5, 7.0]], "props": {"basis":
+  "Measured on site."}}], "features-demo.geojson": [{"id": "fence-west", "delete": true}]}`. `so`/`soz` are in the wall
+  options' frame, `en`/`enz` on the grid.
 - `domus site regrade CLOUD SPEC.json [BACKUP]` gives ground-fix points and lines the levels a placed cloud shows:
   `{"features": ["lawn-ground"], "radius": 0.3, "percentile": 20, "basis": "..."}`.
 
@@ -737,6 +739,14 @@ along, so `s` is metres along it and `o` metres in from it. `[regrade]` is where
 less the house and a margin, narrowed by `s_max` or `polygon_so`), `[defaults]` what walls and terraces take unless
 they say (`upstand_m`, `batter`, `thickness_m`, and `paving_m`, how deep a paved terrace's paving is), and `[rules]
 drain_cover_m` the least cover over a drain after a cut. The template's numbers are placeholders: set the person's own.
+
+A wall can also say how it's built, below and behind its face, as its maker's guide does: its body's depth, its
+capping units, its first course's embedment, its bedding and base course, its trench and the soil over its drainage
+(`depth_m`, `cap_depth_m`, `cap_overhang_m`, `embed_m`, `bedding_m`, `base_m`, `trench_m`, `seal_m` and the rest), on
+the wall or for every wall in `[defaults]`. Take the numbers from the guide of the product the person is weighing, not
+from a guess. Each option then has a materials list, what it takes to build, to order from (`materials` in
+`summary.json` and in `site.evaluate()`, and in the viewer under the options' comparison): units whole and cut,
+aggregate, pipe, paving and soil, with `[materials]` adding an allowance and densities. There are no costs.
 
 Then each scheme is a file in `options/`: copy `options/option.toml.example`, or sketch it in the viewer (**Design**,
 **Wall** and **Level area**, then **Make it an option**, which writes `options/sketch-<name>.toml`). Sketches saved in
@@ -806,7 +816,9 @@ and open questions. When a note changes, rewrite it rather than adding a correct
 
 Site tools, a site's tests and agents read a site through `domus.api`, never Domus's internals. Its promise: what it
 offers keeps working from one release to the next, and changing any of it takes a deprecation warning in an earlier
-release and a "For site projects" note in the changelog. [docs/api.md](docs/api.md) has all of it.
+release and a "For site projects" note in the changelog. Three parts are provisional, and may change between releases
+without a deprecation: the video and prep steps, the observations and the house kept as an IFC file.
+[docs/api.md](docs/api.md) has all of it, and says why each of those is provisional.
 
 ```python
 from domus import api
@@ -815,7 +827,7 @@ site = api.open_site("sites/demo")              # the folder given, else DOMUS_S
 print(site.title, round(site.lot().area), "m2")  # Demo site (made up) 660 m2
 ground = site.ground()                          # a function: heights at points on the site's grid
 c = site.lot().centroid
-print(float(ground(c.x, c.y)))                  # 42.27, on the demo
+print(round(float(ground(c.x, c.y)), 2))        # 42.27, on the demo
 for option in site.options():
     result = site.evaluate(option)
     print(option["id"], result["volumes"]["fill_m3"], result["flat"]["gain_m2"])
@@ -827,7 +839,7 @@ for option in site.options():
 |---|---|
 | `site.settings()`, `site.title` | `data/site.toml` as a dict (a copy), and the site's name |
 | `site.grid` | The site's grid and heights: `epsg`, `label`, `vertical`, `origin`, `datums`, and `to_nztm`, `from_nztm`, `to_lonlat`, `to_model_height` and `from_model_height` to turn points and levels between them |
-| `site.lot()`, `site.house_walls()`, `site.house()` | The lot and the house's walls as shapely polygons in plan, and the house as its source gives it (`house.geojson` and `[house]`, or its IFC file) |
+| `site.lot()`, `site.house_walls()` | The lot and the house's walls as shapely polygons in plan, the walls as the house's source gives them (`house.geojson`, or its IFC file) |
 | `site.layer(name)` | The features of `data/site/<name>.geojson`, or none |
 | `site.ground()` | The ground as the build draws it, as `ground(e, n)`: the LiDAR with the fixes and the existing walls' faces and tops |
 | `site.options()`, `site.frame()` | The wall options, and their frame: `frame.en(so)` and `frame.so(en)` |
@@ -837,8 +849,9 @@ for option in site.options():
 | `site.check(checks, tags, plots)` | The checks, as `domus prep check` runs them, and their report |
 | `api.create`, `api.new`, `api.demo`; `site.fetch()`, `map_canopy()`, `fetch_marks()`, `fetch_title()`, `fetch_points()`, `scan()`, `shots()`, `upgrade()`, `trust()`, `shift()`, `edit()`, `regrade()` | What the commands do, for a tool: `domus create`, `new`, `demo`, `fetch`, `canopy`, `marks`, `title`, `points`, `scan`, `shots` and `site ...`. Each takes `say`, which gets the lines the command prints |
 | `site.video.place(tag)`, `site.prep.profile(points)` and the other steps | `domus video`'s and `domus prep`'s steps, for a tool: provisional, so they may change between releases ([docs/api.md](docs/api.md)) |
-| `site.edit(intent, why)`, `undo()`, `edits()`, `propose()`, `proposals()`, `accept()`, `reject()` | The one route for every change to the site's data, recorded and undoable, and the changes proposed for a person to decide on ([docs/changes.md](docs/changes.md)): provisional too |
+| `site.edit(intent, why)`, `undo()`, `edits()`, `propose()`, `proposals()`, `accept()`, `reject()` | The one route for every change to the site's data, recorded and undoable, and the changes proposed for a person to decide on ([docs/changes.md](docs/changes.md)) |
 | `site.observations()`, `site.propose_observation(id)` | The observations, each read against the model, and a proposal to set one's target to what it read ([docs/observations.md](docs/observations.md)): provisional too |
+| `site.house()`, `site.write_house_ifc()` | The house as its source gives it (`house.geojson` and `[house]`, or its IFC file), and the house written as that IFC file ([docs/site-format.md](docs/site-format.md#the-house-as-an-ifc-file)): provisional too |
 | `api.linz_query`, `api.clip`, `api.fit_affine`, `api.resample_line` | Helpers for LINZ layers, raster windows, image-to-ground fits and lines |
 
 A process can open several sites at once, and each keeps what Domus reads of it apart, so a tool can compare two. A
@@ -851,20 +864,21 @@ nothing from the build cache in `.domus/build-cache/`; proofs use it.
 
 | File | Read it for |
 |---|---|
-| `summary.json` | The house's fitted numbers, the existing walls' heights, and every option's walls, volumes, flat lawn, flags and materials list. The quickest way to read results without the viewer |
+| `summary.json` | The house's fitted numbers, the existing walls' heights, every option's walls, volumes, flat lawn, flags and materials list, and each observation as read against the model. The quickest way to read results without the viewer |
 | `model.json` | Everything the viewer draws, in viewer metres (x east, y up, z south of the origin): [docs/model-format.md](docs/model-format.md) |
 | `build.json` | Which Domus built it, when, and which extensions ran |
 
 ### Pictures and exports
 
 `domus shots SPEC.json` saves pictures of the site or any option, from view buttons or cameras placed in viewer
-metres, in the options' frame (`pos_so`) or on the grid (`pos_en`). The build must be current. Pictures are PNGs with no
-metadata. [docs/shots.md](docs/shots.md) has the spec, with a worked example on the demo.
+metres, in the options' frame (`pos_so`) or on the grid (`pos_en`), with an option's ground coloured by its cut and
+fill (`"cutfill": true`) if you like. The build must be current. Pictures are PNGs with no metadata.
+[docs/shots.md](docs/shots.md) has the spec, with a worked example on the demo.
 
 `domus export PATH [--option ID]` writes the model as last built, as glTF (`.glb`, for Blender and 3D viewers) or IFC4
-(`.ifc`, for a designer's software, with each wall's numbers in a property set). On the demo, `domus export b.glb
---option b-two-tiers` writes about 2 MB. Build first: it reads `viewer/data/`. [docs/export.md](docs/export.md) says
-what each holds.
+(`.ifc`, for a designer's software, with each wall's numbers in a property set), its walls and steps closed solids. On
+the demo, `domus export b.glb --option b-two-tiers` writes about 2 MB. Build first: it reads `viewer/data/`.
+[docs/export.md](docs/export.md) says what each holds.
 
 ## 10. Common or site: where new work goes
 
@@ -909,7 +923,7 @@ check roof plumb` runs just those.
 
 | Check | Looks for |
 |---|---|
-| `sanity` | Things floating above or buried in the ground, spikes and holes, duplicate ids |
+| `sanity` | Things floating above or buried in the ground, spikes and holes, duplicate ids, and two ground-fix points at one place whose heights disagree |
 | `roof` | The roof against the LiDAR inside the eaves, and a better plan shift if there is one |
 | `plumb` | Placed clips' tilt, from the frames' upright edges |
 | `clouds` | Placed clouds against the ground, cell by cell |
@@ -959,7 +973,9 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md) f
 - **Common or site.** Section 10's question decides where a change goes. Nothing about one property is built into
   common.
 - **The public API's promise.** Anything `domus.api` and `domus.testing` offer changes only after a deprecation in an
-  earlier release and a "For site projects" note in the changelog. Site tools and agents use the API, not internals.
+  earlier release and a "For site projects" note in the changelog, but for the parts [docs/api.md](docs/api.md) calls
+  provisional: the video and prep steps, the observations and the house kept as an IFC file. Site tools and agents use
+  the API, not internals.
 - **The house through its accessor.** Code that reads the house reads it with `domus.model.house_source.house(site)`
   (`site.house()` in the API), never `house.geojson` or `[house]` directly: with `[house] source = "ifc"` the house's
   IFC file is its source.
@@ -971,11 +987,11 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md) f
   `settings()`, `format()` and `grid`, taken as the function's first argument. What a part reads of a site is kept with
   that site, never in a module's own globals, so one process can hold several. The command line and the server read
   `DOMUS_SITE` once and hand the site down; a job in a process of its own gets the site's folder. The pure layers
-  (`geo`, the model's pure parts and `scheme`) read no site at all. No part looks for a site of its own: one called
-  without its site fails, as any call missing an argument does. Only where a process starts is the site it was
-  started for read (`domus.project.site.started()`), and `tests/test_handed.py` looks for code that reads it anywhere
-  else. The tests make a `DomusDeprecationWarning` an error, so Domus's own code and tests use no name it has
-  deprecated.
+  (`geo`, the model's pure parts and the options' working out: `scheme`, `solids` and `materials`) read no site at
+  all. No part looks for a site of its own: one called without its site fails, as any call missing an argument does.
+  Only where a process starts is the site it was started for read (`domus.project.site.started()`), and
+  `tests/test_handed.py` looks for code that reads it anywhere else. The tests make a `DomusDeprecationWarning` an
+  error, so Domus's own code and tests use no name it has deprecated.
 - **Text files are UTF-8**, named on every read and write; a test checks.
 - **The app** (`domus/app/`: the command line, the server and the viewer) sits on top, and nothing else in Domus
   imports it. **The viewer** loads nothing from other hosts (new libraries go in its `vendor` folder), and its page is

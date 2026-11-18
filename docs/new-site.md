@@ -12,8 +12,9 @@ uv run domus new site --name "My place" --boundary lot.geojson
 
 No boundary yet? `--centre -43.53,172.63 --size 30` puts in a stand-in square.
 
-A site is on a grid in metres, and Domus picks it from the boundary. A boundary on such a grid stays on it. One in
-longitude and latitude goes on NZTM2000 in New Zealand, the LINZ data's own grid, and on its UTM zone anywhere else.
+A site is on a grid in metres, and Domus picks it from the boundary. A boundary on such a grid, which its file's
+`crs` member names, stays on it. One in longitude and latitude, as GeoJSON is without a `crs` member, goes on NZTM2000
+in New Zealand, the LINZ data's own grid, and on its UTM zone anywhere else.
 One on a grid in feet goes on the UTM zone too. `--epsg 27700`, say, puts the site on a grid of your choosing.
 
 This writes `site/data/site.toml`, the boundary, and `site/options/_site.toml`. In a copy of the Domus repo,

@@ -14,6 +14,7 @@
 
 <p align="center">
   <a href="#try-it">Try it</a> ·
+  <a href="#screenshots">Screenshots</a> ·
   <a href="#how-a-model-comes-about">How it works</a> ·
   <a href="#what-you-can-do-with-it">What it does</a> ·
   <a href="AGENTS.md">For agents</a> ·
@@ -21,7 +22,7 @@
   <a href="#the-docs">The docs</a>
 </p>
 
-![A made-up site in the viewer: a small house on a slope, a lawn held up by two low block walls with a planted bed between them, trees and a fence](docs/images/hero.webp)
+![A made-up site in the viewer: a small house on a slope, a lawn held up by two low block walls with a planted bed between them, trees and a fence](docs/images/hero.png)
 
 <p align="center"><sub>The made-up demo site with scheme B: two low block walls and a planted bed. Every picture of a site in this repo is of a made-up one. None is a real place.</sub></p>
 
@@ -33,9 +34,41 @@ your phone, a few tape measurements, the plans in the council's file.
 
 It runs on your own machine or home server, and your site's files stay in a folder you control.
 
+## What it's good for
+
+- **Seeing your place before anyone draws anything.** The ground, the house, the trees and the walls you have, in 3D,
+  from public data in a few minutes, and better with every walk, measurement and document you add.
+- **Comparing retaining wall schemes.** Sketch one on the model, or write it as a small text file, and Domus works out
+  the ground it makes, how high each wall stands, how much soil moves, how much flat lawn you gain, and what it takes to
+  build.
+- **Knowing what to ask.** It flags a wall in an easement, a drain left with too little cover, a footing beside a post or
+  a lid, ground lowered beside the house or raised against it, steps that are too steep, and more.
+- **Talking to the people who'll do the work.** Pictures of each scheme from the same spots, and the model as glTF or
+  IFC for a designer's software.
+
 > [!WARNING]
 > **Domus is a planning aid, not a survey.** Its numbers come from public LiDAR, your phone and your tape measure. It
-> helps you ask better questions. An engineer, a surveyor and your council still get the last word.
+> helps you ask better questions. An engineer, a surveyor and your council still get the last word, and Domus doesn't
+> price a job or say what needs consent.
+
+## Screenshots
+
+<table>
+<tr>
+<td colspan="2"><img src="docs/images/screenshot-site.png" alt="The richer made-up site from above the drive: a house with a porch and steps, a chimney and a water tank, an old block wall across the lawn, trees along the drive, and a fence"></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><sub>The richer made-up site as it is: the house with its porch, chimney and tank, an old block wall across the lawn, trees along the drive, and a fence.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/images/screenshot-cut-and-fill.png" alt="Scheme B on the made-up demo with its ground coloured by cut and fill: the lawn and the bed behind its two block walls in blue where soil is brought in"></td>
+<td width="50%" valign="top"><img src="docs/images/screenshot-block-walls.png" alt="Scheme D on the richer made-up site: two retaining walls of a named block, laid course by course under capping units, with a planted bed between them and the house behind"></td>
+</tr>
+<tr>
+<td align="center"><sub>Scheme B on the demo, its ground coloured by its cut and fill: blue where soil is brought in, stronger the deeper.</sub></td>
+<td align="center"><sub>Scheme D on the richer site: two walls of a named block, laid course by course under their capping units.</sub></td>
+</tr>
+</table>
 
 ## How a model comes about
 
@@ -126,15 +159,25 @@ A tape and a level are still the most accurate tools you own. A handful of measu
 ground that matter, ties everything else down. They go in the site's layers as plain GeoJSON, with a note of where each
 number came from and how far to trust it.
 
+You can edit those files by hand, in a text editor or QGIS. Or let Domus make the change, with `domus site edit`, an
+agent or a tool of your own: then it's checked, recorded with who made it, when and why, and can be undone. When a
+check or an agent finds something that should change, it proposes it, and you accept or reject it, on the command line
+or in the viewer's **Site** tab. Nothing changes itself. [docs/changes.md](docs/changes.md) has the details.
+
 ### 5. The model
 
 Everything comes together in one page in your browser: the ground with the photo draped over it, the house, existing
 walls, drains at their depth, fences, trees, lawns and beds, and the point clouds from your walks. Every part says where
 it came from and how sure it is, so you always know what you're looking at.
 
-![The house on the richer made-up site: a porch with steps and a lean-to roof, a door and window, a water tank, a deck with a balustrade, and an old block wall in front](docs/images/house-parts.webp)
+![The house on the richer made-up site: a porch with steps and a lean-to roof, a door and window, a chimney, a water tank, a deck with a balustrade, and an old block wall in front](docs/images/house-parts.png)
 
-<p align="center"><sub>The house on a richer made-up site: a porch with its steps, a tank, a deck with a balustrade, and an old block wall.</sub></p>
+<p align="center"><sub>The house on a richer made-up site: a porch with its steps, a chimney, a tank, a deck with a balustrade, and an old block wall.</sub></p>
+
+The house can also be kept as an IFC file, the format designers' software opens. `domus house ifc` writes it, and with
+`[house] source = "ifc"` it becomes the house's one source: the model, the schemes and the checks all read the house
+from it, and it changes the same recorded, undoable way as everything else.
+[docs/site-format.md](docs/site-format.md#the-house-as-an-ifc-file) says how.
 
 ### 6. Schemes side by side
 
@@ -144,7 +187,7 @@ out the ground each scheme makes, and you flick between them.
 
 | The ground now | A. One low wall | B. Two tiers |
 |:---:|:---:|:---:|
-| ![The made-up demo as it is, with an old block wall across the lawn](docs/images/compare-now.webp) | ![Scheme A: one timber wall holding a level lawn](docs/images/compare-a.webp) | ![Scheme B: two block walls with a planted bed between them](docs/images/compare-b.webp) |
+| ![The made-up demo as it is, with an old block wall across the lawn](docs/images/compare-now.png) | ![Scheme A: one timber wall holding a level lawn](docs/images/compare-a.png) | ![Scheme B: two block walls with a planted bed between them](docs/images/compare-b.png) |
 
 <details>
 <summary><b>What a scheme looks like as a file</b></summary>
@@ -179,12 +222,15 @@ polygon_so = [[8.0, 2.0], [8.0, 20.0], [14.0, 20.0], [14.0, 2.0]]
 ```
 
 Walls can be timber, block, segmental, gabion, crib, stone or concrete, and a named block is laid out course by course
-at its real size. A scheme can be based on another and restyled, to compare the same layout in different walls.
+at its real size. A wall can also say how it's built, the way its maker's guide does: how deep it is, how far it goes
+into the ground, its base course and bedding, and the drainage behind it. Domus draws it that way and lists what each
+scheme takes to build, to order from: blocks and capping units, aggregate, pipe, sleepers, paving and soil, with no
+prices. A scheme can be based on another and restyled, to compare the same layout in different walls.
 [docs/options.md](docs/options.md) has all of it.
 
 To take a scheme into other software, `domus export option-a.glb --option a-one-wall` writes it as glTF for Blender and
-3D viewers, and `.ifc` as IFC for a designer's software, with each wall's numbers. [docs/export.md](docs/export.md) says
-what each holds.
+3D viewers, and `.ifc` as IFC for a designer's software, with each wall's numbers, every wall and flight of steps a
+closed solid. [docs/export.md](docs/export.md) says what each holds.
 
 </details>
 
@@ -196,15 +242,11 @@ what each holds.
 </picture>
 
 For every scheme, Domus works out how much soil moves (cut and fill, with a range from the LiDAR's tolerance), how
-high each wall stands, and how much flat lawn you gain. Tick **Colour the ground by cut and fill** to see where. It
-measures from the best ground there is today, as the model draws it: your measurements and placed walks where you
-have them, the existing walls' faces and tops, and the LiDAR only where nothing better is known. A new wall itself and
-paving aren't soil, so they don't count.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/viewer-design-dark.webp">
-  <img src="docs/images/viewer-design-light.webp" alt="The viewer's Design panel with scheme B shown, the ground coloured blue where it is filled, and a table comparing the existing site with schemes A and B.">
-</picture>
+high each wall stands, and how much flat lawn you gain. Tick **Colour the ground by cut and fill** in the viewer to
+see where, as in the [screenshot](#screenshots) of scheme B. It measures from the best ground there is today, as the
+model draws it: your measurements and placed walks where you have them, the existing walls' faces and tops, and the
+LiDAR only where nothing better is known. Only soil counts, measured as solid shapes of what's dug out and brought in:
+a new wall itself and paving aren't soil, so they don't count.
 
 Here's how the made-up demo's two schemes come out, as its build works them out:
 
@@ -213,7 +255,7 @@ Here's how the made-up demo's two schemes come out, as its build works them out:
 | Flat lawn | 5 m² | 91 m² | 164 m² |
 | Walls | one old wall, 18 m | one timber wall, 18 m | two block walls, 36 m |
 | Highest wall face | 0.75 m | 0.70 m | 0.85 m |
-| Cut / fill | | 1.3 / 23 m³ (±18) | 0.3 / 75 m³ (±38) |
+| Cut / fill | | 0.9 / 23.4 m³ (±18) | 0.2 / 75.5 m³ (±38) |
 | Things to check | | 1 | 3 |
 
 ### 8. Checks
@@ -224,9 +266,14 @@ house or raised against it, steps that are too steep, and regrading that ends in
 it change. On the demo, both schemes run into a made-up easement, and scheme B's regrading meets the edge of its area
 with an 18 cm step.
 
+For each scheme it also checks how the model draws it: ground showing through a wall or a step, a measured ground
+level that lands inside a new wall, and block walls that need blocks cut to fit.
+
 It checks the model itself too: things floating or buried, spikes and holes in the ground, a roof that doesn't fit the
-LiDAR, clouds that are tilted or off the ground, and readings off your videos that the model doesn't agree with. A check
-that fails is a question to answer, not a box to tick.
+LiDAR, and clouds that are tilted or off the ground. Readings you take off your videos, such as the top of a wall or a
+door sill, can be kept as observations: every build sets each one against the part of the model it checks and shows
+it in green, amber or red, and `domus site propose` turns one into a proposed change to the model, for you to accept or
+reject. A check that fails is a question to answer, not a box to tick.
 
 ## What you can do with it
 
@@ -260,7 +307,8 @@ that fails is a question to answer, not a box to tick.
 
 - Sketch walls and level areas right on the model.
 - Snap to the boundary, the house, existing walls and survey marks; type a length, or `3.2@45` for a bearing too.
-- See the ground a sketch makes as you draw, with its cut and fill, and save it as an option.
+- See the ground a sketch makes as you draw and drag it, worked out as solids, with its cut and fill, and save it as
+  an option.
 - Flick between schemes with <kbd>[</kbd> and <kbd>]</kbd>.
 
 </td>
@@ -268,9 +316,10 @@ that fails is a question to answer, not a box to tick.
 
 **Share and keep**
 
-- `domus shots` saves pictures of each scheme from the views you choose.
+- `domus shots` saves pictures of each scheme from the views you choose, its cut and fill coloured if you like.
 - `domus export` writes the site, or a scheme, as glTF for Blender and 3D viewers, or as IFC for a designer's software,
   with each wall's numbers.
+- Changes made through Domus are recorded, with who, when and why, and can be undone.
 - Sketches save as you go, with your notes, and copy out as text.
 - A site folder can be a git repository of its own: `domus create` writes a `.gitignore` that leaves out what Domus makes again.
 - Back up one folder and you've backed up everything.
@@ -292,9 +341,8 @@ docker compose -f deploy/compose.yml up -d
 Open <http://localhost:8765>. With an empty site folder it asks for your address. Want a look first? `/demo` shows the
 made-up site, so you can poke at everything without any data of your own.
 
-> [!NOTE]
-> The image and this repo are private for now, so this needs access to them. Otherwise, build the image yourself with
-> `docker build -t ghcr.io/populii/domus:latest .`.
+The image comes from `ghcr.io/populii/domus`. To build it from your copy of the repo instead, run
+`docker build -t ghcr.io/populii/domus:latest .` first.
 
 Prefer no Docker? You'll need [uv](https://docs.astral.sh/uv/), which sorts out Python for you:
 
@@ -305,7 +353,7 @@ uv run domus --site sites/demo build
 uv run domus --site sites/demo serve
 ```
 
-Then open <http://127.0.0.1:8765>. The demo builds in a few seconds.
+Then open <http://127.0.0.1:8765>. The demo builds in well under a minute.
 
 ### Your own place
 
@@ -361,8 +409,10 @@ and setting.
 
 ### Host it at home
 
-Domus is a single container that keeps everything in one `/site` folder. Set `DOMUS_SITES` and one container holds many
-sites, each in its own folder, with a list page and a box for new addresses.
+Domus is a single container that keeps everything in one `/site` folder: the site's files, the built model and the
+sketches you save, so backing up that folder backs up everything. Set `DOMUS_SITES` and one container holds many sites,
+each in its own folder, with a list page and a box for new addresses. To upgrade, pull the new image and start the
+container again: a model an older Domus built is built again the first time its site is opened.
 [docs/self-hosting.md](docs/self-hosting.md) covers Docker, Unraid (there's a template in `deploy/unraid/`), upgrades
 and putting a login in front.
 
@@ -415,8 +465,9 @@ When a tool you wrote for your site turns out to be useful for anyone's, it can 
 Domus is built to be driven by an AI agent as much as by hand. [AGENTS.md](AGENTS.md) is the agent's manual: how to set
 a site up from nothing, which sources to reach for first (the video walk above all), how to turn a walk into placed
 clouds and measurements, how to fit the model to the evidence, how to adapt a site to its own situation, how to check
-the result, and the privacy rules for working on a real property. Point your agent at it and at this README, and ask it
-to model your place.
+the result, and the privacy rules for working on a real property. It has the agent make its changes the recorded,
+undoable way, and propose the ones you should decide. Point your agent at AGENTS.md and at this README, and ask it to
+model your place.
 
 ## What leaves your machine
 
@@ -438,6 +489,9 @@ Being honest about the rough edges:
   aerial photo. Your own LiDAR and photos, on any grid, make the model as good as New Zealand's.
 - Drafted houses are simple: a hip, gable or skillion roof fitted to the LiDAR, plain walls, and neighbours as
   flat-topped blocks. You add the porch, the deck and the rest.
+- Placing a video walk accurately is still hand work: marking points in its frames and holding them to places you
+  know. The phone's guided scan places a walk only roughly, to about a metre, and it and phone LiDAR scans have had
+  little use on real phones so far.
 - It knows when your documents are there, but doesn't read them for you.
 - Council data such as drains, hazards and zoning isn't fetched yet.
 - It doesn't estimate cost or say what needs consent.

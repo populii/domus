@@ -13,7 +13,7 @@ This repository is meant to be read by anyone. Nothing about a real property eve
 photo, a video frame, a measurement, a coordinate, a feature's id or anything else that could point at one. That
 covers code, comments, tests, docs, examples, pictures, commit messages, issues and pull requests.
 
-- **Use the made-up sites.** `domus demo` writes one, and `tools/made_up_sites.py` writes six more. They're all in the
+- **Use the made-up sites.** `domus demo` writes one, and `tools/made_up_sites.py` writes seven more. They're all in the
   sea, so none is anyone's house. Examples use their made-up ids, frame names and numbers.
 - **Keep real sites out of git.** In a copy of this repo a property lives in `site/` or `sites/<name>/`, which git
   ignores, or in a folder or private repository of its own. A test fails if git tracks anything its ignore rules leave
@@ -78,8 +78,8 @@ once a month.
 
 `src/domus` is laid out by what each part does: the site's grid and geometry, the model's parts, the wall options, the
 build, exports to other software, the checks, video and scans, documents, importers that bring a place in, the site
-folder and the public API, and on top of them the app (`domus/app/`): the command line, the server and the viewer. [ARCHITECTURE.md](ARCHITECTURE.md) has the table, and it's
-where to look first, as the layout is still settling.
+folder and the public API, and on top of them the app (`domus/app/`): the command line, the server and the viewer.
+[ARCHITECTURE.md](ARCHITECTURE.md) has the table, and it's where to look first.
 
 Import rules, in `[tool.importlinter]` in `pyproject.toml` and checked by `uv run lint-imports`, keep four promises:
 
@@ -105,6 +105,11 @@ A few more rules the code keeps:
   function's first argument. What a part reads of a site is kept with that site, so one process can hold several. The
   command line and the server read `DOMUS_SITE` once and hand the site down, and a job in a process of its own gets the
   site's folder. No part looks for a site of its own.
+- **The house is read one way:** through `domus.model.house_source` (`site.house()` in the public API), never from
+  `house.geojson` or `[house]` directly, since with `[house] source = "ifc"` the house's IFC file is its one source.
+- **Changes to a site's data have one route** (`domus.project.changes`, [docs/changes.md](docs/changes.md)): the
+  viewer, `domus site` and the API's `site.edit()` make each change as an intent, checked, written the safe way,
+  recorded and undoable, and a check or a tool that finds something to change proposes it for a person to accept.
 - **The viewer is one page and loads nothing from other hosts.** New libraries go in its `vendor` folder. Its
   `index.html` is a page body with no doctype or head: the server adds the skeleton. Scripts drive it through
   `window.siteViewer` (`setCamera` and `drawn`).
@@ -116,16 +121,19 @@ A few more rules the code keeps:
 The tests run on the made-up demo site, written into a temporary folder and built once for the whole run. They set
 `DOMUS_SITE` to it, and `DOMUS_STRICT_SETTINGS=1`, which makes reading a setting the schema doesn't declare, or reading
 one with another default than the schema's, an error. Fixtures in `tests/conftest.py` give a test the demo's folder
-(`site`), the demo as a Site to hand to what's tested (`project`), its built model (`built`), and another folder's Site
-(`at_site`).
+(`site`), the demo as a Site to hand to what's tested (`project`), its built model (`built`), another folder's Site
+(`at_site`), and the command line run in the test's own process (`domus`).
 
 Some tests guard the repository itself, so expect them to speak up:
 
 - the settings tables in [docs/site-format.md](docs/site-format.md) say what the schema says;
 - every text read and write names UTF-8;
+- no part of Domus reads the site its process was started for, but where a process starts (`tests/test_handed.py`);
 - the examples in [`site/`](site/README.md) run on the demo, and their tests pass;
 - git tracks nothing its ignore rules leave out;
-- [docs/shots.md](docs/shots.md)'s example spec fits the demo.
+- [docs/shots.md](docs/shots.md)'s example spec fits the demo;
+- every picture of a made-up site the README shows is listed in `docs/images/readme-pictures.json`, at its window, with
+  no metadata.
 
 Write new tests against the made-up sites. When none has what a test needs, add it to the richer one in
 `tools/made_up_sites.py` (a test's own small site in a temporary folder is fine too). Never a real site.
@@ -151,7 +159,7 @@ CI does this for every pull request, on the made-up sites:
 
 ```mermaid
 flowchart LR
-  W["tools/made_up_sites.py write"] --> S[(seven made-up sites)]
+  W["tools/made_up_sites.py write"] --> S[(eight made-up sites)]
   S --> B["built with the<br/>pull request's base"]
   S --> H["built with its head"]
   B --> R["tools/made_up_sites.py report"]
@@ -164,7 +172,7 @@ flowchart LR
 | `demo` | What `domus demo` writes: a sloping lot, a small house, a block wall, a drain, trees, a fence and two wall options |
 | `richer` | The demo with more of what real sites have: house parts, levels along the drain, a sewer at an assumed depth, a right of way listed before the lot, trees over the drive with the paving under them painted into the photo, ground fixes where the options' lawns go (a measured line and a regular pattern of levels), a concrete path, a third option with a paved terrace, and an option in walls of a named block that say how they're built |
 | `abroad` | The demo moved onto the British National Grid, rasters and all. Its build must match the demo's within 1.5 mm |
-| `format1`, `format2`, `format3` | The demo as a site in each older format, with what the next format changed. They stay as they are for good |
+| `format1` to `format4` | The demo as a site in each older format, with what the next format changed. They stay as they are for good. `format4`'s clip readings and two placements of a clip, which format 5 keeps as observations, come with their made-up picks and placed cloud |
 | `left` | The demo with its options' frame run the other way along the same boundary, so the lot lies on the frame line's left (`[frame] side = "left"`), and its options drawn to stand where the demo's do |
 
 A change that shouldn't move a model shows "nothing" for every site. The job fails only when the head can't build a
@@ -193,7 +201,7 @@ A setting that grows out of a site's own tool keeps the number the tool used as 
 
 ## Site formats and migrations
 
-A site says its format in `[domus] format` in `data/site.toml` (4 today). Every Domus reads older sites: each change of
+A site says its format in `[domus] format` in `data/site.toml` (5 today). Every Domus reads older sites: each change of
 format comes with a migration that reads the old way in memory, for good, so an old site builds unchanged without
 anyone touching it. `domus site upgrade` writes the migrations into a site's files when its owner is ready
 (`--dry-run` first says what would change, and copies of what it changes are kept in the site's `.domus/`).
@@ -204,7 +212,7 @@ When a change alters how a site says something:
 2. Add the migration, in memory, from the previous format.
 3. Teach `domus site upgrade` to write it, keeping comments.
 4. Add a made-up site in the previous format to `tools/made_up_sites.py`, with what your change alters, beside
-   `format1` to `format3`. Those never change, so CI keeps proving every older format still builds as it did.
+   `format1` to `format4`. Those never change, so CI keeps proving every older format still builds as it did.
 5. Add a "For site projects" note to the changelog.
 
 `[domus] requires` lets a site say the oldest Domus that builds it.
@@ -213,15 +221,32 @@ When a change alters how a site says something:
 
 Site tools, a site's own tests and agents use `domus.api` and `domus.testing` ([docs/api.md](docs/api.md)). What they
 offer keeps working from one release to the next: changing or removing any of it takes a deprecation warning in an
-earlier release and a "For site projects" note in the changelog. Everything else in the package is internal and can
-change in any release. When modules move, their old import paths keep working for a while, deprecated, so a site's
-tools written before have time to move; a later release removes them, and its changelog says so.
+earlier release and a "For site projects" note in the changelog. Three parts are provisional until they're declared
+stable, and docs/api.md says why: the video and prep steps, the observations and the house kept as an IFC file.
+Everything else in the package is internal and can change in any release. When modules move, their old import
+paths keep working for a while, deprecated, so a site's tools written before have time to move; a later release
+removes them, and its changelog says so.
 
 ## Docs and the changelog
 
 Write for a person: plain English, short sentences, the words they'd use, and say what they'll see. Every claim is true
 of the code: run what you describe on a made-up site before you write it down. Commands and `domus.api` are what docs
 describe; internal module paths can move. Examples use the made-up sites.
+
+The README's pictures of the made-up sites are taken again with one command, when the viewer or a made-up site changes
+how they look:
+
+```sh
+uv run python tools/readme_pictures.py               # all of them, or --only hero compare-b
+```
+
+[`docs/images/readme-pictures.json`](docs/images/readme-pictures.json) lists each picture: the made-up site it shows
+(`demo` or `richer`), the window it's taken in and its shot, as a `domus shots` spec gives one
+([docs/shots.md](docs/shots.md)). The tool writes those sites into a folder of its own, builds them, takes the pictures
+with `domus shots` and writes them into `docs/images` as PNGs of 256 colours with no metadata. It needs the `shots`
+extra and Playwright's Chromium. Taken again on the machine that took them, with nothing changed, they come out byte
+for byte the same, so `git status` shows which pictures a change moved. To change a picture, change its line in the
+list, take it again, and commit both.
 
 Every change gets a line in [CHANGELOG.md](CHANGELOG.md), under `## Unreleased` at the top (add that heading if a
 release has just taken it):
@@ -252,4 +277,4 @@ release of November 2026 and `2026.11.1` the next, by UTC, with no zero padding.
 
 The tag starts the release workflow: it checks the tag matches the code's version and runs the tests again, publishes
 the image to `ghcr.io/populii/domus` as `YEAR.MONTH.COUNT`, `YEAR.MONTH` and `latest` (with an SBOM and provenance,
-and signed while the repository is public), and makes a GitHub release from that version's section of the changelog.
+signed with cosign), and makes a GitHub release from that version's section of the changelog.

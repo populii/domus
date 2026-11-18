@@ -31,30 +31,35 @@ bearings on the grid.
 
 ## Format
 
+Scheme B on the made-up demo, as `domus demo` writes it in `options/b-two-tiers.toml`, trimmed to its upper
+wall and the lawn it holds, with what each key means:
+
 ```toml
-name = "B. Two low tiers"                 # the viewer's heading for it
-short = "B. Two low tiers"                # its button
-description = "..."
+name = "B. Two tiers"                     # the viewer's heading for it
+short = "B. Two tiers"                    # its button
+description = "Two low block walls with a planted bed between them and more flat lawn above."
+steps = 1                                 # flights of steps to count in the table, where [[stairs]] draws none (below)
 keep_existing = []                        # ids of existing walls it keeps; the rest go, face and all (What the build works out)
-remove_features = []                      # ids of site features it takes out, such as old steps (data/site/features-*.geojson)
+# remove_features: ids of site features it takes out, such as old steps (data/site/features-*.geojson)
 
 [[walls]]
-id = "L2"
-name = "Inner wall and its return along the bank"
-material = "timber"     # timber | block | segmental | gabion | crib | stone | concrete
-line_so = [[5.0, 2.4], [-1.5, 2.4], [-1.5, 6.5]]   # its face
-# Optional: thickness_m (0.25: the thickness its set-out and corners take, and unless depth_m says
-# otherwise the depth drawn), upstand_m (0.1, how far its top stands above the ground it
-# retains), retained_side ("left"/"right" looking along the line; found from the ground if left
-# out). Its top is the designed ground behind it plus the upstand, its toe the designed ground in
-# front, unless the line has a third number per point (a fixed top, NZVD2016), or top = 42.6, or
-# height_m = 0.9, or tops = [42.6, 42.3] (a level for each stretch of the line: see below).
+id = "B2"
+name = "Upper wall"
+material = "block"      # timber | block | segmental | gabion | crib | stone | concrete
+line_so = [[7.0, 2.0], [7.0, 20.0]]   # its face
+# Optional: thickness_m (the thickness its set-out and corners take, and unless depth_m says otherwise
+# the depth drawn: [defaults] thickness_m unless given, 0.25 on the demo), upstand_m (how far its top
+# stands above the ground it retains: 0.1 on the demo), retained_side ("left"/"right" looking along
+# the line; found from the ground if left out). Its top is the designed ground behind it plus the
+# upstand, its toe the designed ground in front, unless the line has a third number per point (a fixed
+# top, on the site's datum), or `top` gives one level, `height_m` its height above its toe, or `tops` a
+# level for each stretch of the line (see below).
 # picture = "painted" draws it with the painted picture of its material, where the site's own photo
 # is of an old wall a new one won't look like.
-# unit_m = [0.457, 0.2] draws it in a block you name, at its true size: one block's face, its length
-# and its course height, split-faced and set out as it would be built (see below). With it,
-# cap_m = 0.1 adds a capping course that high along the top, and colour = "#7f868b" gives the blocks
-# their colour.
+# unit_m, one block's face as [length, course height], draws it in a block you name, at its true size,
+# split-faced and set out as it would be built (see below). With it, cap_m adds a capping course that
+# high along the top, and colour gives the blocks their colour, a palette key or hex. The richer
+# made-up site's scheme D (tools/made_up_sites.py) is B in walls like that.
 # depth_m, cap_depth_m, cap_overhang_m, embed_m, embed_per_m, embed_courses, bedding_m, base_m,
 # trench_m and seal_m say how it's built, below and behind its face: see below.
 
@@ -62,26 +67,22 @@ line_so = [[5.0, 2.4], [-1.5, 2.4], [-1.5, 6.5]]   # its face
 id = "lawn"
 name = "Lawn"
 kind = "lawn"           # lawn | planting | paving (each its look) | ground (a regrade, drawn as the ground round it)
-level = 42.55           # NZVD2016 at `at_so`
-at_so = [7.5, 5.0]
-fall = "1:25"           # or "2%" or 0.02; flat lawn is counted up to 1:20
+level = 42.1            # its height at `at_so`, on the site's datum (NZVD2016 on the demo)
+at_so = [11.0, 11.0]
+fall = "1:40"           # or "2.5%" or 0.025; flat lawn is counted up to 1:20
 fall_to = "north"       # north | east | south | west on the site's grid, or a bearing in degrees
 batter = 2.5            # edges not on a wall slope back to the ground at 1 : batter
-polygon_so = [[-1.5, 2.4], [5.0, 2.4], [5.0, 0.3], [7.5, 0.3], [7.5, 10.9], [3.0, 10.9], [-1.5, 6.5]]
+polygon_so = [[7.0, 2.0], [7.0, 20.0], [14.0, 20.0], [14.0, 2.0]]
 # A paved terrace (kind = "paving", what a path sketched in the viewer becomes) is drawn as pavers, and has its
-# level at the paving's top. paving_m = 0.2 says how deep its paving is, pavers, bedding and any basecourse: the
-# soil is that far under its level. Without it, [defaults] paving_m in _site.toml, else 0.2.
+# level at the paving's top. paving_m says how deep its paving is, pavers, bedding and any basecourse: the soil
+# is that far under its level. Without it, [defaults] paving_m in _site.toml, else 0.2.
 
-[[stairs]]
-id = "steps"
-name = "Steps up to the lawn"
-line_so = [[3.8, 1.2], [5.0, 1.2]]   # its centre line, from one end to the other
-width_m = 1.0
-# Optional: material ("concrete", or "sleepers" for two timber sleepers to a tread), risers (worked
-# out at about 0.17 m each if left out), and foot and
-# head, the levels at the line's first and last points (else the designed ground just beyond each end).
-# foot = [40.3, 40.0] is for a flight whose foot stands on ground that slopes across it, such as a
-# driveway climbing past: the ground at the left and at the right end of the foot line, facing up the flight.
+# A flight of steps the build draws is a [[stairs]] table; scheme B only counts one (steps = 1). It takes an
+# id and a name, line_so (its centre line, from one end to the other) and width_m. Optional: material
+# ("concrete", or "sleepers" for two timber sleepers to a tread), risers (worked out at about 0.17 m each if
+# left out), and foot and head, the levels at the line's first and last points (else the designed ground just
+# beyond each end). A foot of two levels, at the left and the right end of the foot line facing up the flight,
+# is for a flight whose foot stands on ground that slopes across it, such as a driveway climbing past.
 ```
 
 A terrace polygon with three numbers per corner (`[s, o, level]`) takes its own level at each
@@ -176,7 +177,7 @@ the trench the soil is filled to the designed ground as it is behind any wall. A
 on the ground at its toe, as before. What a guide adds at some places along a wall, such as more drainage aggregate
 behind an outside corner, isn't counted.
 
-Heights are in the site's vertical datum, NZVD2016 by default.
+Heights are on the site's vertical datum (`[crs] vertical`), NZVD2016 for a site in New Zealand.
 
 ## What an option takes: its materials list
 
@@ -226,7 +227,8 @@ sleeper_m = 2.4                             # to count the sleepers of sleeper s
 
 ## The same scheme in another style
 
-To compare how a scheme looks in different walls, base one option on another and restyle it:
+To compare how a scheme looks in different walls, base one option on another and restyle it. On the made-up demo,
+this is scheme B in gabion, with its upper wall in stone:
 
 ```toml
 name = "B2. Two low tiers in gabion"
@@ -239,7 +241,7 @@ material = "gabion"
 thickness_m = 0.5
 
 [[restyle]]
-walls = ["L2"]
+walls = ["B2"]
 material = "stone"
 
 [[restyle_stairs]]           # every flight of steps, or the ones listed in `stairs`

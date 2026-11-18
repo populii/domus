@@ -14,8 +14,8 @@ Pull page scans out of a PDF, then pin a sheet to the grid using the grid crosse
 {"plans": {
   "pages": [{"pdf": "sources/raw/plans.pdf", "out": "sources/raster", "stem": "plans-p"}],
   "georef": [{"name": "C-101", "out": "c101", "source": "sources/raw/plans.pdf", "page": 1, "image": "sources/raster/plans-p1.jpeg",
-              "dpi": 200, "crs": "EPSG:2193", "grid_n": [5180000, 5180025], "grid_e": [1570000, 1570025], "min_score": 0.85,
-              "rough": {"n0": 5180000, "e0": 1570000, "col0": 150, "col_per_m": 40.0, "row0": 350, "row_per_m": 40.0}}]
+              "dpi": 200, "crs": "EPSG:2193", "grid_n": [5500000, 5500025], "grid_e": [1500000, 1500025], "min_score": 0.85,
+              "rough": {"n0": 5500000, "e0": 1500000, "col0": 150, "col_per_m": 40.0, "row0": 350, "row_per_m": 40.0}}]
 }}
 ```
 
@@ -110,11 +110,13 @@ marks and the plants, each only where the camera sees it past the house (`--only
 wall option's walls).
 
 `check` looks for things floating above or buried in the ground, spikes and holes in the ground, a roof that doesn't fit
-the LiDAR, placed clouds that are tilted or off the ground, and duplicate ids. For the wall options it looks for ground
-that comes through a wall or a flight of steps, or stands over a tread's edge (`through`, in the built model), ground-fix
-points inside an option's wall at or over its top (`fixes`), and block walls that aren't set out in whole units: cut
-pieces at a stretch's ends or a step, and cut caps (`blocks`, with each wall's own block size). It exits 1 if a check
-fails its tolerance, and writes its report to `.domus/checks/check_model.json`. A check the site has nothing for is
-skipped with a note saying why: the roof without a house or a surface model, plumb and clouds without placed videos, and
-the option checks without wall options. `sections` needs a `"sections"` entry naming a reference line, and `canopy-plot`
-draws candidate tree crowns to help you write `trees.geojson`.
+the LiDAR, placed clouds that are tilted or off the ground, duplicate ids, two ground-fix points at one place whose
+heights disagree, and each observation's reading against the model (`observations`, [observations.md](observations.md)).
+For the wall options it looks for ground that comes through a wall or a flight of steps, or stands over a tread's edge
+(`through`, in the built model), ground-fix points inside an option's wall at or over its top (`fixes`), and block walls
+that aren't set out in whole units: cut pieces at a stretch's ends or a step, and cut caps (`blocks`, with each wall's
+own block size). It exits 1 if a check fails its tolerance, and writes its report to `.domus/checks/check_model.json`. A
+check the site has nothing for is skipped with a note saying why: the roof without a house or a surface model, plumb and
+clouds without placed videos, the option checks without wall options, and observations without `data/observations.json`.
+`sections` needs a `"sections"` entry naming a reference line, and `canopy-plot` draws candidate tree crowns to help you
+write `trees.geojson`.

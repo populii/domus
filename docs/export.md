@@ -23,7 +23,8 @@ A site's tools and agents do the same with `site.export(path, format=None, optio
 ([api.md](api.md)), which gives the file's path.
 
 An export is the model as Domus draws it: a planning aid, not a survey or an engineering design. Its ground is the
-LiDAR's, and an option's walls and levels are what Domus works out from it.
+ground as the build draws it, from the LiDAR, the site's ground fixes and its existing walls, and an option's walls
+and levels are what Domus works out on it.
 
 ## What both hold
 
@@ -67,7 +68,7 @@ with the origin at the model's origin. Most 3D viewers open a `.glb` as it is.
 ## IFC (.ifc)
 
 IFC4, written with IfcOpenShell, Domus's `ifc` extra: `uv sync --extra ifc` in a copy of Domus, or
-`pip install 'domus[ifc]'`. The container image has it. Without it, `domus export` says so and writes nothing.
+`pip install '.[ifc]'` there. The container image has it. Without it, `domus export` says so and writes nothing.
 
 - **The project:** an IfcProject in metres, with one IfcSite. The house is an IfcBuilding on it, with one
   IfcBuildingStorey at its floor level holding its parts. Everything else stands on the site.

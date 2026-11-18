@@ -13,8 +13,10 @@
     site.export("site.glb")                 # the built model for other software: glTF (.glb) or IFC (.ifc)
 
 **The promise.** What this module offers keeps working from one release to the next. Changing any of it takes a
-deprecation warning in an earlier release and a "For site projects" note in CHANGELOG.md. The rest of the `domus`
-package is internal, and can change in any release.
+deprecation warning in an earlier release and a "For site projects" note in CHANGELOG.md. Three parts are provisional
+until they're declared stable, and docs/api.md says why: the video and prep steps (`site.video`, `site.prep`), the
+observations (`observations()`, `propose_observation()`) and the house kept as an IFC file (`house()`,
+`write_house_ifc()`). The rest of the `domus` package is internal, and can change in any release.
 
 **Several sites in one process.** Each Site reads its own folder, and what Domus reads of one is kept apart from
 the others, so a tool can open two sites and compare them. A problem a person can put right, such as a missing
@@ -343,7 +345,7 @@ class Site:
         0]}: an intent, a list of them, or a JSON file holding either. It's checked against the site, each file it
         changes is written the safe way, all of them or none, and it's recorded in .domus/edits/ with `why`, which it
         needs, `who` (this computer's user unless given), each file's SHA-256 before and after, and what puts it back,
-        which undo() applies. `dry_run` only says what would change. Provisional (docs/api.md).
+        which undo() applies. `dry_run` only says what would change.
 
         The older form, edit(spec, backup=None, apply=False), with a spec as domus site edit has always taken it
         ({layer file: [{"id", "so" or "en" (or "soz", "enz"), "props", "drop_props", "new", "delete"}]}), works as it
@@ -391,7 +393,7 @@ class Site:
     def undo(self, edit, who=None, why=None, say=print):
         """Undoes an edit, by its number as edits() gives it: what puts it back is applied, but only while each file it
         changed is still as it left it, and the undo is recorded as an edit of its own, which can be undone in turn.
-        Gives that record. Provisional (docs/api.md)."""
+        Gives that record."""
         from .project import changes
 
         with self._writing():
@@ -400,7 +402,7 @@ class Site:
     def edits(self):
         """The edits made to the site's data, oldest first: each record as .domus/edits/ holds it (`id`, `kind`, `who`,
         `when`, `why`, `intents`, `summary`, `files` with each one's SHA-256 before and after, `inverse`, `rebuild`),
-        with `in_effect`, and `undone_by` once an undo has undone it. Provisional (docs/api.md)."""
+        with `in_effect`, and `undone_by` once an undo has undone it."""
         from .project import changes
 
         return changes.records(self._project)
@@ -408,7 +410,7 @@ class Site:
     def propose(self, intents, why, source, say=print):
         """Proposes a change for a person to accept or reject, as a check or a tool does when it finds something to
         put right: `intents` as edit() takes them, `why` why, and `source` what proposed it. It's checked against the
-        site now; nothing changes until it's accepted. Gives the proposal (.domus/proposals/<id>.json). Provisional."""
+        site now; nothing changes until it's accepted. Gives the proposal (.domus/proposals/<id>.json)."""
         from .project import changes
         from .project import intents as kinds
 
@@ -432,14 +434,14 @@ class Site:
 
     def proposals(self, state=None):
         """The proposed changes, oldest first: each with `id`, `made`, `source`, `why`, `intents`, `summary` and its
-        `state`, open, accepted or rejected (only those in `state`, if it's given). Provisional (docs/api.md)."""
+        `state`, open, accepted or rejected (only those in `state`, if it's given)."""
         from .project import changes
 
         return changes.proposals(self._project, state)
 
     def accept(self, proposal, who=None, say=print):
         """Accepts a proposed change, by its id: its intents applied as edit() applies them, with the proposal as their
-        basis. Gives the edit's record. Provisional (docs/api.md)."""
+        basis. Gives the edit's record."""
         from .project import changes
 
         with self._writing():
@@ -447,7 +449,7 @@ class Site:
 
     def reject(self, proposal, why, who=None, say=print):
         """Rejects a proposed change, by its id, recording `why` and `who`; the site's data is left as it is. Gives the
-        proposal. Provisional (docs/api.md)."""
+        proposal."""
         from .project import changes
 
         return changes.reject(self._project, proposal, why, who, say)
