@@ -72,7 +72,7 @@ def test_an_extension_s_own_failure_is_named(tmp_path, trust_file):
 
 
 def build(site, out, env):
-    return subprocess.run([sys.executable, "-m", "domus.cli", "build"], check=False, env={**os.environ, **env, "DOMUS_SITE": str(site),
+    return subprocess.run([sys.executable, "-m", "domus.app.cli", "build"], check=False, env={**os.environ, **env, "DOMUS_SITE": str(site),
                           "DOMUS_OUTPUT": str(out)}, capture_output=True, text=True, encoding="utf-8")
 
 
@@ -91,7 +91,7 @@ def test_a_trusted_extension_draws_in_the_build_and_build_json_says_so(tmp_path)
     stopped = build(site, tmp_path / "out", env)
     assert stopped.returncode != 0 and "aren't trusted on this machine" in stopped.stderr + stopped.stdout
     assert not (tmp_path / "out" / "model.json").exists()
-    subprocess.run([sys.executable, "-m", "domus.cli", "--site", str(site), "site", "trust"], check=True,
+    subprocess.run([sys.executable, "-m", "domus.app.cli", "--site", str(site), "site", "trust"], check=True,
                    env={**os.environ, **env}, capture_output=True)
     assert build(site, tmp_path / "out", env).returncode == 0
     model = json.loads((tmp_path / "out" / "model.json").read_text(encoding="utf-8"))

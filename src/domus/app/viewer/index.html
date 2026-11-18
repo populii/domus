@@ -2737,7 +2737,7 @@ $("sketchSend").hidden = true;
   } catch { /* nothing saved yet */ }
   dbReady = true;
 })();
-// The same calls as the artifact's database, on domus.serve's store.
+// The same calls as the artifact's database, on domus.app.serve's store.
 async function serverStore() {
   const health = await fetch("healthz").catch(() => null);
   if (!health?.ok) return {};

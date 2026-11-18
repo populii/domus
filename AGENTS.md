@@ -131,6 +131,7 @@ gives the usage of each of them.
 | `DOMUS_TRUST_FILE` | Where `domus site trust` records what this machine trusts, instead of the user's configuration folder |
 | `DOMUS_BUILD_CACHE` | `0` builds everything again, as `domus build --fresh` does |
 | `DOMUS_STRICT_SETTINGS` | `1` makes reading a setting the schema doesn't declare an error. Domus's tests set it |
+| `DOMUS_STRICT_SITE` | `1` makes calling a part of Domus without its site an error. Domus's tests set it |
 
 [docs/self-hosting.md](docs/self-hosting.md) has the server's own: `DOMUS_PORT`, `DOMUS_ALLOWED_HOSTS`,
 `DOMUS_TRUST_PROXY`, `DOMUS_MAX_SITES` and `DOMUS_ACCESS_LOG`.
@@ -927,8 +928,10 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md) f
   site) are kept for site code and deprecated. The tests run in strict mode, where a part called without its site is
   an error, and `tests/test_handed.py` looks for code that reads the old way.
 - **Text files are UTF-8**, named on every read and write; a test checks.
-- **The viewer** loads nothing from other hosts (new libraries go in its `vendor` folder), and its page is a body with
-  no doctype or head. **The server** uses the standard library only. The import rules in `pyproject.toml` hold both.
+- **The app** (`domus/app/`: the command line, the server and the viewer) sits on top, and nothing else in Domus
+  imports it. **The viewer** loads nothing from other hosts (new libraries go in its `vendor` folder), and its page is
+  a body with no doctype or head. **The server** uses the standard library only. The import rules in `pyproject.toml`
+  hold them.
 - **A change that shouldn't move a model** is proved with `tools/compare_builds.py`. CI does it on the made-up sites for
   every pull request; for a real site, build with `domus build --fresh` before and after.
 - **Before you push:** `uv run pytest -q`, `uv run ruff check .` and `uv run lint-imports`.

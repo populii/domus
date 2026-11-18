@@ -153,11 +153,11 @@ def test_an_option_can_take_a_site_feature_out(tmp_path):
 
     root = tmp_path / "demo"
     env = {k: v for k, v in os.environ.items() if k not in ("DOMUS_OUTPUT", "DOMUS_SITE")}
-    subprocess.run([sys.executable, "-m", "domus.cli", "demo", str(root)], check=True, env=env, capture_output=True)
+    subprocess.run([sys.executable, "-m", "domus.app.cli", "demo", str(root)], check=True, env=env, capture_output=True)
     option = root / "options" / "a-one-wall.toml"
     option.write_text(option.read_text(encoding="utf-8").replace(
         "keep_existing = []", 'keep_existing = []\nremove_features = ["fence-west", "no-such-thing"]'), encoding="utf-8")
-    out = subprocess.run([sys.executable, "-m", "domus.cli", "--site", str(root), "build"], check=True, env=env,
+    out = subprocess.run([sys.executable, "-m", "domus.app.cli", "--site", str(root), "build"], check=True, env=env,
                          capture_output=True, text=True)
     assert "no-such-thing" in out.stdout
     layers = json.loads((root / "viewer" / "data" / "model.json").read_text(encoding="utf-8"))["layers"]

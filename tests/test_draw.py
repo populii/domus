@@ -9,7 +9,7 @@ from domus import build
 
 def test_the_sums():
     here = Path(__file__).parent
-    core = here.parent / "src" / "domus" / "viewer" / "draw-core.js"
+    core = here.parent / "src" / "domus" / "app" / "viewer" / "draw-core.js"
     out = subprocess.run(["node", str(here / "draw_core_check.mjs"), str(core)], capture_output=True, text=True, check=False)
     assert out.returncode == 0, out.stderr
 

@@ -56,7 +56,7 @@ def test_no_cache_when_asked_or_where_it_cant_be_written(tmp_path, monkeypatch):
 def build(site, out, *extra):
     """A build of `site` into `out` (with DOMUS_SITE, as --site would build into the site's own folder)."""
     env = {**os.environ, "DOMUS_SITE": str(site), "DOMUS_OUTPUT": str(out)}
-    subprocess.run([sys.executable, "-m", "domus.cli", "build", *extra], check=True, env=env, capture_output=True)
+    subprocess.run([sys.executable, "-m", "domus.app.cli", "build", *extra], check=True, env=env, capture_output=True)
     return out
 
 

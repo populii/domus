@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
-from domus import serve
+from domus.app import serve
 from domus.capture.sfm_georef import apply, horn_initial
 
 

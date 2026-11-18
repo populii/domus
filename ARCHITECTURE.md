@@ -59,10 +59,12 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 | `prep/` | A site's documents and photos into its data |
 | `importers/` | Places into site folders: New Zealand's (`nz/`), anywhere's (`osm`) |
 | `project/` | The site folder: the Site each part is handed (its folder, output, settings, format and grid) and its rasters, its settings' schema, formats and upgrades, trusted extensions, layer edits, `domus new` and the demo |
-| top level | The command line, the server, the public API (`api`, `testing`), `create`, the viewer and the templates |
+| `app/` | On top of it all, the app: the command line (`cli`), the server (`serve`) and the viewer (`viewer/`, a page and its libraries). Nothing else in Domus imports it |
+| top level | The public API (`api`, `testing`), `create`, `shots` and the templates |
 
-The modules that moved there in 2026.11.38 can still be imported by their old names (`domus.terrain`, `domus.video`,
-...), which are the same modules, so a site's tools written before keep working.
+The modules that moved there can still be imported by their old names (`domus.terrain`, `domus.video`, `domus.cli`,
+...), which are the same modules, so a site's tools written before keep working. The app's, `domus.cli` and
+`domus.serve`, say they're deprecated.
 
 ## Settings and imports
 
@@ -70,7 +72,7 @@ Every setting a site can hold is declared once, with its default and a line of h
 code reads settings through it. The tests fail on a setting the code reads that the schema doesn't declare, or reads
 with another default, and docs/site-format.md's tables are written from it. Import rules in pyproject.toml, checked in CI, keep the server on
 the standard library, the pure layers (`geo`, the model's pure parts and the options' working out) free of the site
-and the app, and the command line on top. The pure parts
+and the app, and the app on top, where nothing imports it. The pure parts
 are the house and its looks, the walls and their looks, the small features, the plants (`vegetation`), the ground's
 triangulation (`tin`), the wall options' working out (`scheme`), the mesh helpers and the drains: the build, a workflow,
 reads the site (`terrain`, `canopy`, `design`) and hands them what they draw from.

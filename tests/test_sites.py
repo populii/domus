@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from domus import serve
+from domus.app import serve
 
 
 @pytest.fixture

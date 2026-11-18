@@ -46,9 +46,9 @@ from urllib.parse import unquote, urlsplit
 
 from .errors import DomusError
 
-VIEWER = Path(__file__).resolve().parent / "viewer"
-# The document skeleton domus serve wraps the viewer's page body in (serve.HEAD, which this module may not import):
-# the tests hold the two the same.
+VIEWER = Path(__file__).resolve().parent / "app" / "viewer"      # the app's viewer: its files, not its code
+# The document skeleton domus serve wraps the viewer's page body in (domus.app.serve.HEAD, which this module may not
+# import): the tests hold the two the same.
 HEAD = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <link rel="icon" href="icon.png">

@@ -140,7 +140,8 @@ def test_a_scan_reaches_the_build(built, site, tmp_path, project):
     """Through the command, the export and the build, with no [video] section in the site."""
     import json
 
-    from domus import build, cli
+    from domus import build
+    from domus.app import cli
     from domus.capture import export_cloud
 
     ext = json.loads((built / "model.json").read_text(encoding="utf-8"))["extent"]

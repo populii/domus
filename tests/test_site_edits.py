@@ -10,7 +10,7 @@ import numpy as np
 
 def _domus(root, *args):
     env = {k: v for k, v in os.environ.items() if k not in ("DOMUS_OUTPUT", "DOMUS_SITE")}
-    return subprocess.run([sys.executable, "-m", "domus.cli", "--site", str(root), *args], env=env, capture_output=True,
+    return subprocess.run([sys.executable, "-m", "domus.app.cli", "--site", str(root), *args], env=env, capture_output=True,
                           text=True, encoding="utf-8", check=False)
 
 
@@ -23,7 +23,7 @@ def _spec(tmp_path, name, spec):
 def test_layer_edits_change_what_they_name_and_keep_what_was_there(tmp_path):
     root = tmp_path / "demo"
     env = {k: v for k, v in os.environ.items() if k not in ("DOMUS_OUTPUT", "DOMUS_SITE")}
-    subprocess.run([sys.executable, "-m", "domus.cli", "demo", str(root)], check=True, env=env, capture_output=True)
+    subprocess.run([sys.executable, "-m", "domus.app.cli", "demo", str(root)], check=True, env=env, capture_output=True)
     walls = root / "data" / "site" / "walls-existing.geojson"
     raw = walls.read_text(encoding="utf-8")
     w1 = json.loads(raw)["features"][0]["geometry"]["coordinates"]

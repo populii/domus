@@ -11,7 +11,8 @@ from pathlib import Path
 import pytest
 from PIL import Image, PngImagePlugin
 
-from domus import serve, shots
+from domus import shots
+from domus.app import serve
 from domus.errors import DomusError
 
 ORIGIN = [1500011.0, 5500015.0, 37.0]

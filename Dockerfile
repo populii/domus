@@ -9,7 +9,7 @@ RUN uv sync --frozen --no-dev --no-editable --all-extras --no-extra shots --pyth
 FROM python:3.14-slim
 LABEL org.opencontainers.image.title="domus" \
       org.opencontainers.image.source="https://github.com/populii/domus" \
-      net.unraid.docker.icon="https://cdn.jsdelivr.net/gh/populii/domus@main/src/domus/viewer/icon.png" \
+      net.unraid.docker.icon="https://cdn.jsdelivr.net/gh/populii/domus@main/src/domus/app/viewer/icon.png" \
       org.opencontainers.image.description="3D site models for comparing retaining wall options" \
       org.opencontainers.image.licenses="MIT"
 RUN apt-get update && apt-get install -y --no-install-recommends libexpat1 && rm -rf /var/lib/apt/lists/*

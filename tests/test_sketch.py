@@ -13,14 +13,14 @@ import tomllib
 import numpy as np
 import pytest
 
-from domus import serve
+from domus.app import serve
 
 
 @pytest.fixture(scope="module")
 def site(tmp_path_factory):
     root = tmp_path_factory.mktemp("sketch") / "demo"
     env = {k: v for k, v in os.environ.items() if k not in ("DOMUS_OUTPUT", "DOMUS_SITE")}
-    subprocess.run([sys.executable, "-m", "domus.cli", "demo", str(root)], check=True, env=env, capture_output=True)
+    subprocess.run([sys.executable, "-m", "domus.app.cli", "demo", str(root)], check=True, env=env, capture_output=True)
     return root
 
 
@@ -105,7 +105,7 @@ def test_an_empty_sketch_is_empty(site):
 
 def test_the_worker_answers_line_by_line_and_survives_a_bad_one(site):
     env = {**{k: v for k, v in os.environ.items() if k != "DOMUS_OUTPUT"}, "DOMUS_SITE": str(site)}
-    p = subprocess.Popen([sys.executable, "-m", "domus.cli", "sketch-worker"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=env)
+    p = subprocess.Popen([sys.executable, "-m", "domus.app.cli", "sketch-worker"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=env)
     try:
         for req in ('{"items": []}', '{"nothing": 1}', '{"items": []}'):
             p.stdin.write(req + "\n")
@@ -124,7 +124,7 @@ def test_the_worker_says_what_setting_needs_putting_right_and_stays_up(site, tmp
     text = shared.read_text(encoding="utf-8")
     shared.write_text(text[:text.index("[regrade]")] + text[text.index("[defaults]"):], encoding="utf-8")
     env = {**{k: v for k, v in os.environ.items() if k != "DOMUS_OUTPUT"}, "DOMUS_SITE": str(root)}
-    p = subprocess.Popen([sys.executable, "-m", "domus.cli", "sketch-worker"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=env)
+    p = subprocess.Popen([sys.executable, "-m", "domus.app.cli", "sketch-worker"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=env)
     wall = {"id": 1, "kind": "wall", "name": "W", "en": [[0, 0], [5, 0]], "material": "timber", "mode": "height", "height": 0.5}
     try:
         for _ in range(2):          # it answers, and is still there to answer again

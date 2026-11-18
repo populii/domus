@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** the command line, the server and the viewer are Domus's app, in `domus.app`:
+  `domus.app.cli`, `domus.app.serve` and `domus/app/viewer/`, which nothing else in Domus imports. The `domus`
+  command, the container and the server work as they did. The old names `domus.cli` and `domus.serve` are the same
+  modules and say they're deprecated (a DeprecationWarning), and `python -m domus.cli` still runs the command line; a
+  site's tools use `domus.api` rather than either. The container's icon is at the viewer's new place.
+
 ## 2026.11.42
 
 - **For site projects:** every part of Domus is handed the site it works on, where it read the current one, so

@@ -28,7 +28,7 @@ import argparse
 import os
 import sys
 
-from . import __version__
+from .. import __version__
 
 COMMANDS = ["create", "new", "demo", "fetch", "canopy", "marks", "title", "points", "sketch-worker", "build", "export", "serve", "video",
             "scan", "prep", "site", "shots"]
@@ -52,7 +52,7 @@ def main(argv=None):
     # Everything after the command is the command's own, --help included.
     k = next((i for i, a in enumerate(argv) if a in COMMANDS), len(argv))
     args, rest = ap.parse_args(argv[:k + 1]), argv[k + 1:]
-    from .project import site as sites
+    from ..project import site as sites
 
     if args.site:
         choose_site(args.site)          # for the processes a command starts, which read the environment
@@ -60,7 +60,7 @@ def main(argv=None):
     else:
         site = sites.started()
     named = site if args.site or os.environ.get("DOMUS_SITE") else None
-    from .errors import as_command
+    from ..errors import as_command
 
     return as_command(lambda: run(args.command, rest, site, named))
 
@@ -69,53 +69,53 @@ def run(command, rest, site, named=None):
     """One command, on `site`, the site the command line was given (`named`, if it was named at all). Modules are
     imported here, once the site is known."""
     if command == "create":
-        from . import create
+        from .. import create
         return create.main(rest, named)
     if command == "new":
-        from .project import newsite
+        from ..project import newsite
         return newsite.main(rest)
     if command == "demo":
-        from .project import demo
+        from ..project import demo
         return demo.main(rest)
     if command == "serve":
         from . import serve
         return serve.main(rest)
     if command == "shots":
-        from . import shots
+        from .. import shots
         return shots.main(site, rest)
     if command == "fetch":
-        from . import importers
+        from .. import importers
         return importers.fetch(site)
     if command == "canopy":
-        from .model import canopy
+        from ..model import canopy
         return canopy.map_site(site)
     if command == "sketch-worker":
-        from .options import sketch
+        from ..options import sketch
         return sketch.main(site)
     if command == "marks":
-        from .importers.nz import marks
+        from ..importers.nz import marks
         return marks.main(site, rest)
     if command == "title":
-        from .importers.nz import title
+        from ..importers.nz import title
         return title.main(site, rest)
     if command == "points":
-        from .importers.nz import points
+        from ..importers.nz import points
         return points.main(site, rest)
     if command == "video":
-        from . import capture as video
+        from .. import capture as video
         return video.main(site, rest)
     if command == "prep":
-        from . import prep
+        from .. import prep
         return prep.main(site, rest)
     if command == "scan":
-        from .capture import scan
+        from ..capture import scan
         return scan.main(site, rest)
     if command == "site":
-        from .project import upgrade
+        from ..project import upgrade
         return upgrade.main(site, rest)
     if command == "export":
         return export(site, rest)
-    from . import build
+    from .. import build
     return build.main(site, rest)
 
 
@@ -129,7 +129,7 @@ def export(site, rest):
                                      "as the viewer shows it (default: the site as it is)")
     ap.add_argument("--format", choices=["glb", "ifc"], help="the format, if the path's suffix doesn't say it")
     args = ap.parse_args(rest)
-    from . import api
+    from .. import api
 
     path = api.Site(site).export(args.path, format=args.format, option=args.option)
     print(f"wrote {path} ({path.stat().st_size / 1e6:.1f} MB)")

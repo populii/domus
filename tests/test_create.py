@@ -7,7 +7,8 @@ import threading
 import numpy as np
 import pytest
 
-from domus import create, publicdata, serve
+from domus import create, publicdata
+from domus.app import serve
 
 LOT = [[1000.0, 2030.0], [1022.0, 2030.0], [1022.0, 2000.0], [1000.0, 2000.0], [1000.0, 2030.0]]
 HOUSE = [[1005.0, 2015.0], [1017.0, 2015.0], [1017.0, 2006.0], [1005.0, 2006.0], [1005.0, 2015.0]]

@@ -7,7 +7,7 @@ import zipfile
 import numpy as np
 import pytest
 
-from domus import serve
+from domus.app import serve
 from domus.capture import safe_npz
 
 

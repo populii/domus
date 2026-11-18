@@ -107,7 +107,7 @@ def test_a_missing_settings_file_says_so(site, prep_json, project):
 
 
 def test_each_command_keeps_its_own_help(capsys):
-    from domus import cli
+    from domus.app import cli
 
     with pytest.raises(SystemExit):
         cli.main(["scan", "--help"])
@@ -239,11 +239,11 @@ def test_the_checks_skip_what_a_site_doesnt_have(tmp_path):
 
     root = tmp_path / "bare"
     env = {k: v for k, v in os.environ.items() if k not in ("DOMUS_OUTPUT", "DOMUS_SITE")}
-    subprocess.run([sys.executable, "-m", "domus.cli", "demo", str(root)], check=True, env=env, capture_output=True)
+    subprocess.run([sys.executable, "-m", "domus.app.cli", "demo", str(root)], check=True, env=env, capture_output=True)
     (root / "data" / "site" / "house.geojson").unlink()
     for option in (root / "options").glob("[!_]*.toml"):
         option.unlink()
-    out = subprocess.run([sys.executable, "-m", "domus.cli", "--site", str(root), "prep", "check", "sanity", "roof",
+    out = subprocess.run([sys.executable, "-m", "domus.app.cli", "--site", str(root), "prep", "check", "sanity", "roof",
                           "plumb", "clouds", "through", "blocks"], env=env, capture_output=True, text=True, encoding="utf-8",
                          check=False)                  # exits 1 if a check fails; the report says what ran
     report = json.loads((root / ".domus" / "checks" / "check_model.json").read_text(encoding="utf-8"))

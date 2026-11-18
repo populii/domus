@@ -15,7 +15,7 @@ OLD = {"crs": {"ROOT", "OUTPUT", "settings", "site_format", "site_epsg", "label"
 CURRENT = {"current", "use"}            # the current site (current(), with no arguments), or making one current
 STARTED = {"started", "start"}          # the site a process was started for
 ALLOWED = {"geo/crs.py": OLD["crs"] | {"current"}, "geo/raster.py": OLD["raster"] | {"current"},
-           "project/site.py": CURRENT | STARTED, "cli.py": STARTED, "api.py": {"started"}}
+           "project/site.py": CURRENT | STARTED, "app/cli.py": STARTED, "api.py": {"started"}}
 
 
 def script(node):

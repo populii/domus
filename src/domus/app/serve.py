@@ -52,8 +52,8 @@ import unicodedata
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from . import __version__
-from .errors import DomusError
+from .. import __version__
+from ..errors import DomusError
 
 VIEWER = Path(__file__).resolve().parent / "viewer"
 HEAD = """<!doctype html>
@@ -299,7 +299,7 @@ class Job:
         """Starts `domus ARGS` on the site."""
         self.log.parent.mkdir(parents=True, exist_ok=True)
         with open(self.log, "wb") as fh:
-            self.proc = subprocess.Popen([sys.executable, "-m", "domus.cli", *args], stdout=fh, stderr=subprocess.STDOUT,
+            self.proc = subprocess.Popen([sys.executable, "-m", "domus.app.cli", *args], stdout=fh, stderr=subprocess.STDOUT,
                                          env=job_env(self.root, self.own_output))
 
     def text(self):
@@ -397,7 +397,7 @@ class SketchWorker:
             sig = self.signature()
             if self.proc is None or self.proc.poll() is not None or sig != self.seen:
                 self._stop()
-                self.proc = subprocess.Popen([sys.executable, "-m", "domus.cli", "sketch-worker"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                self.proc = subprocess.Popen([sys.executable, "-m", "domus.app.cli", "sketch-worker"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                              text=True, encoding="utf-8", env=job_env(self.root, self.own_output))   # its errors: the server's log
                 self.seen = sig
             timer = threading.Timer(WORKER_TIMEOUT_S, self.proc.kill)   # a stuck worker ends the read below

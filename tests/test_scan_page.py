@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from domus import serve
+from domus.app import serve
 
 
 @pytest.fixture
@@ -86,6 +86,6 @@ def test_a_scan_counts_on_the_checklist(built, site, project):
 @pytest.mark.skipif(not shutil.which("node"), reason="needs node")
 def test_the_sums():
     here = Path(__file__).parent
-    core = here.parent / "src" / "domus" / "viewer" / "scan-core.js"
+    core = here.parent / "src" / "domus" / "app" / "viewer" / "scan-core.js"
     out = subprocess.run(["node", str(here / "scan_core_check.mjs"), str(core)], capture_output=True, text=True, check=False)
     assert out.returncode == 0, out.stderr

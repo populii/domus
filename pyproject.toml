@@ -30,7 +30,7 @@ ifc = ["ifcopenshell>=0.9.0.post1"]
 shots = ["playwright>=1.65.2"]     # domus shots: Playwright drives its own Chromium (uv run playwright install chromium)
 
 [project.scripts]
-domus = "domus.cli:main"
+domus = "domus.app.cli:main"
 
 [dependency-groups]
 dev = [
@@ -54,7 +54,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 130
-extend-exclude = ["src/domus/viewer/vendor"]
+extend-exclude = ["src/domus/app/viewer/vendor"]
 
 [tool.ruff.lint]
 # int(round(x)) is kept on purpose: x is often a NumPy scalar.
@@ -68,7 +68,7 @@ include_external_packages = true
 [[tool.importlinter.contracts]]
 name = "The server uses the standard library only, and runs builds and jobs in processes of their own"
 type = "forbidden"
-source_modules = ["domus.serve"]
+source_modules = ["domus.app.serve"]
 forbidden_modules = ["numpy", "scipy", "shapely", "rasterio", "pyproj", "PIL", "cv2", "av", "pycolmap", "laspy", "tomlkit",
                      "domus.geo.crs", "domus.build", "domus.options.design", "domus.model.terrain"]
 
@@ -78,7 +78,7 @@ type = "forbidden"
 source_modules = ["domus.model.house", "domus.model.house_texture", "domus.geo.mesh", "domus.model.wall_looks",
                   "domus.model.walls", "domus.model.features", "domus.model.drains", "domus.model.tin",
                   "domus.model.vegetation", "domus.options.scheme"]
-forbidden_modules = ["domus.geo.crs", "domus.api", "domus.build", "domus.cli", "domus.serve", "domus.create",
+forbidden_modules = ["domus.geo.crs", "domus.api", "domus.build", "domus.app", "domus.create",
                      "domus.options.design", "domus.options.sketch", "domus.project"]
 
 [[tool.importlinter.contracts]]
@@ -87,7 +87,7 @@ type = "forbidden"
 source_modules = ["domus.geo", "domus.model.house", "domus.model.house_texture", "domus.model.wall_looks", "domus.model.walls",
                   "domus.model.features", "domus.model.drains", "domus.model.tin", "domus.model.vegetation",
                   "domus.options.scheme"]
-forbidden_modules = ["domus.project", "domus.api", "domus.testing", "domus.build", "domus.cli", "domus.serve", "domus.create",
+forbidden_modules = ["domus.project", "domus.api", "domus.testing", "domus.build", "domus.app", "domus.create",
                      "domus.shots", "domus.export", "domus.model.terrain", "domus.model.canopy", "domus.options.design",
                      "domus.options.sketch", "domus.checks", "domus.capture", "domus.prep", "domus.importers"]
 # geo's names from before Domus handed its parts their site (crs.ROOT, crs.settings(), raster.DEM, raster.dem() and the
@@ -96,8 +96,8 @@ ignore_imports = ["domus.geo.crs -> domus.project.site", "domus.geo.raster -> do
                   "domus.geo.raster -> domus.project.rasters"]
 
 [[tool.importlinter.contracts]]
-name = "Only the command line imports the server, and nothing imports the command line"
+name = "Nothing imports the app (domus.app), which sits on top, and only its command line imports its server"
 type = "forbidden"
 source_modules = ["domus.**"]
-forbidden_modules = ["domus.cli", "domus.serve"]
-ignore_imports = ["domus.cli -> domus.serve"]
+forbidden_modules = ["domus.app"]
+ignore_imports = ["domus.app.cli -> domus.app.serve"]

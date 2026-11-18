@@ -250,7 +250,7 @@ def test_what_it_refuses(built, site, tmp_path):
 
 
 def test_the_command_writes_through_the_api(built, tmp_path, capsys):
-    from domus import cli
+    from domus.app import cli
 
     cli.main(["export", str(tmp_path / "out" / "a.glb"), "--option", "a-one-wall"])
     assert "wrote" in capsys.readouterr().out and read_glb(tmp_path / "out" / "a.glb")[0]["asset"]["extras"]["option"]

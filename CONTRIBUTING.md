@@ -78,7 +78,7 @@ once a month.
 
 `src/domus` is laid out by what each part does: the site's grid and geometry, the model's parts, the wall options, the
 build, exports to other software, the checks, video and scans, documents, importers that bring a place in, the site
-folder, and at the top the command line, the server, the public API and the viewer. [ARCHITECTURE.md](ARCHITECTURE.md) has the table, and it's
+folder and the public API, and on top of them the app (`domus/app/`): the command line, the server and the viewer. [ARCHITECTURE.md](ARCHITECTURE.md) has the table, and it's
 where to look first, as the layout is still settling.
 
 Import rules, in `[tool.importlinter]` in `pyproject.toml` and checked by `uv run lint-imports`, keep four promises:
@@ -91,7 +91,8 @@ Import rules, in `[tool.importlinter]` in `pyproject.toml` and checked by `uv ru
 - **The pure layers read no site.** `geo` (the grid maths, rasters, GeoJSON, meshes and fits), the model's pure
   parts and the working out of a wall option are handed what they need: a site's grid is made from its settings, and a
   raster is read from the file and grid it's given. Only the names kept for site code reach a site, and only those.
-- **The command line sits on top.** Nothing imports it, and only it imports the server.
+- **The app sits on top.** Nothing else in Domus imports `domus.app` (the command line, the server and the viewer),
+  and within it only the command line imports the server.
 
 A few more rules the code keeps:
 
