@@ -8,6 +8,11 @@
   options do. Sketches saved on such a site before this have o's sign flipped in their `so`; their points on the grid
   (`en`), which **Make it an option** uses, were right. `tools/made_up_sites.py` has a site like that, `left`, which
   CI builds with the others.
+- **For site projects:** `domus video place` works without `[house] roof_at_wall_above_fl`, which neither `domus
+  create` nor `domus demo` writes. It stopped with a `KeyError` without it; now it takes the eaves' height from
+  `fl_upper` plus `roof_at_wall_above_fl` where a site gives it, else from `roof_plane_at_wall`, the same height, which
+  every house has. A site that set `roof_at_wall_above_fl` to `roof_plane_at_wall` less `fl_upper` only to place a
+  video can drop it ([docs/site-format.md](docs/site-format.md)).
 - The README drops its small 3D model, which GitHub's viewer drew as a little blue patch on a wire floor, and the
   README's and AGENTS.md's flowcharts of many steps read top to bottom, so GitHub doesn't shrink them.
 - `domus demo` writes a surface model (`data/lidar/dsm.tif`) with the roof Domus draws for the demo's house, its hip,

@@ -116,7 +116,7 @@ gives them in `[datums.<datum>]` and `[house]` reads with them there, and `domus
 | `house.roof_name_note` | `""` | Words after the roof layer's name |
 | `house.roof_source` | `"the house's outline and [house] in data/site.toml"` | Where the roof's shape came from |
 | `house.walls_source_note` | `""` | Words after the walls' source |
-| `house.roof_at_wall_above_fl` |  | The roof plane at the wall, above fl_upper, for placing videos on the house |
+| `house.roof_at_wall_above_fl` | worked out | The roof plane at the wall, above fl_upper, for placing videos on the house: optional, roof_plane_at_wall less fl_upper, unless given |
 | `[services]` | | Drains (services.geojson) |
 | `services.assumed_depth_m.<drain>` |  | A depth to draw a drain at, below the ground, when it has no levels |
 | `services.colours.<drain>` | `"#2f2f2f"` | A drain's colour |

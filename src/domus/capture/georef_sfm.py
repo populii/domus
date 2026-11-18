@@ -542,6 +542,14 @@ def known_lengths(site, rec, control, tag):
     return out
 
 
+def eaves_height(house):
+    """The eaves' height on the model's datum, from [house]: points on a wall's plane below it count as wall points.
+    It's fl_upper plus roof_at_wall_above_fl where the site gives that, else roof_plane_at_wall, the same height,
+    which every house has."""
+    above = house.get("roof_at_wall_above_fl")
+    return house["roof_plane_at_wall"] if above is None else house["fl_upper"] + above
+
+
 def main(site):
     ap = argparse.ArgumentParser()
     ap.add_argument("tag")
@@ -550,7 +558,7 @@ def main(site):
     tag = args.tag
     rec = load(video_dir(site) / f"{tag}-sfm.npz")
     house = site.settings()["house"]
-    eaves = house["fl_upper"] + house["roof_at_wall_above_fl"]
+    eaves = eaves_height(house)
     planes = house_planes(site)
     dem = rasters.dem(site)
     ground = Grid(dem, site.settings()["model"]["extent"])

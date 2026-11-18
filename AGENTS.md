@@ -388,9 +388,8 @@ Placing needs control: points marked in the frames, held to known places. Write 
   it).
 
 Placing fits the cloud to the house's walls and the ground, and counts points below the eaves as wall points. It takes
-the eaves' height from `[house]` as `fl_upper` plus `roof_at_wall_above_fl`. Neither `domus create` nor `domus demo`
-writes that second one, and placing stops with a `KeyError` without it: set it to `roof_plane_at_wall` less `fl_upper`.
-Then:
+the eaves' height from `[house]`: `fl_upper` plus `roof_at_wall_above_fl` if the site sets that, else
+`roof_plane_at_wall`. Then:
 
 ```sh
 domus video place walk-colmap
