@@ -5,6 +5,9 @@ domus.options.scheme works an option out point by point; the solids follow the s
 
 - The ground as it is: the triangles of the ground the build draws (a site's tin.DrawnGround), closed into a solid
   with sides and a flat bottom below everything.
+- The ground the option starts from (Design.base): the ground as it is, but where a wall it takes away stood
+  (Design.gone), at that wall's toe, the lowest where two meet. Its batters raise and cut that, and where nothing
+  else is, it's the designed ground.
 - A terrace: its outline extruded and cut by its plane, keeping what's below (with its own level at each corner, the
   triangles Domus interpolates those levels on). The first terrace a point is in gives its level there.
 - A batter from a terrace's free edge (Design.free, Design.batters) raises the ground to the terrace's level at the
@@ -554,23 +557,29 @@ def option_solids(design, walls, existing_walls=(), segments=SEGMENTS, old=None,
     def wide(geom):
         return section(geom, origin).offset(EDGE_M, mf.JoinType.Miter)
 
-    # The soil before: the ground, but at its toe inside an existing wall, the lowest where two meet. Only the walls
-    # that come near the regrade area matter.
-    near = box(*window)
-    if old is None:
-        old = [(w["id"], wall_body(w, design.existing)) for w in existing_walls]
-    old = [(i, b) for i, b in old if b[0].intersects(near)]
-    before = ground
-    if old:
-        plans = [section(b[0], origin) for _, b in old]
-        under = [_toe_columns(b, origin, zb, top + 1.0, segments)[0] for _, b in old]
+    def on_toes(bodies):
+        """The ground, but at its toe inside each wall of `bodies` (scheme.wall_body's), the lowest where two meet."""
+        if not bodies:
+            return ground
+        plans = [section(b[0], origin) for b in bodies]
+        under = [_toe_columns(b, origin, zb, top + 1.0, segments)[0] for b in bodies]
         toes = []
         for cell, members in _overlay(plans):
             low = under[members[0]]
             for k in members[1:]:
                 low = low ^ under[k]
             toes.append(low ^ tall(cell.offset(EDGE_M, mf.JoinType.Miter)))
-        before = union([ground - tall(mf.CrossSection.batch_boolean(plans, mf.OpType.Add)), *toes])
+        return union([ground - tall(mf.CrossSection.batch_boolean(plans, mf.OpType.Add)), *toes])
+
+    # The soil before: the ground, but at its toe inside an existing wall. Only the walls that come near the regrade
+    # area matter.
+    near = box(*window)
+    if old is None:
+        old = [(w["id"], wall_body(w, design.existing)) for w in existing_walls]
+    old = [(i, b) for i, b in old if b[0].intersects(near)]
+    before = on_toes([b for _, b in old])
+    # The ground the option starts from (Design.base): the ground, but at its toe where a wall it takes away stood.
+    base = on_toes([b for b in design.gone if b[0].intersects(near)])
 
     cut, fill, named = [], [], []
 
@@ -644,8 +653,8 @@ def option_solids(design, walls, existing_walls=(), segments=SEGMENTS, old=None,
         raise_to, cut_to = union(fills), union(cuts)
         box_all = prism(win, zb + 0.5, top + 1.5)
         under_cut = box_all - cut_to
-        up = outline(raise_to - ground) ^ rest
-        lowered = outline(ground ^ cut_to) ^ rest
+        up = outline(raise_to - base) ^ rest
+        lowered = outline(base ^ cut_to) ^ rest
         both = up ^ lowered
         if not both.is_empty():     # raised by one batter and cut by another: the larger change wins, as in Design
             cut_wins = _cut_wins(both, design, origin, conflict_step)
@@ -654,10 +663,10 @@ def option_solids(design, walls, existing_walls=(), segments=SEGMENTS, old=None,
         soil(up - walled, raise_to, box_all - raise_to, "batters raise")
         soil(down - walled, under_cut, cut_to, "batters cut")
         designed += [("batters raise", raise_to ^ tall(up)), ("batters cut", under_cut ^ tall(down)),
-                     ("ground", ground ^ tall((rest - up) - down))]
+                     ("ground", base ^ tall((rest - up) - down))]
         soils += [(up, raise_to), (down, under_cut), ((rest - up) - down, before)]
     else:
-        designed.append(("ground", ground ^ tall(rest)))
+        designed.append(("ground", base ^ tall(rest)))
         soils.append((rest, before))
     designed += [(f"terrace {k}", level ^ tall(own)) for k, (own, level) in enumerate(levels) if not own.is_empty()]
     designed += [(f"steps {k}", below ^ tall(foot)) for k, (foot, below) in enumerate(ramps) if not foot.is_empty()]
@@ -787,14 +796,14 @@ def _nearest_cells(ends, segments, reach=BATTER_REACH_M):
 def _cut_wins(region, design, origin, step=CONFLICT_STEP_M):
     """Where, in `region` (a plan about `origin`), one batter cuts the ground by more than another raises it, so
     Design takes the cut. The raise less the cut is continuous, so it's read on a `step` grid of nodes (Design.batters,
-    the ground as it is), taken as linear on each half of a cell, and the part where it's below nothing is cut out of
-    each half exactly. Whole cells in a row where it's below nothing go in as one rectangle."""
+    the ground the option starts from), taken as linear on each half of a cell, and the part where it's below nothing
+    is cut out of each half exactly. Whole cells in a row where it's below nothing go in as one rectangle."""
     x0, y0, x1, y1 = region.bounds()
     xs = np.arange(x0 - step, x1 + 2 * step, step)
     ys = np.arange(y0 - step, y1 + 2 * step, step)
     X, Y = np.meshgrid(xs + origin[0], ys + origin[1])
     raise_to, lower_to = design.batters(X, Y)
-    h0 = np.ravel(design.existing.sample(X, Y))
+    h0 = np.ravel(design.base(X, Y))
     gap = (np.maximum(raise_to - h0, 0) - np.maximum(h0 - lower_to, 0)).reshape(X.shape)   # up less down: Design's test
     X, Y = X - origin[0], Y - origin[1]
     below = gap < 0

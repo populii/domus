@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** an existing wall an option takes away (one not in its `keep_existing`) goes, face and all.
+  Its footprint, from its face's foot with any batter to its back, joins that option's regrade area as far as the
+  lot and the part `[regrade]` names go (into the house's margin too, but never the house), and there the option
+  starts from the soil under the wall, at its toe, not from its old face. Its terraces and batters reach across the
+  footprint as anywhere else, and where none of them reaches, the ground is left at the toe, which is where the cut
+  and fill already counted the soil. So no option leaves part of a removed wall's old face standing, cut off by the
+  regrade area's edge or out of reach of its batters. An option that takes a wall away can move a little more or
+  less soil, and a new wall whose toe or retained ground is read over the old footprint can change its levels there
+  ([docs/options.md](docs/options.md#what-the-build-works-out)).
+- `scheme.Design` and `scheme.Context` take `limits`, as far as the footprint of a wall an option takes away joins
+  its regrade area (a site's `design.removed_limits`: the lot within `[regrade]`'s limits, `design.regrade_limits`,
+  less the house), and `Design.base` is the ground an option starts from. A wall option's solids start from it too.
+
 ## 2026.11.52
 
 - **For site projects:** observations: readings from videos kept as data apart from the model, in

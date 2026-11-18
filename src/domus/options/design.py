@@ -113,9 +113,9 @@ def regrade_settings(site):
 
 
 @cached
-def regrade_area(site):
-    """Where options regrade and where flat lawn is counted: the lot, or the part of it in [regrade] polygon_so
-    (a polygon in the frame) or with s under s_max, less the house and a margin round it."""
+def regrade_limits(site):
+    """As far as options may regrade: the lot, or the part of it in [regrade] polygon_so (a polygon in the frame) or
+    with s under s_max."""
     cfg = regrade_settings(site)
     fr = frame(site)
     area = title(site)
@@ -124,7 +124,20 @@ def regrade_area(site):
     if "s_max" in cfg:
         s_min = -1000.0
         area = area.intersection(Polygon(fr.en(np.array([[s_min, s_min], [cfg["s_max"], s_min], [cfg["s_max"], -s_min], [s_min, -s_min]]))))
-    return area.difference(house_outline(site).buffer(cfg.get("house_margin_m", 0.6)))
+    return area
+
+
+@cached
+def regrade_area(site):
+    """Where options regrade and where flat lawn is counted: the lot, or the part of it in [regrade] polygon_so
+    (a polygon in the frame) or with s under s_max, less the house and a margin round it."""
+    return regrade_limits(site).difference(house_outline(site).buffer(regrade_settings(site).get("house_margin_m", 0.6)))
+
+
+def removed_limits(site):
+    """As far as the footprint of an existing wall an option takes away joins its regrade area (scheme.Design): the
+    regrade limits, less the house itself."""
+    return regrade_limits(site).difference(house_outline(site))
 
 
 class Terrace(scheme.Terrace):
@@ -135,12 +148,14 @@ class Terrace(scheme.Terrace):
 
 
 class Design(scheme.Design):
-    """scheme.Design on `site`: its options' defaults, regrade area and frame, and its ground as it is (the ground as
-    the build draws it, terrain.existing()) unless `existing` gives another."""
+    """scheme.Design on `site`: its options' defaults, regrade area, frame and existing walls, as far as the footprint
+    of one an option takes away joins its regrade area (removed_limits), and its ground as it is (the ground as the
+    build draws it, terrain.existing()) unless `existing` gives another."""
 
     def __init__(self, opt, existing=None, site=None):
         site = given(site)
-        super().__init__(opt, settings(site)["defaults"], existing or terrain.existing(site), regrade_area(site), frame(site))
+        super().__init__(opt, settings(site)["defaults"], existing or terrain.existing(site), regrade_area(site), frame(site),
+                         existing_walls(site), removed_limits(site))
 
 
 def existing_walls(site):
@@ -181,7 +196,7 @@ def context(site):
                           existing_walls(site), house_outline(site), house_building(site), house_retaining_walls(site),
                           obstacles(site), easement_shapes(site),
                           geojson.read_optional(site.path / "data" / "site" / "services.geojson"),
-                          site.settings().get("services", {}))
+                          site.settings().get("services", {}), removed_limits(site))
 
 
 def evaluate(site, opt, existing=None, step=0.1):

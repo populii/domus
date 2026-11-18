@@ -374,16 +374,31 @@ class Stair:
 class Design:
     """The designed ground of one option, and its walls and steps with their levels: on the ground as it is
     (`existing`, anything with sample(e, n)), regraded only inside `garden` (the regrade area), with the options'
-    `defaults` and drawn in their `frame`."""
+    `defaults` and drawn in their `frame`.
 
-    def __init__(self, opt, defaults, existing, garden, frame):
+    Each of `existing_walls` (domus.walls dicts) the option takes away, not in its `keep_existing`, goes, face and
+    all. Its footprint (wall_body's plan, from its face's foot with any batter to its back) joins `garden` as far as
+    `limits` lets it (a site's lot within its [regrade] limits, less its house; the whole footprint where it's None),
+    and there the option starts from the soil under the wall, at its toe, not from its old face (base): its terraces
+    and batters reach across it as anywhere else, and where none of them reaches, the ground is left at the toe."""
+
+    def __init__(self, opt, defaults, existing, garden, frame, existing_walls=(), limits=None):
         self.defaults = defaults
         self.existing = existing
-        self.garden = garden
         self.frame = frame
         self.terraces = [Terrace(t, self.defaults, frame) for t in opt.get("terraces", [])]
         self.walls = [option_wall(w, self.defaults, frame) for w in opt.get("walls", [])]
         self.keep_existing = list(opt.get("keep_existing", []))
+        self.gone = []      # each wall the option takes away, as wall_body gives it, its plan within `limits`
+        for w in existing_walls:
+            if w["id"] in self.keep_existing:
+                continue
+            plan, line, chain, toe = wall_body(w, existing)
+            if limits is not None:
+                plan = _polygons(plan.intersection(limits))
+            if plan.area > 0:
+                self.gone.append((plan, line, chain, toe))
+        self.garden = unary_union([garden, *(g[0] for g in self.gone)]) if self.gone else garden
         self.stairs = [Stair(s, frame) for s in opt.get("stairs", [])]
         self._garden_prepared = False
         # Terrace edges along a wall or a flight of steps are held by it; the rest are free and get a batter.
@@ -415,14 +430,22 @@ class Design:
         come through the treads carried out over it."""
         return self.sample(e, n, drawn=True)
 
+    def base(self, e, n):
+        """The ground the option starts from at points (e, n): the ground as it is, but where a wall it takes away
+        stood (Design.gone), the soil under that wall, at its toe, the lowest where two meet."""
+        e = np.asarray(e, float)
+        n = np.asarray(n, float)
+        h0 = np.asarray(self.existing.sample(e, n), float)
+        return _on_toes(self.gone, e, n, h0) if self.gone else h0
+
     def _terraced(self, e, n):
-        """The ground with the terraces and their batters, before the steps."""
+        """The ground with the terraces and their batters, before the steps, on the ground it starts from (base)."""
         e = np.asarray(e, float)
         n = np.asarray(n, float)
         shape = np.shape(e)
         e = e.ravel()
         n = n.ravel()
-        h0 = np.asarray(self.existing.sample(e, n), float)
+        h0 = self.base(e, n)
         z = h0.copy()
         if not self.terraces:
             return z.reshape(shape)
@@ -471,8 +494,9 @@ class Design:
 
     def regraded(self, e, n, z=None, h0=None):
         """Where the option regrades the ground, at points (e, n): in its terraces and under its flights of steps,
-        inside the regrade area, and where a batter reaches. Everywhere else it leaves the ground as it is. `z` and
-        `h0` are the designed ground and the ground as it is at those points, when they're known already."""
+        inside the regrade area, where a batter reaches, and where a wall it takes away stood (base). Everywhere else it
+        leaves the ground as it is. `z` and `h0` are the designed ground and the ground as it is at those points, when
+        they're known already."""
         e = np.asarray(e, float)
         n = np.asarray(n, float)
         z = self.sample(e, n) if z is None else z
@@ -550,6 +574,12 @@ class Design:
 
 
 # --- comparing options ------------------------------------------------------------------------
+
+def _polygons(geom):
+    """The polygons in `geom`, without the lines or points where an intersection only touches."""
+    parts = [p for p in shapely.get_parts(geom) if p.geom_type in ("Polygon", "MultiPolygon") and p.area > 0]
+    return unary_union(parts) if parts else Polygon()
+
 
 def grid_in(poly, step):
     """The points of a `step` grid inside `poly` (E, N), none in an empty one (a site with no house)."""
@@ -769,13 +799,15 @@ class Context:
     ground as its build draws it), `garden` the regrade area and `regrade` its settings. The rest are for cut and fill
     and the checks: the existing walls (domus.walls dicts), the house's outline, the building itself and any walls retaining
     the ground against it (shapely geometry, empty or None where there are none), the point features a footing must
-    miss ((name, E, N)), the easements ((name, intent, shape)), and the services (GeoJSON features) with their settings
-    ([services] in data/site.toml)."""
+    miss ((name, E, N)), the easements ((name, intent, shape)), the services (GeoJSON features) with their settings
+    ([services] in data/site.toml), and `limits`, as far as the footprint of an existing wall an option takes away
+    joins its regrade area (Design)."""
 
     def __init__(self, frame, settings, ground, garden, regrade, existing_walls=(), house_outline=None,
                  house_building=None, house_retaining_walls=None, obstacles=(), easements=(), services=(),
-                 services_settings=None):
+                 services_settings=None, limits=None):
         self.frame, self.settings, self.ground, self.garden, self.regrade = frame, settings, ground, garden, regrade
+        self.limits = limits
         self.existing_walls = list(existing_walls)
         self.house_outline = Polygon() if house_outline is None else house_outline
         self.house_building = Polygon() if house_building is None else house_building
@@ -787,7 +819,8 @@ class Context:
 def evaluate(opt, site, existing=None, step=0.1):
     """Everything the viewer and the comparison table need about one option, worked out on what `site` (a Context)
     gives it, from the ground as it is unless `existing` gives another."""
-    d = Design(opt, site.settings["defaults"], existing or site.ground, site.garden, site.frame)
+    d = Design(opt, site.settings["defaults"], existing or site.ground, site.garden, site.frame, site.existing_walls,
+               site.limits)
     rules, fg = site.settings.get("rules", {}), site.regrade
     fr = site.frame
     walls = d.wall_levels()

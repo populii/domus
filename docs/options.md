@@ -33,7 +33,7 @@ bearings on the grid.
 name = "B. Two low tiers"                 # the viewer's heading for it
 short = "B. Two low tiers"                # its button
 description = "..."
-keep_existing = []                        # ids of existing walls it keeps; the rest are removed
+keep_existing = []                        # ids of existing walls it keeps; the rest go, face and all (What the build works out)
 remove_features = []                      # ids of site features it takes out, such as old steps (data/site/features-*.geojson)
 
 [[walls]]
@@ -251,10 +251,16 @@ build paints.
 - The designed ground: each terrace's level inside it, batters from its free edges out to the
   existing ground, all inside the regrade area (the lot, or the part of it `[regrade]` names, less any house
   and a margin round it). A batter that cannot reach the ground there is reported as a step at the area's edge.
+  Each existing wall the option takes away (one not in its `keep_existing`) goes, face and all. Its footprint, from
+  its face's foot with any batter to its back, joins that option's regrade area as far as the lot and the part
+  `[regrade]` names go (into the house's margin too, but never the house), and there the option starts from the
+  soil under the wall, at its toe, not from its old face. The terraces and their batters reach across the footprint
+  as anywhere else, and where none of them reaches, the ground is left at the toe.
 - The existing ground is today's best: the ground as the build draws it, with the ground fixes from measurements
   and placed walks where there are some, the existing walls' faces and tops, and the LiDAR only where nothing
   better is known. Options are designed on it (where batters meet the ground, the flat lawn before, the cover over
-  the drains, the step at the regrade area's edge) and measured from it.
+  the drains, the step at the regrade area's edge), but for the footprints of the walls they take away (above), and
+  measured from it.
 - Each wall's top, toe, exposed and retained heights, length and face area. Behind a wall the ground is
   the designed ground it holds, below the wall's top where the wall stands above it.
 - Each flight's risers and goings, flagged when they are steep (a riser over 0.19 m or a going under 0.25 m).
@@ -273,8 +279,8 @@ build paints.
   the soil under it is at its toe. A wall that says how it's built stands in its trench, and the soil stops at the
   trench's bottom, but for the soil over its drainage aggregate (`seal_m`), which is fill. Nor does paving: under a
   paved terrace the soil is `paving_m` below its level.
-  An existing wall isn't soil either, so taking one out and filling where it stood fills from its toe, and an
-  option that keeps one, or leaves its ground alone, moves no soil there.
+  An existing wall isn't soil either, so taking one out and filling where it stood fills from its toe; where an
+  option leaves that ground at the toe, and where it keeps a wall, it moves no soil.
 - Flat lawn: ground in the regrade area no steeper than 1:20 over 1 m, away from the walls (0.3 m past
   each wall's body, `depth_m` deep), before and after.
 - What it takes to build, to order from: its materials list (below).

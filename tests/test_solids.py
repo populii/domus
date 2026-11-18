@@ -108,6 +108,20 @@ def test_an_options_solids_stand_where_the_point_rule_puts_the_ground_and_measur
     like_the_point_rule(*worked_out(name, project, ctx), ctx.existing_walls)
 
 
+@pytest.mark.parametrize("name", ["a-one-wall", "paving-and-steep"])
+def test_where_an_option_takes_the_old_wall_away_its_solids_start_from_the_toe(name, project, ctx):
+    """Given the site's existing walls, an option that takes the old wall away starts from the soil under it, at its
+    toe, where it stood (scheme.Design.base): the solids stand where the point rule puts the ground then too, and
+    measure what it does."""
+    d = scheme.Design(option(name, project, ctx), ctx.settings["defaults"], ctx.ground, ctx.garden, ctx.frame,
+                      ctx.existing_walls, ctx.limits)
+    e, n = scheme.grid_in(d.garden, 0.05)
+    assert d.gone and (np.abs(d.base(e, n) - ctx.ground.sample(e, n)) > 0.05).any()
+    walls = d.wall_levels()
+    walls_mod.set_out(walls, ctx.ground)
+    like_the_point_rule(d, walls, solids.option_solids(d, walls, ctx.existing_walls), ctx.existing_walls)
+
+
 def test_beside_a_terrace_with_its_own_levels_its_batters_take_the_level_along_its_edge(project, ctx):
     """Just outside a terrace with its own level at each corner, all along it, the solids and the point rule put the
     ground in the same place: each batter starts from the terrace's level along its edge."""

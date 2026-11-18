@@ -30,13 +30,13 @@ class Smeared:
         return 40.0 + 0.5 * np.clip(np.asarray(n, float) - 4.0, 0.0, 2.0) + 0.0 * np.asarray(e, float)
 
 
-def on(ground, existing_walls=(), **defaults):
-    """What a made-up site gives its options: s east along its south edge, o north into it, and a 10 m square to
-    regrade."""
+def on(ground, existing_walls=(), limits=None, **defaults):
+    """What a made-up site gives its options: s east along its south edge, o north into it, a 10 m square to regrade,
+    and `limits` as far as the footprint of an old wall an option takes away may join it."""
     frame = scheme.SiteFrame([0.0, 0.0], [10.0, 0.0], "left")
     garden = Polygon([(0, 0), (10, 0), (10, 10), (0, 10)])
     settings = {"defaults": {"batter": 2.0, "thickness_m": 0.2, "upstand_m": 0.1, **defaults}, "rules": {}}
-    return scheme.Context(frame, settings, ground, garden, {"flat_slope": 0.05}, existing_walls)
+    return scheme.Context(frame, settings, ground, garden, {"flat_slope": 0.05}, existing_walls, limits=limits)
 
 
 def test_an_option_is_worked_out_on_what_it_is_given():
@@ -118,15 +118,63 @@ def test_an_option_is_measured_from_the_ground_with_the_existing_walls_in_it():
     assert np.allclose(drawn.sample(*at), [40.0, 41.0]) and np.allclose(lidar.sample(*at), [40.3, 40.75])
     assert drawn.sample(np.array([30.0]), np.array([5.0]))[0] == 40.5  # off the ground drawn, the ground model's
     # A lawn at 40.5 over the step, the wall taken out: filled from 40 m to o 5.2 (the wall's toe under it too) and a
-    # batter down to o 1, cut from 41 m behind it.
+    # batter down to o 1, cut from 41 m behind it. The wall's whole footprint is in the regrade area with it, so the
+    # lawn and its batters run over its 0.2 m past the area's sides too: 0.7 m3 more fill than inside the 10 m alone.
     lawn = {"terraces": [{"id": "T", "level": 40.5, "polygon_so": [[-3, 2], [13, 2], [13, 13], [-3, 13]]}]}
     v = scheme.evaluate(lawn, on(drawn, [old]), step=0.1)["volumes"]
-    assert (v["fill_m3"], v["cut_m3"]) == (18.5, 24.0)
+    assert (v["fill_m3"], v["cut_m3"]) == (19.2, 24.0)
     v = scheme.evaluate(lawn, on(lidar, [old]), step=0.1)["volumes"]
     assert (v["fill_m3"], v["cut_m3"]) == (15.0, 22.4)                 # from the LiDAR's slope, it would be less
     # An option that keeps the wall moves no soil where it stands.
     v = scheme.evaluate({**lawn, "keep_existing": ["X"]}, on(drawn, [old]), step=0.1)["volumes"]
     assert (v["fill_m3"], v["cut_m3"]) == (17.5, 24.0)
+
+
+def test_a_wall_an_option_takes_away_joins_its_regrade_area_as_far_as_the_lot():
+    """An old wall with a battered face (batter_m 1.0: its top a metre back from its foot), half of it outside the
+    regrade area and its end past the lot: an option that takes it away has its footprint, from its face's foot to its
+    back, in the area it regrades as far as the lot goes, so the lawn replaces the old wall past the area's side, and
+    stops at the lot's. One that keeps it leaves the regrade area as it is."""
+    lidar = tin.Ground(Smeared())
+    old = walls.from_feature({"properties": {"id": "X", "retained_side": "left", "thickness_m": 0.3, "batter_m": 1.0,
+                                             "toe_m": [40.0, 40.0]},
+                              "geometry": {"type": "LineString", "coordinates": [[5.0, 5.0, 41.0], [15.0, 5.0, 41.0]]}})
+    drawn = tin.DrawnGround(tin.build((-6.0, -6.0, 21.0, 16.0), 0.5, lidar, (0.0, 0.0), [old]), lidar)
+    lot = Polygon([(-6, -6), (13, -6), (13, 16), (-6, 16)])
+    lawn = {"terraces": [{"id": "T", "level": 40.5, "polygon_so": [[2, 2], [14, 2], [14, 9], [2, 9]]}]}
+    gone, kept = (scheme.evaluate({**lawn, "keep_existing": keep}, on(drawn, [old], limits=lot), step=0.1)
+                  for keep in ([], ["X"]))
+    plan = scheme.wall_body(old, drawn)[0]
+    assert plan.bounds[2] > 14.9 and gone["design"].garden.covers(plan.intersection(lot).buffer(-1e-4))
+    assert not gone["design"].garden.intersects(plan.difference(lot).buffer(-1e-4))
+    assert kept["design"].garden.area == pytest.approx(100.0)
+    at = (np.array([12.0, 14.0]), np.array([5.6, 5.6]))    # on the old wall as the ground draws it: past the area's side,
+    assert ((40.1 < drawn.sample(*at)) & (drawn.sample(*at) < 40.9)).all()          # and past the lot's
+    assert np.allclose(gone["design"].sample(*at), [40.5, drawn.sample(*at)[1]])
+    assert np.allclose(kept["design"].sample(*at), drawn.sample(*at))
+    assert gone["volumes"]["fill_m3"] > kept["volumes"]["fill_m3"]
+
+
+def test_where_nothing_reaches_a_wall_an_option_takes_away_its_ground_is_left_at_the_toe():
+    """An old wall with a battered face (batter_m 1.0) on a LiDAR that smears it into a slope, and a new wall on its
+    line holding a lawn behind it: in front of the new wall, over the old face's foot, no terrace or batter reaches.
+    An option that takes the old wall away starts from the soil under it there, at its toe, not from the slope, so it
+    leaves the ground at the toe, as the cut and fill count it: no soil moves there. One that keeps the old wall leaves
+    the slope."""
+    lidar = tin.Ground(Smeared())
+    old = walls.from_feature({"properties": {"id": "X", "retained_side": "left", "thickness_m": 0.3, "batter_m": 1.0,
+                                             "toe_m": [40.0, 40.0]},
+                              "geometry": {"type": "LineString", "coordinates": [[1.0, 5.0, 41.0], [9.0, 5.0, 41.0]]}})
+    opt = {"walls": [{"id": "N", "line_so": [[1, 5], [9, 5]], "retained_side": "left"}],
+           "terraces": [{"id": "T", "level": 41.0, "polygon_so": [[1, 5], [9, 5], [9, 9], [1, 9]]}]}
+    gone, kept = (scheme.evaluate({**opt, "keep_existing": keep}, on(lidar, [old]), step=0.1) for keep in ([], ["X"]))
+    at = (np.array([4.0, 5.0, 6.0]), np.full(3, 4.7))      # in front of the new wall, over the old face's foot
+    toe = scheme.wall_edges(old, lidar)[3]                  # the soil under the old wall: the ground at its face's foot
+    assert np.allclose(toe, 40.25) and (lidar.sample(*at) > 40.3).all()
+    assert np.allclose(gone["design"].sample(*at), 40.25)
+    assert np.allclose(kept["design"].sample(*at), lidar.sample(*at))
+    w = gone["walls"][0]["def"]
+    assert np.allclose(scheme.soil_change(gone["design"], [w], [old], *at), 0.0)
 
 
 def test_what_a_wall_is_built_on_and_with_isnt_soil():
