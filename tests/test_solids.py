@@ -2,8 +2,11 @@
 the soil it cuts and fills, built from its own shapes with Manifold, stand where the point rule (domus.options.scheme)
 puts the ground and measure what it measures."""
 
+import json
+
 import numpy as np
 import pytest
+from shapely.geometry import Polygon
 
 from domus.options import design, scheme, sketch, solids
 from domus.project.demo import X0, Y0
@@ -40,6 +43,10 @@ def option(name, project, ctx):
             {"id": "P", "kind": "paving", "level": low + 0.3, "at_so": [5.0, 6.0], "polygon_so": [[3, 3], [7, 3], [7, 9], [3, 9]]},
             {"id": "L", "level": low + 0.5, "at_so": [11.0, 14.0], "fall": "1:10", "fall_to": 30,
              "polygon_so": [[9, 11], [13, 11], [14, 17], [9, 18]]}]}
+    if name.startswith("steep-batter"):     # a terrace's batters so steep their cones reach metres below and above it
+        return {"walls": [{"id": "W", "line_so": [[8.0, 2.0], [8.0, 20.0]]}],
+                "terraces": [{"id": "T", "level": low + 0.6, "at_so": [11.0, 11.0], "batter": float(name.rsplit("-", 1)[1]),
+                              "polygon_so": [[8, 2], [8, 20], [14, 20], [14, 2]]}]}
     if name == "keeps-the-old-wall":
         return {"keep_existing": ["W1"], "walls": [{"id": "N", "line_so": [[12.0, 3.0], [12.0, 19.0]]}],
                 "terraces": [{"id": "T", "level": ground_at(ctx, 10.0, 10.0) + 0.3, "at_so": [10.0, 10.0], "fall": "1:40",
@@ -64,19 +71,70 @@ def point_rule(d, walls, existing_walls, step=0.05):
     return float(-dz[dz < 0].sum() * step * step), float(dz[dz > 0].sum() * step * step)
 
 
-@pytest.mark.parametrize("name", ["a-one-wall", "b-two-tiers", "steps", "sloping-foot", "paving-and-steep",
-                                  "keeps-the-old-wall", "sketch"])
-def test_an_options_solids_stand_where_the_point_rule_puts_the_ground_and_measure_what_it_does(name, project, ctx):
-    d, walls, s = worked_out(name, project, ctx)
+def like_the_point_rule(d, walls, s, existing_walls):
+    """The solids are closed, measure the cut and fill the point rule does to 0.05% of the soil moved, and stand within
+    2 mm of the designed ground."""
     for part in [s.existing, *s.designed, *s.walls, *s.steps, *s.cut, *s.fill]:
         assert part.status() == solids.mf.Error.NoError and part.volume() > -1e-9
-    cut, fill = point_rule(d, walls, ctx.existing_walls)
+    cut, fill = point_rule(d, walls, existing_walls)
     v = s.volumes()
     within = 0.0005 * (cut + fill)                    # 0.05% of the soil moved
     assert v["cut_m3"] == pytest.approx(cut, abs=within) and v["fill_m3"] == pytest.approx(fill, abs=within)
     e, n = scheme.grid_in(d.garden, 0.5)
     gap = np.abs(s.height(e, n) - d.sample(e, n))
     assert np.isfinite(gap).all() and gap.max() < 0.002
+
+
+@pytest.mark.parametrize("name", ["a-one-wall", "b-two-tiers", "steps", "sloping-foot", "paving-and-steep",
+                                  "keeps-the-old-wall", "sketch", "steep-batter-0.5", "steep-batter-1.0"])
+def test_an_options_solids_stand_where_the_point_rule_puts_the_ground_and_measure_what_it_does(name, project, ctx):
+    like_the_point_rule(*worked_out(name, project, ctx), ctx.existing_walls)
+
+
+BENDS = [(2, 22), (8, 22), (9, 21.2), (9.6, 21.7), (10.1, 22.6), (11, 22.2), (13, 22), (20, 22)]
+
+
+@pytest.fixture(scope="module")
+def leaning(tmp_path_factory):
+    """The demo with its old wall bent through tight corners and leaning back a metre (batter_m 1.0), so the outline of
+    its foot, half the lean in front of its line, folds back on itself at the corners."""
+    from domus import demo
+    from domus.project import demo as made_up
+    from domus.project.site import Site
+
+    root = tmp_path_factory.mktemp("leaning")
+    demo.write(root)
+    path = root / "data" / "site" / "walls-existing.geojson"
+    fc = json.loads(path.read_text(encoding="utf-8"))
+    wall = fc["features"][0]
+    wall["geometry"]["coordinates"] = [[X0 + x, Y0 + y, round(float(made_up.ground(X0 + x, Y0 + y)) + 0.7, 2)] for x, y in BENDS]
+    wall["properties"].update(batter_m=1.0, thickness_m=0.3)
+    path.write_text(json.dumps(fc), encoding="utf-8", newline="\n")
+    return design.context(Site(root))
+
+
+def over_the_bends(name, ctx):
+    """Options that take the leaning wall away under a terrace over its bends, raised or lowered, or keep it with a new
+    wall across it."""
+    at = ground_at(ctx, 8.0, 11.0)
+    over = [[5, 6], [11, 6], [11, 16], [5, 16]]
+    if name == "taken-away-under-fill":
+        return {"terraces": [{"id": "T", "level": at + 0.4, "at_so": [8.0, 11.0], "polygon_so": over}]}
+    if name == "taken-away-under-cut":
+        return {"terraces": [{"id": "T", "level": at - 0.3, "at_so": [8.0, 11.0], "polygon_so": over}]}
+    return {"keep_existing": ["W1"], "walls": [{"id": "N", "line_so": [[6.0, 12.0], [11.0, 12.0]]}],
+            "terraces": [{"id": "T", "level": ground_at(ctx, 8.5, 14.0) + 0.3, "at_so": [8.5, 14.0],
+                          "polygon_so": [[6, 12], [11, 12], [11, 17], [6, 17]]}]}
+
+
+@pytest.mark.parametrize("name", ["taken-away-under-fill", "taken-away-under-cut", "kept-and-crossed"])
+def test_an_old_walls_soil_is_at_its_toe_where_the_outline_of_its_foot_folds(name, leaning):
+    face, back, _, _ = scheme.wall_edges(leaning.existing_walls[0], leaning.ground)
+    assert not Polygon(np.vstack([face, back[::-1]])).is_valid
+    d = scheme.Design(over_the_bends(name, leaning), leaning.settings["defaults"], leaning.ground, leaning.garden,
+                      leaning.frame)
+    walls = d.wall_levels()
+    like_the_point_rule(d, walls, solids.option_solids(d, walls, leaning.existing_walls), leaning.existing_walls)
 
 
 def test_the_walls_and_steps_are_solids_of_their_own_size(project, ctx):

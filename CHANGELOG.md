@@ -7,6 +7,13 @@
   They're provisional: public and documented, but they may change between releases without a deprecation until
   they're declared stable ([docs/api.md](docs/api.md)). The video steps' options are the command line's own now, and
   each step's usage names it as `domus video <step>`.
+- A wall option's solids (`domus.options.solids`) measure what the build's rule does on two kinds of site they got
+  wrong. Where a terrace's batters were steep (a batter under about 2), their cones could reach below the ground's
+  block, and then the solids raised the ground over each cone's whole reach: hundreds of cubic metres where the rule
+  counts a few.
+  Where an existing wall leans round a tight corner, the outline of its foot folds back on itself, and the soil under
+  the wall followed the fold. Now the ground's block reaches past every cone, and a wall's soil is at its toe across
+  its plan as the rule reads it: the toe at the nearest point of the wall's line. Nothing a build writes uses them yet.
 
 ## 2026.11.46
 

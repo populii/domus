@@ -21,7 +21,9 @@ domus.options.scheme works an option out point by point; the solids follow the s
 - The soil (scheme.soil_change): before, the ground as it is, but at its toe inside an existing wall; after, inside a
   new wall or an existing wall the option keeps, at that wall's toe (the lowest where walls meet); under a flight of
   steps, its ramp; in a terrace, its level less any paving; and where a batter moves the ground, the batter. Everywhere
-  else the soil stays as it was.
+  else the soil stays as it was. A wall's plan is scheme.wall_body's, and its toe at a point of the plan is the toe at
+  the nearest point of its line: in the part of the plan nearest each straight piece of the line (from the lower
+  envelope of the distances to the pieces, as for a batter) it runs along the piece and square across it.
 
 How the solids are put together. Manifold works out a boolean exactly however two solids meet, but where they share a
 surface it takes many times as long, so no solid is cut by another that shares a face with it: each part of the plan
@@ -46,9 +48,9 @@ import numpy as np
 import shapely
 from shapely.geometry import Polygon, box
 
-from ..geo.mesh import offset_behind, resample_line
+from ..geo.mesh import offset_behind
 from ..model import walls as walls_mod
-from .scheme import BATTER_REACH_M, WALL_STEP_M, wall_edges
+from .scheme import BATTER_REACH_M, wall_body
 
 SEGMENTS = 128          # the sides of a batter's cone
 EDGE_M = 1e-6           # how far a solid reaches past the part of the plan it's worked out in, so no two share a face
@@ -268,10 +270,11 @@ class Solids:
     side by side; `walls` the new walls, each from its face to its back and its toe to its top, and `steps` the treads
     of every flight; `cut` and `fill` the pieces of soil the option takes away and brings in."""
 
-    def __init__(self, origin, existing, designed, walls, steps, cut, fill):
+    def __init__(self, origin, existing, designed, walls, steps, cut, fill, named=()):
         self.origin = origin
         self.existing, self.designed, self.walls, self.steps = existing, designed, walls, steps
         self.cut, self.fill = cut, fill
+        self.named = list(named)            # (what, which part of the plan, piece): every cut, fill and designed piece
 
     def volumes(self):
         """Cut and fill in m3: the pieces' volumes added up."""
@@ -314,28 +317,39 @@ def ground_triangles(existing, window, step=0.25):
     return np.column_stack([E.ravel(), N.ravel(), existing.sample(E, N).ravel()]), faces
 
 
-def wall_soil_line(w, ground=None):
-    """A wall's face, its back and its toe at points along it, as scheme.wall_body works out its plan and the soil
-    under it: a new wall's (levelled by Design.wall_levels, `ground` None), or an existing wall's on `ground`."""
-    if ground is None:
-        pts, chain = resample_line(np.asarray(w["line"], float)[:, :2], WALL_STEP_M)
-        face = pts[:, :2]
-        return face, offset_behind(face, w["thickness"], w["side"]), np.interp(chain, w["toe_chain"], w["toe"])
-    face, back, _, toe = wall_edges(w, ground)
-    return face, back, toe
-
-
-def _widened(face, back, by):
-    """A wall's face and back moved `by` apart, and on past its ends: a solid that reaches past its plan."""
-    face, back = face.copy(), back.copy()
-    across = back - face
-    length = np.maximum(np.hypot(*across.T), 1e-12)[:, None]
-    face, back = face - across / length * by, back + across / length * by
-    for line in (face, back):
-        for k, j in ((0, 1), (-1, -2)):
-            t = line[k] - line[j]
-            line[k] = line[k] + t / max(float(np.hypot(*t)), 1e-12) * by
-    return face, back
+def _toe_columns(body, origin, low, high, segments=SEGMENTS):
+    """Everything over a wall's plan below its toe, from `low`, and everything above it, to `high`: (below, above),
+    reaching 2 EDGE_M past the plan. `body` is the wall as scheme.wall_body gives it, (plan, line, chain, toe), and its
+    toe at a point of the plan is the toe at the nearest point of the line, as scheme reads it: in the part of the plan
+    nearest each straight piece of the line, the toe along the piece carried square across it, and level past its
+    ends. So a plan that folds where a leaning wall's foot turns a tight corner (which wall_body's buffer puts right)
+    takes its toe from the line, never from the fold."""
+    plan, line, chain, toe = body
+    pts = np.asarray(line.coords, float)[:, :2] - origin
+    at = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(pts, axis=0).T))])       # each corner's distance along
+    keep = [k for k in range(len(pts) - 1) if at[k + 1] - at[k] > 1e-9]
+    x0, y0, x1, y1 = shapely.union(plan, line).bounds
+    far = float(np.hypot(x1 - x0, y1 - y0)) + 1.0          # from anywhere on the line to past anywhere in the plan
+    cs = section(plan, origin).offset(2 * EDGE_M, mf.JoinType.Miter)
+    ends = np.array([[pts[k], pts[k + 1]] for k in keep])
+    cells = _nearest_cells(ends, segments, far) if len(keep) > 1 else [None] * len(keep)
+    chain, toe = np.asarray(chain, float), np.asarray(toe, float)
+    below, above = [], []
+    for k, cell in zip(keep, cells, strict=True):
+        region = cs if cell is None else cs ^ cell.offset(EDGE_M, mf.JoinType.Miter)
+        if region.is_empty():
+            continue
+        length = at[k + 1] - at[k]
+        along = (pts[k + 1] - pts[k]) / length
+        across = np.array([-along[1], along[0]]) * far
+        inner = chain[(chain > at[k] + 1e-9) & (chain < at[k + 1] - 1e-9)] - at[k]
+        t = np.unique(np.r_[-far, 0.0, inner, length, length + far])      # where the toe along the piece bends
+        z = np.interp(at[k] + np.clip(t, 0.0, length), chain, toe)
+        mid = pts[k] + t[:, None] * along
+        col = prism(region, low - 1.0, high + 1.0)
+        below.append(strip(mid + across, mid - across, z, low) ^ col)
+        above.append(strip(mid + across, mid - across, high, z) ^ col)
+    return union(below), union(above)
 
 
 def option_solids(design, walls, existing_walls, segments=SEGMENTS):
@@ -347,9 +361,12 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
     window = (g0 - MARGIN_M, g1 - MARGIN_M, g2 + MARGIN_M, g3 + MARGIN_M)
     V, F = ground_triangles(design.existing, window)
     V = np.column_stack([np.asarray(V, float)[:, :2] - origin, np.asarray(V, float)[:, 2]])
+    # Below and above everything: the ground, the terraces, and the batters' cones, which reach BATTER_REACH_M / batter
+    # below and above their terrace's levels.
     corners = [t.z(*np.asarray(t.poly.exterior.coords)[:, :2].T) for t in design.terraces]
-    zb = float(np.floor(min([np.nanmin(V[F, 2]), *(np.min(z) for z in corners)]))) - 3.0
-    top = float(np.ceil(max([np.nanmax(V[F, 2]), *(np.max(z) for z in corners)]))) + 5.0
+    deep = [0.0 if free.is_empty else BATTER_REACH_M / t.batter for t, free in zip(design.terraces, design.free, strict=True)]
+    zb = float(np.floor(min([np.nanmin(V[F, 2]), *(np.min(z) - d for z, d in zip(corners, deep, strict=True))]))) - 3.0
+    top = float(np.ceil(max([np.nanmax(V[F, 2]), *(np.max(z) + d for z, d in zip(corners, deep, strict=True))]))) + 5.0
     win = section(box(*window), origin)
     ground = close_surface(V, F, zb) ^ prism(win, zb - 1.0, top + 1.0)
     area = section(garden, origin)
@@ -361,40 +378,54 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
     def wide(geom):
         return section(geom, origin).offset(EDGE_M, mf.JoinType.Miter)
 
-    # The soil before: the ground, but at its toe inside an existing wall.
-    old = [wall_soil_line(w, design.existing) for w in existing_walls]
+    # The soil before: the ground, but at its toe inside an existing wall, the lowest where two meet. Only the walls
+    # that come near the regrade area matter.
+    near = box(*window)
+    old = [(w, wall_body(w, design.existing)) for w in existing_walls]
+    old = [(w, b) for w, b in old if b[0].intersects(near)]
     before = ground
     if old:
-        holes = union([tall(section(Polygon(np.vstack([f, b[::-1]])).buffer(EDGE_M), origin)) for f, b, _ in old])
-        toes = [strip(*_widened(f - origin, b - origin, 2 * EDGE_M), t, zb) for f, b, t in old]
-        before = union([ground - holes, *toes])
+        plans = [section(b[0], origin) for _, b in old]
+        under = [_toe_columns(b, origin, zb, top + 1.0, segments)[0] for _, b in old]
+        toes = []
+        for cell, members in _overlay(plans):
+            low = under[members[0]]
+            for k in members[1:]:
+                low = low ^ under[k]
+            toes.append(low ^ tall(cell.offset(EDGE_M, mf.JoinType.Miter)))
+        before = union([ground - tall(mf.CrossSection.batch_boolean(plans, mf.OpType.Add)), *toes])
 
-    cut, fill = [], []
+    cut, fill, named = [], [], []
 
-    def soil(region, after, above):
-        """The soil moved in `region` (a plan), where `after` holds everything below the soil after and `above`
-        everything above it."""
+    def soil(region, after, above, part):
+        """The soil moved in `region` (a plan, the `part` of the plan it is), where `after` holds everything below the
+        soil after and `above` everything above it."""
         if region.is_empty():
             return
         here = tall(region)
         fill.append((after ^ here) - before)
         cut.append((before ^ here) ^ above)
+        named.extend([("fill", part, fill[-1]), ("cut", part, cut[-1])])
 
     # The walls, new and kept: the soil is at the wall's toe, the lowest where two meet.
-    kept = [(w, line) for w, line in zip(existing_walls, old, strict=True) if w["id"] in design.keep_existing]
+    kept = [b for w, b in old if w["id"] in design.keep_existing]
+    gone = [section(b[0], origin) for w, b in old if w["id"] not in design.keep_existing]
+    gone = mf.CrossSection.batch_boolean(gone, mf.OpType.Add) if gone else mf.CrossSection()
     bodies = []                                                  # (plan, below the toe, above it, a new wall's)
-    for (face, back, toe), new in [(wall_soil_line(w), True) for w in walls] + [(line, False) for _, line in kept]:
-        wf, wb = _widened(face - origin, back - origin, 2 * EDGE_M)
-        plan = section(Polygon(np.vstack([face, back[::-1]])).buffer(EDGE_M), origin) ^ area
-        bodies.append((plan, strip(wf, wb, toe, zb + 1.0), strip(wf, wb, top + 1.0, toe), new))
+    for body, new in [(wall_body(w), True) for w in walls] + [(b, False) for b in kept]:
+        plan = section(body[0], origin) ^ area
+        if not plan.is_empty():
+            bodies.append((plan, *_toe_columns(body, origin, zb + 1.0, top + 1.0, segments), new))
     walled = mf.CrossSection.batch_boolean([b[0] for b in bodies], mf.OpType.Add) if bodies else mf.CrossSection()
     for cell, members in _overlay([b[0] for b in bodies]):
-        if not any(bodies[k][3] for k in members):               # only kept walls: the soil stays at their toes
-            continue
+        if not any(bodies[k][3] for k in members):   # only kept walls: the soil stays at their toes, but where one the
+            cell = cell ^ gone                       # option takes away was lower there, it comes up to theirs
+            if cell.is_empty():
+                continue
         after, above = bodies[members[0]][1], bodies[members[0]][2]
         for k in members[1:]:
             after, above = after ^ bodies[k][1], above + bodies[k][2]
-        soil(cell, after, above)
+        soil(cell, after, above, f"walls {members}")
 
     # Steps: the last flight a point is under gives its ground.
     stepped = mf.CrossSection()
@@ -403,20 +434,20 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
         below, over = _stair_columns(st, origin, zb, top)
         foot = (section(st.poly, origin) ^ area) - stepped
         ramps.append((foot, below))
-        soil(foot - walled, below, over)
+        soil(foot - walled, below, over, f"steps {len(ramps) - 1}")
         stepped = stepped + foot
 
     # Terraces: the first a point is in gives its level, and the soil is any paving's depth under it.
     taken = mf.CrossSection()
     levels = []
-    for t in design.terraces:
+    for k, t in enumerate(design.terraces):
         own = ((section(t.poly, origin) ^ area) - taken) - stepped
         taken = taken + (section(t.poly, origin) ^ area)
         level, over = _terrace_columns(t, wide(t.poly), origin, zb, top, 0.0)
         levels.append((own, level))
         if t.paving:
             level, over = _terrace_columns(t, wide(t.poly), origin, zb, top, t.paving)
-        soil(own - walled, level, over)
+        soil(own - walled, level, over, f"terrace {k}")
 
     # The rest of the regrade area: where the batters raise the ground the soil is theirs, and where they only cut it,
     # it comes down to their cut.
@@ -441,18 +472,21 @@ def option_solids(design, walls, existing_walls, segments=SEGMENTS):
             cut_wins = _cut_wins(both, design, origin)
             up = up - cut_wins
         down = lowered - up
-        soil(up - walled, raise_to, box_all - raise_to)
-        soil(down - walled, under_cut, cut_to)
-        designed += [raise_to ^ tall(up), under_cut ^ tall(down), ground ^ tall((rest - up) - down)]
+        soil(up - walled, raise_to, box_all - raise_to, "batters raise")
+        soil(down - walled, under_cut, cut_to, "batters cut")
+        designed += [("batters raise", raise_to ^ tall(up)), ("batters cut", under_cut ^ tall(down)),
+                     ("ground", ground ^ tall((rest - up) - down))]
     else:
-        designed.append(ground ^ tall(rest))
-    designed += [level ^ tall(own) for own, level in levels if not own.is_empty()]
-    designed += [below ^ tall(foot) for foot, below in ramps if not foot.is_empty()]
+        designed.append(("ground", ground ^ tall(rest)))
+    designed += [(f"terrace {k}", level ^ tall(own)) for k, (own, level) in enumerate(levels) if not own.is_empty()]
+    designed += [(f"steps {k}", below ^ tall(foot)) for k, (foot, below) in enumerate(ramps) if not foot.is_empty()]
+    named += [("designed", part, piece) for part, piece in designed]
 
-    return Solids(origin, ground ^ tall(area), [d for d in designed if not d.is_empty()],
+    return Solids(origin, ground ^ tall(area), [d for _, d in designed if not d.is_empty()],
                   [_wall_solid(w, design.existing, origin) for w in walls],
                   [tread for st in design.stairs for tread in _treads(st, origin)],
-                  [c for c in cut if not c.is_empty()], [f for f in fill if not f.is_empty()])
+                  [c for c in cut if not c.is_empty()], [f for f in fill if not f.is_empty()],
+                  [(what, part, piece) for what, part, piece in named if not piece.is_empty()])
 
 
 def _batter(t, free, origin, low, high, segments):
@@ -520,14 +554,14 @@ def _straight(t, free):
     return out
 
 
-def _nearest_cells(ends, segments):
-    """For each straight piece (a, b) of an edge, the part of the plan within BATTER_REACH_M where it's the nearest
+def _nearest_cells(ends, segments, reach=BATTER_REACH_M):
+    """For each straight piece (a, b) of an edge or a line, the part of the plan within `reach` where it's the nearest
     piece: where the distance to it (an upturned cone of slope one along it) is the lowest of them all."""
     ang = 2 * np.pi * np.arange(segments) / segments
-    ring = np.column_stack([np.cos(ang), np.sin(ang)]) * BATTER_REACH_M
+    ring = np.column_stack([np.cos(ang), np.sin(ang)]) * reach
     distance = []
     for a, b in ends:
-        pts = [[*a, 0.0], [*b, 0.0]] + [[*(p + r), BATTER_REACH_M] for p in (a, b) for r in ring]
+        pts = [[*a, 0.0], [*b, 0.0]] + [[*(p + r), reach] for p in (a, b) for r in ring]
         distance.append(mf.Manifold.hull_points(np.ascontiguousarray(pts, dtype=np.float64)).as_original())
     ids = {m.original_id(): k for k, m in enumerate(distance)}
     lowest = union(distance).to_mesh64()
