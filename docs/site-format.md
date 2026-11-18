@@ -18,6 +18,7 @@ options/*.toml            one per option
 viewer/data/              the built model (set DOMUS_OUTPUT to move it; docs/model-format.md)
 .domus/viewer.db          saved sketches (set DOMUS_DB to move it)
 .domus/build-cache/       what the next build can reuse
+.gitignore                what git leaves out of the site: what Domus makes again (`domus new` writes it)
 ```
 
 ## Settings

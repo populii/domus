@@ -70,6 +70,53 @@ def test_new_takes_a_negative_latitude(tmp_path):
     assert (tmp_path / "p" / "data" / "site" / "boundary.geojson").exists()
 
 
+def test_a_new_site_can_be_a_git_repository_of_its_own(tmp_path):
+    """`domus new` writes a .gitignore: git leaves out what Domus makes again (the built model, the build cache, the
+    checks' reports, the server's logs, upgrade backups, video frames, the reconstructions' working files, pictures of
+    checks, picks backups) and keeps what a person made, the viewer's saved sketches and the records of edits among it.
+    Asked of git itself, with no configuration of this machine's."""
+    import os
+    import shutil
+    import subprocess
+
+    from domus import newsite
+
+    if not shutil.which("git"):
+        pytest.skip("git isn't installed")
+    root = tmp_path / "p"
+    newsite.main([str(root), "--name", "A place", "--centre", "-43.53,172.63"])
+    made = ["viewer/data/model.json", ".domus/build-cache/ground-k1/entry.json", ".domus/checks/check_model.json",
+            ".domus/build.log", ".domus/upgrade/format-2-20260101-000000/data/site.toml", "sources/raw/frames6/walk/t000.167.jpg",
+            "data/video/cache/colmap/walk/database.db", "data/video/checks/walk-plan.jpg", "data/sources/canopy.jpg",
+            "data/video/picks/walk.json.bak-1", "tools/__pycache__/pegs.cpython-314.pyc", ".pytest_cache/README.md"]
+    kept = ["data/site.toml", "data/site/boundary.geojson", "data/site/house.geojson", "data/lidar/dem.tif",
+            "data/video/walk-site.npz", "data/video/picks/walk.json", "options/_site.toml", "options/a-terrace.toml",
+            "sources/raw/walk.mp4", "sources/raw/plan.pdf", ".domus/viewer.db", ".domus/edits/move-the-shed.json",
+            "AGENTS.md", "notes.md", "tools/pegs.py", "tests/test_site.py", ".gitignore"]
+    for rel in made + kept:
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).touch()
+    (tmp_path / "none").touch()
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": str(tmp_path / "none"), "GIT_CONFIG_NOSYSTEM": "1"}
+    git = ["git", "-c", f"core.excludesFile={tmp_path / 'none'}"]
+    subprocess.run([*git, "init", "-q"], cwd=root, env=env, check=True, capture_output=True)
+    out = subprocess.run([*git, "check-ignore", *made, *kept], cwd=root, env=env, capture_output=True, text=True,
+                         encoding="utf-8", check=False)
+    assert sorted(out.stdout.split()) == sorted(made), out.stderr
+
+
+def test_a_folder_keeps_its_own_gitignore(tmp_path):
+    """site/ in a copy of Domus has a .gitignore that keeps everything added to it out of the repo: a site started there
+    leaves it as it is."""
+    from domus import newsite
+
+    ring, epsg = newsite.square_boundary(-43.53, 172.63, 20)
+    (tmp_path / "site").mkdir()
+    (tmp_path / "site" / ".gitignore").write_text("/*\n!/README.md\n", encoding="utf-8")
+    newsite.write_project(tmp_path / "site", "A place", ring, epsg=epsg)
+    assert (tmp_path / "site" / ".gitignore").read_text(encoding="utf-8") == "/*\n!/README.md\n"
+
+
 def test_read_boundary_takes_lon_lat(tmp_path):
     import json
 

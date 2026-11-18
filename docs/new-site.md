@@ -20,6 +20,15 @@ This writes `site/data/site.toml`, the boundary, and `site/options/_site.toml`. 
 git ignores everything you add to `site/`; anywhere else, use any folder you like. `[model] extent` is the
 area modelled: it starts 15 m past the boundary, and you can widen it.
 
+It writes a `.gitignore` too, as `domus create` does, so the site can be a git repository of its own. Git leaves out
+what Domus makes again: the built model in `viewer/data/`; the build cache, the checks' reports, the server's logs and
+the copies `domus site upgrade` keeps, in `.domus/`; the frames taken from videos and the reconstructions' working
+files; and the pictures `domus video plot`, `domus prep sections` and `domus prep canopy-plot` draw. It keeps
+everything you made: `data/`, `options/`, `sources/`, your notes, tools and tests, and the viewer's store,
+`.domus/viewer.db`, which holds the sketches you draw and save in the viewer, with their notes, and the checklist's
+ticks. Keep such a repository private, as your documents and videos in `sources/raw/` are in it. A folder that has a
+`.gitignore` already keeps its own, as `site/` in a copy of the Domus repo does.
+
 ## 2. Fetch the ground and aerial
 
 ```sh

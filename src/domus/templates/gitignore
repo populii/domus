@@ -1,0 +1,29 @@
+# What git leaves out of this site: what Domus makes again when it's needed. Everything a person made
+# stays in: data/, options/, sources/, the site's notes, tools and tests, and all of .domus/ but what's
+# named here, such as the viewer's saved sketches and checklist (viewer.db). Domus wrote this file when it
+# started the site.
+
+# The built model: `domus build` writes it again.
+/viewer/data/
+
+# What the next build can reuse, the checks' reports and pictures, the server's logs, and the copies
+# of the files `domus site upgrade` rewrote.
+/.domus/build-cache/
+/.domus/checks/
+/.domus/*.log
+/.domus/upgrade/
+
+# The frames `domus video frames` takes from a video, the reconstructions' working files, and the
+# pictures `domus video plot` and `domus prep sections` draw.
+/sources/raw/frames6/
+/data/video/cache/
+/data/video/checks/
+
+# The picture `domus prep canopy-plot` draws, and the copy of a picks file `domus video picks-edit`
+# keeps before each edit.
+/data/sources/canopy.jpg
+*.json.bak-*
+
+# Python's own, from the site's tools and tests.
+__pycache__/
+.pytest_cache/

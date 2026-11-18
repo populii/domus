@@ -6,6 +6,11 @@
   or flights, under that one's top, as where a wall's end tucks into a thicker wall at a corner. Nothing shows there,
   but the option's ground inside the thicker wall, which rises from its face to the ground it holds, was reported as
   coming through the tucked end. Ground that comes through just beside the thicker wall is still found.
+- `domus new` and `domus create` write a `.gitignore` in a new site, so the site can be a git repository of its own.
+  Git leaves out what Domus makes again: the built model, the build cache, the checks' reports, the server's logs, the
+  copies `domus site upgrade` keeps, the frames taken from videos and the reconstructions' working files. It keeps
+  everything a person made, the sketches saved in the viewer (`.domus/viewer.db`) among it. A folder that has a
+  `.gitignore` already keeps its own, as `site/` in a copy of Domus does. docs/new-site.md lists what's left out.
 
 ## 2026.11.38
 

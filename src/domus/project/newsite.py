@@ -1,4 +1,4 @@
-"""Start a site project: its settings, boundary and the options' shared settings.
+"""Start a site project: its settings, boundary, the options' shared settings and a .gitignore.
 
     domus new my-place --name "My place" --boundary lot.geojson
     domus new my-place --name "My place" --centre -43.5321,172.6362 --size 30
@@ -124,7 +124,9 @@ def toml_str(s):
 def write_project(path, name, ring, note="", about="", epsg=NZTM, importer="manual", vertical=None, attribution=None):
     """A new site project at `path`, its lot `ring` on the grid EPSG `epsg`, brought in by `importer`. A site in New
     Zealand gets the LINZ data's height datum and credit line, unless `vertical` and `attribution` say otherwise; one
-    elsewhere leaves them for its own data to fill in."""
+    elsewhere leaves them for its own data to fill in. A .gitignore lets the site be a git repository of its own: git
+    leaves out what Domus makes again and keeps what a person made (templates/gitignore). A folder that has one
+    already keeps it."""
     root = Path(path)
     if (root / "data" / "site.toml").exists():
         raise DomusError(f"{root} already has a site project")
@@ -155,6 +157,8 @@ def write_project(path, name, ring, note="", about="", epsg=NZTM, importer="manu
         .replace("{{frame_origin}}", json.dumps(a)).replace("{{frame_toward}}", json.dumps(b)),
         encoding="utf-8", newline="\n")
     shutil.copy(TEMPLATES / "option.toml.example", root / "options" / "option.toml.example")
+    if not (root / ".gitignore").exists():     # a folder's own stays: in a copy of Domus, site/ has one that ignores it all
+        (root / ".gitignore").write_text((TEMPLATES / "gitignore").read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
     return root
 
 
