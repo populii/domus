@@ -100,6 +100,85 @@ def test_drawn_less_its_walls_nothing_stands_in_them_and_no_face_lies_in_theirs(
     assert np.abs(Surface(v, f).z(e[away], n[away]) - Surface(v0, f0).z(e[away], n[away])).max() < 1e-6
 
 
+@pytest.mark.parametrize("which", ["a-one-wall", "b-two-tiers"])
+def test_it_stands_on_one_bottom_and_every_upright_face_drawn_shows(which, project, drawn):
+    """The ground with an option stands on one flat bottom: its pieces each had their own, and where two met at
+    different depths the step between them was drawn, under the ground's top. And every upright face drawn shows: by
+    some corner of it, the ground's top on one side stands lower than that corner, as at the regrade area's edge. An
+    upright face with the top as high as each of its corners on both sides lies inside the ground and isn't drawn. (A
+    sliver under a millimetre across draws nothing at the millimetre model.json writes to.)"""
+    opt = next(o for o in options.load_all(project) if o["id"] == which)
+    res = design.evaluate(project, opt, keep_solids=True)
+    d, s = res["design"], res["solids"]
+    patch = patch_of(d)
+    whole = solids.option_ground(s, drawn.vertices, drawn.faces, patch, d.garden, d.stairs)
+    m = whole.to_mesh64()
+    t = np.asarray(m.vert_properties, float)[:, :3][np.asarray(m.tri_verts, np.int64).reshape(-1, 3)]
+    n = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+    down = n[:, 2] < -0.5 * np.linalg.norm(n, axis=1)                  # facing down: its bottom
+    assert down.any() and np.allclose(t[down][:, :, 2], whole.bounding_box()[2])
+    v, f = solids.surface(whole, s.origin, patch)
+    c = v[f]
+    n = np.cross(c[:, 1] - c[:, 0], c[:, 2] - c[:, 0])
+    size = np.linalg.norm(n, axis=1)
+    across_least = size / np.max(np.linalg.norm(c - np.roll(c, 1, axis=1), axis=2), axis=1)        # its least height
+    upright = (np.abs(n[:, 2]) <= solids.UPRIGHT * size) & (across_least >= 1e-3)
+    top = Surface(v, f[n[:, 2] > solids.UPRIGHT * size])
+    u = c[upright]
+    across = n[upright, :2] / np.linalg.norm(n[upright, :2], axis=1)[:, None] * 2e-4
+    near = u + 0.01 * (u.mean(axis=1)[:, None, :] - u)
+    lower = np.fmin(*[top.z((near[:, :, 0] + k * across[:, [0]]).ravel(), (near[:, :, 1] + k * across[:, [1]]).ravel()).reshape(-1, 3)
+                      for k in (1, -1)])
+    assert upright.any() and (near[:, :, 2] > lower + 1e-5).any(axis=1).all()
+
+
+def test_inside_a_walls_body_its_floor_isnt_drawn_but_under_a_cap_and_under_the_soil_it_is(project, drawn):
+    """Where a wall stands, the ground is cut down to its floor (walls_cut). Inside the wall's body, over the plan its
+    mesh stands on (solids.footing) and under its head, nothing of that floor shows, and it isn't drawn (surface's
+    `inside`), as for a made-up block wall holding a lawn. Beside it a made-up capped block wall: under its capping
+    course, standing out from its face, the floor is the ground at its toe, seen under the cap, and where the soil
+    covers its body behind the shallower cap it's the soil. Both are still drawn, as is everything away from the walls."""
+    low = round(ground_at(project, 8.0, 10.0), 2)
+    walls = [{"id": "P", "material": "block", "line_so": [[10.0, 4.5], [10.0, 9.5]], "retained_side": "left", "top": low + 0.9},
+             {**BLOCK, "id": "C", "line_so": [[10.0, 11.0], [10.0, 16.0]], "retained_side": "left", "top": low + 0.9}]
+    opt = made_up("bodies", walls=walls, terraces=[{"id": "upper", "level": low + 0.8, "at_so": [12.0, 10.0],
+                                                    "polygon_so": [[10, 4], [14, 4], [14, 17], [10, 17]]}])
+    res = design.evaluate(project, opt, keep_solids=True)
+    d, s = res["design"], res["solids"]
+    patch = patch_of(d)
+    whole = solids.option_ground(s, drawn.vertices, drawn.faces, patch, d.garden, d.stairs)
+    cut, standing = walls_cut(res, d, s, whole)
+    bodies = []
+    for w, (_, head, _) in zip(res["walls"], standing, strict=True):
+        pts, _, chain, toe, _ = walls_mod.wall_levels(w["def"])
+        bodies.append((solids.footing(w["mesh"].vertices, w["mesh"].faces, pts, chain, toe), head))
+    v0, f0 = solids.surface(whole, s.origin, patch, cut, standing)
+    v1, f1 = solids.surface(whole, s.origin, patch, cut, standing, bodies)
+
+    def looking_up(v, f):
+        c = v[f]
+        n = np.cross(c[:, 1] - c[:, 0], c[:, 2] - c[:, 0])
+        return c[n[:, 2] > solids.UPRIGHT * np.linalg.norm(n, axis=1)]
+
+    def inside(mid, body, head):
+        return shapely.contains_xy(body.buffer(-1e-3), mid[:, 0], mid[:, 1]) & (mid[:, 2] < head(mid[:, 0], mid[:, 1]) - 1e-3)
+    up0, up1 = looking_up(v0, f0), looking_up(v1, f1)
+    mid0, mid1 = up0.mean(axis=1), up1.mean(axis=1)
+    (plain, plain_head), (capped, _) = bodies
+    assert inside(mid0, plain, plain_head).any() and not inside(mid1, plain, plain_head).any()
+    plan, _, parts = standing[1]
+    buried = parts[1][0]                                       # behind the shallower cap, under the soil
+    for region in (plan.difference(capped), buried):           # under the cap standing out from the face; the soil
+        k0, k1 = (int(shapely.intersects(region.buffer(-1e-4), shapely.polygons(u[:, :, :2])).sum()) for u in (up0, up1))
+        assert k0 and k1 == k0
+    rng = np.random.default_rng(7)
+    e = rng.uniform(patch[0] + 0.01, patch[2] - 0.01, 4000)
+    n = rng.uniform(patch[1] + 0.01, patch[3] - 0.01, 4000)
+    away = ~shapely.contains_xy(shapely.unary_union([p for p, _, _ in standing]).buffer(0.01), e, n)
+    assert np.abs(Surface(v1, f1).z(e[away], n[away]) - Surface(v0, f0).z(e[away], n[away])).max() < 1e-9
+    assert len(f1) < len(f0)
+
+
 def test_under_a_flight_it_is_the_ramp_under_the_treads(project, drawn):
     """Under a flight of steps on a foot that slopes across it, the ground is drawn where the rule draws it, the ramp
     just under the treads (Stair.under), not the soil the flight stands on, which is carried in level from its foot

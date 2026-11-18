@@ -63,7 +63,7 @@ import shapely
 from shapely.errors import GEOSException
 from shapely.geometry import Polygon, box
 
-from ..geo.mesh import offset_behind
+from ..geo.mesh import Surface, offset_behind
 from ..model import walls as walls_mod
 from .scheme import BATTER_REACH_M, HELD_M, body_plan, drainage, wall_body
 
@@ -484,7 +484,10 @@ def option_ground(s, vertices, faces, patch, garden, stairs=()):
     of the ground the build draws (`vertices` on the site's grid, `faces`), which reach past the patch. Under its
     flights of steps (`stairs`, the design's) it's the ramp just under the treads, as the rule draws it
     (Stair.under), where the soil under them is the ground the flight stands on (Stair.z): on a foot that slopes
-    across the flight, that's carried in level, and it would come through the lowest treads."""
+    across the flight, that's carried in level, and it would come through the lowest treads. It has one flat bottom,
+    the highest of its pieces' own: each stood on its own (option_solids takes them 2 m and more under anything it
+    draws, and the ground here 3 m under its lowest point), and where two met at different depths the step between
+    them was an upright face under the ground's top, which the build drew though nothing of it shows."""
     o = s.origin
     v = np.column_stack([np.asarray(vertices, float)[:, :2] - o, np.asarray(vertices, float)[:, 2]])
     zb = float(np.floor(np.nanmin(v[:, 2]))) - 3.0
@@ -502,7 +505,12 @@ def option_ground(s, vertices, faces, patch, garden, stairs=()):
             piece = split_by_plane(prism(piece.project(), lo[2], lo[5] + 1.0), (a[0], a[1], st.foot - 0.03),
                                    st.along * st.rise / st.length)[0]
         pieces.append(piece)
-    return union([*pieces, ground])
+    whole = union([*pieces, ground])
+    x0, y0, x1, y1 = (patch[0] - o[0], patch[1] - o[1], patch[2] - o[0], patch[3] - o[1])
+    over_patch = (v[:, 0] >= x0 - 1.0) & (v[:, 0] <= x1 + 1.0) & (v[:, 1] >= y0 - 1.0) & (v[:, 1] <= y1 + 1.0)
+    low = float(np.nanmin(v[over_patch, 2])) if over_patch.any() else zb
+    bottom = min(max(p.bounding_box()[2] for p in [*pieces, ground] if not p.is_empty()) + 0.01, low - 1.0)
+    return whole ^ prism(section(box(*patch), o), bottom, whole.bounding_box()[5] + 1.0)
 
 
 def _faces(m, origin, keep):
@@ -522,13 +530,18 @@ def _faces(m, origin, keep):
 UPRIGHT = 1e-6      # a face whose normal rises less than this is upright: the ground's own slopes are far from it
 
 
-def surface(ground, origin, patch, cut=None, walls=()):
+def surface(ground, origin, patch, cut=None, walls=(), inside=()):
     """The ground with an option (option_ground) as the viewer draws it: its top, and the upright faces where two of its
     parts meet at different heights, as at the regrade area's edge where a batter runs into it, but not its bottom or
     the patch's sides. (vertices on the site's grid, faces). Less `cut` (a solid about the origin: what stands on the
     ground and covers it, as the walls and the flights do, walls_cut), with no upright face on a wall's drawn outline
     under its head (`walls`, as walls_cut takes them): that lies in the wall's faces and would show through them. Over
-    its head it's the ground's own, where that stands over the wall beside it."""
+    its head it's the ground's own, where that stands over the wall beside it. An upright face with the ground's top as
+    high as each of its corners on both sides of it lies inside the ground, between two of its pieces or under a step's
+    lower side, and isn't drawn. `inside` gives the walls' bodies, each the plan its mesh stands on (footing) and its head: a
+    face looking up with its corners over such a plan, under the head, is the cut's floor inside the wall, and isn't
+    drawn either. Under a capping course standing out from the face, or where the soil covers the wall as it's built,
+    the floor shows, and stays."""
     x0, y0, x1, y1 = (patch[0] - origin[0], patch[1] - origin[1], patch[2] - origin[0], patch[3] - origin[1])
     if cut is not None and not cut.is_empty():
         ground = ground - cut
@@ -538,6 +551,7 @@ def surface(ground, origin, patch, cut=None, walls=()):
         for axis, at in ((0, x0), (0, x1), (1, y0), (1, y1)):
             on_side |= np.all(np.abs(c[:, :, axis] - at) < 1e-6, axis=1)
         upright = np.abs(nz) <= UPRIGHT                 # as near upright as the arithmetic leaves a face cut upright
+        up = nz > UPRIGHT
         k = np.flatnonzero(upright & ~on_side)
         mid = c[k].mean(axis=1)
         e, n = mid[:, 0] + origin[0], mid[:, 1] + origin[1]
@@ -545,8 +559,47 @@ def surface(ground, origin, patch, cut=None, walls=()):
             near = shapely.distance(plan.boundary, shapely.points(e, n)) < 1e-5
             if near.any():
                 on_side[k[near][mid[near, 2] < head(e[near], n[near])]] = True
-        return (nz > UPRIGHT) | (upright & ~on_side)
+        # The ground's top a fifth of a millimetre to each side of an upright face, by each of its corners (a hair in
+        # towards its middle): where the lower of the two stands as high as each corner, the face is inside the ground.
+        k = np.flatnonzero(upright & ~on_side)
+        if len(k) and up.any():
+            tops = c[up]
+            top = Surface(tops.reshape(-1, 3), np.arange(3 * len(tops)).reshape(-1, 3))
+            across = np.cross(c[k, 1] - c[k, 0], c[k, 2] - c[k, 0])[:, :2]
+            size = np.linalg.norm(across, axis=1)
+            sx, sy = (2e-4 * across / np.maximum(size, 1e-300)[:, None]).T
+            near = c[k] + 0.01 * (c[k].mean(axis=1)[:, None, :] - c[k])
+            px, py = near[:, :, 0], near[:, :, 1]
+            lower = np.fmin(top.z((px + sx[:, None]).ravel(), (py + sy[:, None]).ravel()),
+                            top.z((px - sx[:, None]).ravel(), (py - sy[:, None]).ravel())).reshape(-1, 3)
+            on_side[k[(size > 1e-12) & np.all(near[:, :, 2] <= lower + 1e-5, axis=1)]] = True
+        u = np.flatnonzero(up)
+        for plan, head in inside:
+            if not len(u):
+                break
+            grid = c[u] + [origin[0], origin[1], 0.0]
+            over = shapely.contains_xy(plan.buffer(1e-5), grid[:, :, 0], grid[:, :, 1]).all(axis=1)
+            middle = grid[over].mean(axis=1)
+            under = middle[:, 2] < head(middle[:, 0], middle[:, 1]) - 1e-3
+            up[u[over][under]] = False
+            u = np.flatnonzero(up)
+        return up | (upright & ~on_side)
     return _faces(ground, origin, keep)
+
+
+def footing(vertices, faces, line, chain, toe):
+    """The plan a wall's drawn mesh stands on (shapely, on the site's grid): its faces looking down at or under its toe
+    (`toe` at each distance `chain` along its `line`, as walls.wall_levels gives them), its bottom in the ground, and
+    not a capping course's underside standing out over the ground. Over it, from its bottom up to its head, is the wall
+    (surface's `inside`)."""
+    t = np.asarray(vertices, float)[np.asarray(faces, np.int64).reshape(-1, 3)]
+    n = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+    down = n[:, 2] < -0.5 * np.linalg.norm(n, axis=1)
+    mid = t.mean(axis=1)
+    along = shapely.line_locate_point(shapely.LineString(np.asarray(line, float)[:, :2]), shapely.points(mid[:, 0], mid[:, 1]))
+    low = t[:, :, 2].max(axis=1) <= np.interp(along, chain, toe) + 1e-3
+    plan = shapely.unary_union(shapely.polygons(t[down & low][:, :, :2]))
+    return shapely.make_valid(plan) if not plan.is_empty else plan
 
 
 def _not_upright(vertices, faces):

@@ -67,6 +67,21 @@ def r(a, nd=3):
     return [round(float(v), nd) for v in np.ravel(a)]
 
 
+def welded(m, frame):
+    """A mesh with its corners made one where model.json writes them at one place, to the millimetre (mesh_json's r),
+    and less the triangles that close up there: they draw nothing. Its corners keep the order they came in, so a mesh
+    with none to make one is as it was. Its pictures' coordinates must follow from where a corner is, as the ground's
+    and the lawns' do."""
+    key = np.round(frame.xyz(m.vertices) * 1000).astype(np.int64)
+    _, first, inverse = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    order = np.argsort(first)
+    rank = np.empty(len(order), np.int64)
+    rank[order] = np.arange(len(order))
+    f = rank[inverse.reshape(-1)][np.asarray(m.faces, np.int64).reshape(-1, 3)]
+    return mesh.Mesh(np.asarray(m.vertices, float)[first[order]],
+                     f[(f[:, 0] != f[:, 1]) & (f[:, 1] != f[:, 2]) & (f[:, 2] != f[:, 0])])
+
+
 def datum_note(vertical):
     """" (NZVD2016)" after a name of something with heights on that datum; nothing for a datum the site doesn't name."""
     return f" ({vertical})" if vertical else ""
@@ -408,7 +423,10 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
     standing = [solids.standing(m.vertices, m.faces, pts, chain, toe, top, getattr(m, "soil_over", ()), getattr(m, "soil_over_m", 0.0))
                 for (m, _), (pts, _, chain, toe, top) in zip(meshes, levels, strict=True)]
     cut = solids.walls_cut(standing, d.stairs, s.origin, float(whole.bounding_box()[5]) + 5.0)
-    tin = mesh.Mesh(*solids.surface(whole, s.origin, patch, cut, standing))
+    # The cut's floor inside each wall's body (over the plan its mesh stands on) doesn't show, and isn't drawn.
+    bodies = [(solids.footing(m.vertices, m.faces, pts, chain, toe), head)
+              for (m, _), (pts, _, chain, toe, _), (_, head, _) in zip(meshes, levels, standing, strict=True)]
+    tin = welded(mesh.Mesh(*solids.surface(whole, s.origin, patch, cut, standing, bodies)), frame)
     uv = np.column_stack([(tin.vertices[:, 0] - e0) / (e1 - e0), (tin.vertices[:, 1] - n0) / (n1 - n0)])
     out = [{**mesh_json(tin, frame, "#9fb58a", f"{opt['short']}: designed ground"), "id": f"option-{oid}-ground",
             "role": "ground", "uv": r(uv, 5), **tag,
@@ -458,6 +476,7 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
             m.add(v + [0, 0, 0 if host else 0.012], f)
         if not len(m):
             continue
+        m = welded(m, frame)
         if host:
             out.append({"type": "vegetation", "id": f"option-{oid}-terrace-{t.id}", "role": "skin",
                         "name": f"{opt['short']}: {t.name} ({t.poly.area:.0f} m2)", "colour": host["colour"],
@@ -500,10 +519,11 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
                 V.append(v)
         if not V:
             continue
+        laid = welded(mesh.Mesh(np.vstack(V), np.vstack(F)), frame)
         out.append({"type": "vegetation", "id": f"option-{oid}-lawn-{lawn['id']}", "role": "skin",
                     "name": f"{opt['short']}: {lawn['name']}, where it is left as it is", "colour": lawn["colour"],
                     "plants": [{"name": lawn["name"], "info": {"note": "Left as it is by this option."}}],
-                    "drape": vegetation.lawn_drape(np.vstack(V), np.vstack(F), *(
+                    "drape": vegetation.lawn_drape(laid.vertices, laid.faces, *(
                         (lawn["plain_box"], f"{lawn['id']}-plain.jpg") if "plain_box" in lawn else
                         (vegetation.lawn_box(lawn["poly"]), f"{lawn['id']}.jpg")), frame), **tag})
         kept.append(lawn["id"])

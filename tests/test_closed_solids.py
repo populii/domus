@@ -1,7 +1,7 @@
 """Walls and steps drawn as closed solids, as Manifold takes them (its check of a valid solid), with the looks and the
 picture coordinates they had, on the demo site: plain walls (timber in level bays with its posts and with an open end,
-block, battered, and held on either side), walls of a named block (straight, with a capping course standing out or deeper than the body, round a
-corner, round a sharp corner, stepped with their stacked capping units, stepped two courses, stepped where the line
+block held on either side, and the old block wall leaning back), walls of a named block (straight, with a capping course
+standing out or deeper than the body, round a corner, round a sharp corner, stepped with their stacked capping units, stepped two courses, stepped where the line
 turns, along an arc with a stepped top, and two that meet along a face), and steps (of blocks and of sleepers, on a
 level foot and on one that slopes across them)."""
 
@@ -47,8 +47,8 @@ def cases(low):
                                             "retained_side": "left", "tops": [low + 0.9, low + 0.6]}]},
         "timber with an open end": {"walls": [{"id": "W", "material": "timber", "line_so": [[10.0, 6.0], [10.0, 12.0]],
                                                "retained_side": "left", "top": low + 0.8, "open_ends": ["start"]}]},
-        "block, battered": {"walls": [{"id": "W", "material": "block", "line_so": [[10.0, 6.0], [10.0, 12.0]],
-                                       "retained_side": "left", "top": low + 1.0, "batter": 0.2}]},
+        "block": {"walls": [{"id": "W", "material": "block", "line_so": [[10.0, 6.0], [10.0, 12.0]],
+                             "retained_side": "left", "top": low + 1.0}]},
         "block, held on the right": {"walls": [{"id": "W", "material": "block", "line_so": [[10.0, 6.0], [10.0, 12.0]],
                                                 "retained_side": "right", "top": low + 1.0}]},
         "timber in level bays, held on the right": {"walls": [{"id": "W", "material": "timber", "retained_side": "right",
@@ -124,6 +124,21 @@ def test_named_blocks_round_a_sharp_corner_are_closed_solids(turn, project):
             m = design.evaluate(project, {"id": "x", "name": "x", "walls": [w]}, segments=0)["walls"][0]["mesh"]
             status, volume = solid(m)
             assert status == mf.Error.NoError and volume > 0.1, f"{name}, held {side}: {status}, {volume:.4f} m3"
+
+
+def test_a_battered_wall_is_a_closed_solid(project):
+    """A wall whose face leans back, its top a batter of 0.2 m behind its foot: an existing wall's `batter_m` (an
+    option's wall takes none), here the demo's old block wall's, is a closed solid as the build draws it."""
+    from domus.model import walls as walls_mod
+    from domus.options import solids
+
+    old = design.existing_walls(project)[0]
+    m, _ = walls_mod.mesh({**old, "batter": 0.2}, terrain.ground(project))
+    plain, _ = walls_mod.mesh(old, terrain.ground(project))
+    # it leans: its plan reaches a tenth of a metre further each way than the upright wall's, 0.2 m thick
+    assert solids.footprint(m.vertices, m.faces).area > 1.5 * solids.footprint(plain.vertices, plain.faces).area
+    status, volume = solid(m)
+    assert status == mf.Error.NoError and volume > 0.1, f"{status}, {volume:.4f} m3"
 
 
 def test_the_demo_options_walls_are_closed_solids(project):

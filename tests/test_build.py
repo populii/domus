@@ -91,6 +91,23 @@ def test_the_model_carries_what_a_sketch_is_worked_out_with(built, project):
                                 "sketch_back_m": sketch.DEFAULT_BACK_M}
 
 
+def test_a_mesh_is_welded_where_the_model_writes_its_corners_at_one_place():
+    """model.json writes a corner to the millimetre (build.r). Two corners it writes at one place become one, and a
+    triangle that closes up there goes, as it draws nothing (build.welded); the rest keep their corners. A mesh with no
+    two corners at one place comes back as it was, its corners in their order."""
+    from domus.build import Frame, welded
+    from domus.geo.mesh import Mesh
+
+    v = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [1.0002, 1.0001, 0.0003], [2, 1, 0]], float)
+    m = welded(Mesh(v, [[0, 1, 2], [1, 3, 4], [2, 3, 1]]), Frame((0.0, 0.0, 0.0)))
+    assert len(m.vertices) == 4 and len(m.faces) == 2
+    corners = {tuple(np.round(p, 3)) for p in m.vertices[m.faces].reshape(-1, 3)}
+    assert corners == {(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0), (2.0, 1.0, 0.0)}
+    apart = Mesh(np.array([[3, 0, 0], [1, 0, 0], [1, 1, 0], [0, 5, 0]], float), [[0, 1, 2], [2, 1, 3]])
+    same = welded(apart, Frame((0.0, 0.0, 0.0)))
+    assert np.array_equal(same.vertices, apart.vertices) and np.array_equal(same.faces, apart.faces)
+
+
 def test_a_site_s_own_layers_are_placed_as_they_are():
     import pytest
 

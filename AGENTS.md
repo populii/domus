@@ -94,7 +94,7 @@ uv run domus --site sites/demo serve
 | Step | What it writes | It worked if |
 |---|---|---|
 | `domus demo sites/demo` | A complete made-up site: settings, layers, rasters, two wall options | It prints `Wrote the demo site to ...` |
-| `domus --site sites/demo build` | The model in `sites/demo/viewer/data/` | It prints `wrote .../model.json (2.5 MB) and textures` in well under a minute |
+| `domus --site sites/demo build` | The model in `sites/demo/viewer/data/` | It prints `wrote .../model.json (2.0 MB) and textures` in well under a minute |
 | `domus --site sites/demo serve` | Nothing: it serves the viewer | It prints `Viewer on http://127.0.0.1:8765/`, and the page shows the house |
 
 The demo is in the sea, so it's nobody's house. Use it to try anything before you do it to a real site.

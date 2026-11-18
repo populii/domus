@@ -2,10 +2,14 @@
 
 ## Unreleased
 
-- `domus shots` can colour a wall option's ground by its cut and fill: `"cutfill": true` on a shot does what the
-  viewer's **Colour the ground by cut and fill** does, orange where the option cuts and blue where it fills, and the
-  option's lawns and beds step aside for the colours. Each shot sets it, so one shot's colours don't carry into the
-  next ([docs/shots.md](docs/shots.md)).
+- **For site projects:** an option's ground is back to about the size it had before it was drawn from its solids
+  (2026.11.60), and draws the same, to the millimetre model.json writes to. On the made-up demo an option's ground
+  layer has 6,973 triangles where it had 11,397 (7,330 before 2026.11.60), and model.json is 2.05 MB where it was
+  2.46 MB. The ground it's drawn from stands on one flat bottom, so the steps between its pieces' own bottoms,
+  upright faces under its top that nothing of showed, aren't drawn; nor is an upright face inside the ground,
+  between two of its pieces, nor the floor the walls' cut leaves inside a wall's body. The corners of the ground,
+  and of the lawns and beds laid on it, are one where model.json writes them at one place, and the slivers that
+  close up there go. Cut, fill and the materials are measured as before.
 - **For site projects:** the one route for every change to a site's data is covered by the public API's promise:
   `site.edit()` with intents, `site.undo()`, `edits()`, `propose()`, `proposals()`, `accept()` and `reject()` keep
   working from one release to the next, and change only after a deprecation in an earlier release and a note here, as
@@ -13,6 +17,10 @@
   on it as the viewer does. The video and prep steps, the observations (`site.observations()`,
   `site.propose_observation()`) and the house kept as an IFC file (`site.house()`, `site.write_house_ifc()`) stay
   provisional, and docs/api.md says why.
+- `domus shots` can colour a wall option's ground by its cut and fill: `"cutfill": true` on a shot does what the
+  viewer's **Colour the ground by cut and fill** does, orange where the option cuts and blue where it fills, and the
+  option's lawns and beds step aside for the colours. Each shot sets it, so one shot's colours don't carry into the
+  next ([docs/shots.md](docs/shots.md)).
 - The README, AGENTS.md, CONTRIBUTING.md, ARCHITECTURE.md and the docs say what Domus does today. The README has
   screenshots of the made-up sites, among them scheme B's cut and fill, its pictures are taken again with
   `domus shots` as PNGs, and its numbers for the demo's schemes are today's. ARCHITECTURE.md describes the change
