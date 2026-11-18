@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.53
 
 - **For site projects:** an existing wall an option takes away (one not in its `keep_existing`) goes, face and all.
   Its footprint, from its face's foot with any batter to its back, joins that option's regrade area as far as the
