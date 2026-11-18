@@ -10,7 +10,6 @@ so in its layer, and the files can be edited like any others.
 It's a first model, not a survey. Roofs are fitted as a single pitch and walls are plain.
 """
 
-import argparse
 import json
 import os
 import re
@@ -23,6 +22,7 @@ import shapely
 from shapely.geometry import Polygon
 
 from . import importers
+from .errors import DomusError
 from .importers.nz import publicdata
 from .project import newsite
 
@@ -314,36 +314,37 @@ def run_step(root, *args):
     try:
         subprocess.run([sys.executable, "-m", "domus.create", *args], check=True, env=env)
     except subprocess.CalledProcessError as e:
-        raise SystemExit("The build stopped: the lines above say why. Run the same address again to carry on.") from e
+        raise DomusError("The build stopped: the lines above say why. Run the same address again to carry on.") from e
 
 
-def main(argv=None, named=None):
-    """`domus create ADDRESS [PATH]`: into PATH, else the site the command line was given (`named`, by --site or
-    DOMUS_SITE), else a folder named from the address."""
-    ap = argparse.ArgumentParser(prog="domus create", description="Build a 3D model from an address and public data.")
-    ap.add_argument("address")
-    ap.add_argument("path", nargs="?", help="folder for the site project (default: from the address)")
-    args = ap.parse_args(argv)
-    root = Path(args.path) if args.path else named.path if named is not None else Path(slug(args.address))
+def from_address(address, path=None, say=print):
+    """`domus create ADDRESS [PATH]`: a site project for the address, from public data, in the folder `path` (a
+    folder named from the address unless given), drafted and built. A folder already holding this address carries on
+    with its build. Says how it goes to `say`; the fetch, draft and build run in a process of their own, which prints
+    as it goes. Gives the site's folder.
+
+    An address that matches more than one place raises a DomusError whose message is WHICH: and then JSON with the
+    `address` and the `places` to choose from."""
+    root = Path(path) if path else Path(slug(address))
     earlier = root / "data" / "public-lookup.json"
     if earlier.exists():
-        if json.loads(earlier.read_text(encoding="utf-8")).get("query") != args.address:
-            raise SystemExit(f"{root} already holds another address. Use an empty folder for a new one.")
-        print("Carrying on with the build of this address")
+        if json.loads(earlier.read_text(encoding="utf-8")).get("query") != address:
+            raise DomusError(f"{root} already holds another address. Use an empty folder for a new one.")
+        say("Carrying on with the build of this address")
     else:
         try:
-            found = importers.lookup(args.address)
+            found = importers.lookup(address)
         except publicdata.NotFound as e:
-            raise SystemExit(str(e)) from e
+            raise DomusError(str(e)) from e
         except publicdata.Ambiguous as e:
-            raise SystemExit("WHICH: " + json.dumps({"address": e.address, "places": e.places})) from e
+            raise DomusError("WHICH: " + json.dumps({"address": e.address, "places": e.places})) from e
         except OSError as e:
-            raise SystemExit(f"The address lookup didn't get an answer ({e}). Try again shortly.") from e
-        print(f"Found {found['address']}: {found['source']}; {len(found['buildings'])} buildings nearby")
-        scaffold(root, {**found, "query": args.address})
+            raise DomusError(f"The address lookup didn't get an answer ({e}). Try again shortly.") from e
+        say(f"Found {found['address']}: {found['source']}; {len(found['buildings'])} buildings nearby")
+        scaffold(root, {**found, "query": address})
     run_step(root, "--step", "rest")
-    print(f"Done. See it with: domus --site {root} serve")
-    return 0
+    say(f"Done. See it with: domus --site {root} serve")
+    return root
 
 
 def rest(site):
@@ -358,15 +359,15 @@ def rest(site):
         from .importers.nz import title
 
         try:
-            title.main(site, [])
+            title.update(site)
         except OSError as e:
             print(f"LINZ's title and easements didn't load ({e}); carrying on without them")
     if nz:
         from .importers.nz import points
 
         try:
-            points.main(site, [])
-        except (OSError, SystemExit) as e:
+            points.fetch(site)
+        except (OSError, points.NoPointCloud) as e:
             print(f"No point cloud ({e}); the roof is fitted to the 1 m surface model")
     draft_layers(site, found, lot, found["source"])
     site.forget_settings()    # the draft added [house]
@@ -377,7 +378,6 @@ if __name__ == "__main__":
     from .errors import as_command
     from .project.site import started
 
-    if sys.argv[1:] == ["--step", "rest"]:
-        as_command(lambda: rest(started()))     # run_step's process, on the site its environment names
-    else:
-        sys.exit(as_command(main))
+    if sys.argv[1:] != ["--step", "rest"]:
+        raise SystemExit("This runs a step of domus create, which starts it: domus create ADDRESS [PATH]")
+    as_command(lambda: rest(started()))     # run_step's process, on the site its environment names

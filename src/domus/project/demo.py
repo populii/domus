@@ -7,7 +7,6 @@ house, a block wall, a drain, a few trees, a fence and two retaining wall option
 from a real place.
 """
 
-import argparse
 import json
 
 import numpy as np
@@ -194,11 +193,9 @@ def write_options(root):
                                                        encoding="utf-8", newline="\n")
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser(prog="domus demo", description="Write the made-up demo site.")
-    ap.add_argument("path")
-    args = ap.parse_args(argv)
-    root = newsite.write_project(args.path, "Demo site (made up)", LOT, "made up", ABOUT)
+def write(path, say=print):
+    """`domus demo`: the made-up demo site, in the folder `path`. Says what to do next to `say`, and gives the folder."""
+    root = newsite.write_project(path, "Demo site (made up)", LOT, "made up", ABOUT)
     ext = newsite.extent_of(LOT)
     fl = round(float(ground(X0 + 11, Y0 + 10)) + 0.4, 2)
     roof = {"roof_pitch_deg": 25.0, "roof_plane_at_wall": round(fl + 2.8, 2), "eaves_overhang_m": 0.4}
@@ -208,8 +205,5 @@ def main(argv=None):
     with open(root / "data" / "site.toml", "a", encoding="utf-8", newline="\n") as fh:
         fh.write(f"\n[house]\nfl_upper = {fl}\nroof_pitch_deg = {roof['roof_pitch_deg']}\n"
                  f"roof_plane_at_wall = {roof['roof_plane_at_wall']:.2f}\neaves_overhang_m = {roof['eaves_overhang_m']}\n")
-    print(f"Wrote the demo site to {root}. Next:\n  domus --site {root} build\n  domus --site {root} serve")
-
-
-if __name__ == "__main__":
-    main()
+    say(f"Wrote the demo site to {root}. Next:\n  domus --site {root} build\n  domus --site {root} serve")
+    return root

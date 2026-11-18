@@ -27,7 +27,7 @@ def site(tmp_path, at_site):
     return at_site(tmp_path)
 
 
-def test_the_title_and_the_easements_near_the_lot(site, monkeypatch, capsys):
+def test_the_title_and_the_easements_near_the_lot(site, monkeypatch, capsys, domus):
     monkeypatch.setenv("DOMUS_LINZ_KEY", "k")
 
     def fake(key, layer, cql, count=20):
@@ -42,7 +42,7 @@ def test_the_title_and_the_easements_near_the_lot(site, monkeypatch, capsys):
         return []
 
     monkeypatch.setattr(publicdata, "_wfs", fake)
-    title.main(site, [])
+    domus("--site", site.path, "title")
     feats = json.loads(title.title_path(site).read_text(encoding="utf-8"))["features"]
     assert [f["properties"]["name"] for f in feats] == ["Title 123456", "Area A DP 9", "Area C DP 9"]
     t, e, c = (f["properties"] for f in feats)

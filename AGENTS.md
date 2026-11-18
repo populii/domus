@@ -113,11 +113,9 @@ once, so try anything you might not keep on a copy, with `--site`, which also mo
 Python goes through `docker exec -i <container> /app/.venv/bin/python -`, as the host may have none. Keep working files
 out of `/site`, or clear them up afterwards.
 
-`domus video` and `domus prep` list their steps, and most commands and steps print their options with `--help`. Not
-all do. `domus build` (whose one option is `--fresh`), `fetch`, `canopy` and `video export` run when given `--help`
-(`fetch` downloads); `video merge`, `split`, `link`, `link-picks` and `pick` fail on it; and `prep canopy-plot` takes it as the
-name of the picture to write. The plan, IFC and house-texture steps read everything from `data/prep.json`. This file
-gives the usage of each of them.
+Every command and step prints its usage with `--help` and does nothing else, and `domus video` and `domus prep` list
+their steps. A command run where there's no site project says so. The plan, IFC and house-texture steps read
+everything from `data/prep.json`. This file gives the usage of each of them.
 
 ### The environment variables you'll meet
 
@@ -517,7 +515,7 @@ the photo.
 - **The lens changed part way:** `domus video two-lens` maps the clip again with a camera for each lens, so a placement
   of one part places the other.
 
-These steps print no usage of their own, so here it is:
+Each of these prints its usage with `--help`. In short:
 
 | Step | What it does |
 |---|---|
@@ -785,9 +783,10 @@ for option in site.options():
 | `site.ground()` | The ground model, LiDAR with the fixes, as `ground(e, n)` |
 | `site.options()`, `site.frame()` | The wall options, and their frame: `frame.en(so)` and `frame.so(en)` |
 | `site.evaluate(option)` | What an option comes to: `walls`, `volumes`, `flat`, `terraces`, `stairs`, `drains`, `edge` |
-| `site.build()`, `site.output` | Build the model, and the folder it's in |
+| `site.build(fresh=False)`, `site.output` | Build the model, and the folder it's in |
 | `site.export(path, format=None, option=None)` | The built model, or it with a scheme shown, as glTF (`.glb`) or IFC (`.ifc`) |
 | `site.check(checks, tags, plots)` | The checks, as `domus prep check` runs them, and their report |
+| `api.create`, `api.new`, `api.demo`; `site.fetch()`, `map_canopy()`, `fetch_marks()`, `fetch_title()`, `fetch_points()`, `scan()`, `shots()`, `upgrade()`, `trust()`, `shift()`, `edit()`, `regrade()` | What the commands do, for a tool: `domus create`, `new`, `demo`, `fetch`, `canopy`, `marks`, `title`, `points`, `scan`, `shots` and `site ...`. Each takes `say`, which gets the lines the command prints |
 | `api.linz_query`, `api.clip`, `api.fit_affine`, `api.resample_line` | Helpers for LINZ layers, raster windows, image-to-ground fits and lines |
 
 A process can open several sites at once, and each keeps what Domus reads of it apart, so a tool can compare two. A

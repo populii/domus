@@ -161,17 +161,17 @@ def test_the_address_box(box):
     assert started == ["12 Example Street"]
 
 
-def test_a_stopped_build_can_carry_on_but_only_for_the_same_address(tmp_path, monkeypatch):
+def test_a_stopped_build_can_carry_on_but_only_for_the_same_address(tmp_path, monkeypatch, domus):
     found = {"address": "12 Example Street", "point": [1011.0, 2010.0], "parcel": None, "parcel_name": None, "buildings": [], "source": "x"}
     monkeypatch.setattr(publicdata, "lookup", lambda a: found)
     steps = []
     monkeypatch.setattr(create, "run_step", lambda root, *a: steps.append(root))
-    create.main(["12 Example Street", str(tmp_path / "p")])
+    domus("create", "12 Example Street", tmp_path / "p")
     monkeypatch.setattr(publicdata, "lookup", lambda a: pytest.fail("looked up again"))
-    create.main(["12 Example Street", str(tmp_path / "p")])
+    domus("create", "12 Example Street", tmp_path / "p")
     assert len(steps) == 2
     with pytest.raises(SystemExit, match="another address"):
-        create.main(["99 Other Road", str(tmp_path / "p")])
+        domus("create", "99 Other Road", tmp_path / "p")
 
 
 def test_the_address_box_wont_touch_a_site_with_a_project(box):

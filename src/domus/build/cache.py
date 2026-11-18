@@ -61,13 +61,14 @@ def key(*parts):
 
 
 class Cache:
-    """The cache of one site's builds, in `root`/.domus/build-cache. `enabled` is False where it can't be used."""
+    """The cache of one site's builds, in `root`/.domus/build-cache. `enabled` is False where it can't be used, and
+    for a `fresh` build, which takes nothing from the last."""
 
-    def __init__(self, root, out):
+    def __init__(self, root, out, fresh=False):
         self.dir = Path(root) / ".domus" / "build-cache"
         self.out = Path(out)
         self.used = set()
-        self.enabled = os.environ.get("DOMUS_BUILD_CACHE", "1") != "0"
+        self.enabled = not fresh and os.environ.get("DOMUS_BUILD_CACHE", "1") != "0"
         if self.enabled:
             try:
                 self.dir.mkdir(parents=True, exist_ok=True)

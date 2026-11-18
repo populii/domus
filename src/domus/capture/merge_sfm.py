@@ -9,8 +9,8 @@ seen by the joined cameras is then triangulated afresh and a global bundle adjus
 settles poses, points and the shared intrinsics. Writes data/video/<out-tag>-sfm.npz.
 """
 
+import argparse
 import json
-import sys
 import time
 
 import numpy as np
@@ -63,8 +63,14 @@ def similarity(a, b):
 
 
 def main(site):
-    clip, a_tag, b_tag = sys.argv[1:4]
-    out_tag = sys.argv[4] if len(sys.argv) > 4 else f"{clip}-joined"
+    ap = argparse.ArgumentParser(prog="domus video merge", description=__doc__.split("\n\n")[0])
+    ap.add_argument("clip", metavar="CLIP", help="the clip both were reconstructed from")
+    ap.add_argument("a_tag", metavar="TAG_A", help="the reconstruction that keeps its frame")
+    ap.add_argument("b_tag", metavar="TAG_B", help="the reconstruction carried into it")
+    ap.add_argument("out_tag", metavar="OUT", nargs="?", help="the joined reconstruction's tag (default: CLIP-joined)")
+    args = ap.parse_args()
+    clip, a_tag, b_tag = args.clip, args.a_tag, args.b_tag
+    out_tag = args.out_tag or f"{clip}-joined"
     a, b = np.load(video_dir(site) / f"{a_tag}-sfm.npz"), np.load(video_dir(site) / f"{b_tag}-sfm.npz")
     c = safe_npz.load(video_dir(site) / "cache" / f"{clip}-step1-w6.npz")
     frames = [sfm.Frame(n, k, d, col) for n, k, d, col in zip(c["names"], c["kps"], c["des"], c["cols"])]

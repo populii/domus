@@ -21,6 +21,7 @@ import tomllib
 from contextlib import contextmanager
 from pathlib import Path
 
+from ..errors import DomusError
 from . import formats, schema
 
 
@@ -44,7 +45,12 @@ class Site:
         return self.path / "data" / "site.toml"
 
     def _toml(self):
-        return tomllib.loads(self.settings_file.read_text(encoding="utf-8"))
+        try:
+            text = self.settings_file.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            raise DomusError(f"{self.path} isn't a site project: it has no data/site.toml. domus new or domus create "
+                             "starts one.") from None
+        return tomllib.loads(text)
 
     def settings(self):
         """data/site.toml at this Domus's format, whatever format the site is in (domus.project.formats), read through

@@ -345,7 +345,7 @@ def write(out):
         raise SystemExit(f"{out} isn't empty: give a new folder")
     for name in SITES:
         with contextlib.redirect_stdout(io.StringIO()):
-            demo.main([str(out / name)])
+            demo.write(out / name)
     enrich(out / "richer")
     move_abroad(out / "abroad")
     make_format_1(out / "format1")

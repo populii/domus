@@ -112,8 +112,9 @@ def drawn_from(site):
                                                                "Outlines as the beds in data/site/trees.geojson")}
 
 
-def map_site(site):
-    """`domus canopy`: candidate crowns from the site's LiDAR, written for curating into data/site/trees.geojson."""
+def map_site(site, say=print):
+    """`domus canopy`: candidate crowns from the site's LiDAR, written for curating into data/site/trees.geojson. Says
+    what it found to `say`, and gives the file it wrote."""
     settings = site.settings()
     extent = settings["model"]["extent"]
     cands, grids = map_canopy(site, extent, removed_areas(read(site)))
@@ -126,4 +127,5 @@ def map_site(site):
     for c in cands:
         k = "removed" if c.get("removed") else guess_kind(c)
         kinds[k] = kinds.get(k, 0) + 1
-    print(f"{len(cands)} crowns over {grids['veg'].sum() * STEP ** 2:.0f} m2 of canopy: {kinds}; wrote {out}")
+    say(f"{len(cands)} crowns over {grids['veg'].sum() * STEP ** 2:.0f} m2 of canopy: {kinds}; wrote {out}")
+    return out

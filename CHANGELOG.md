@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** every command is a call into the public API, so a site's tools can do what the commands do.
+  `api.create()`, `api.new()` and `api.demo()` start a site; a site's `fetch()`, `map_canopy()`, `fetch_marks()`,
+  `fetch_title()`, `fetch_points()`, `build(fresh=False)`, `scan()`, `shots()`, `upgrade()`, `trust()`, `shift()`,
+  `edit()` and `regrade()` do what `domus fetch`, `canopy`, `marks`, `title`, `points`, `build`, `scan`, `shots` and
+  `site ...` do ([docs/api.md](docs/api.md)). Each takes `say`, which gets the lines the command prints as it goes.
+  The commands work as they did, with the same options, output and exit codes.
+- Every command and step prints its usage with `--help` and does nothing else: `domus build`, `fetch`, `canopy` and
+  `video export` ran (and `fetch` downloaded), `video merge`, `split`, `link`, `link-picks` and `pick` failed on it, and
+  `prep canopy-plot` took it as the name of the picture to write. A command run where there's no site project says
+  so in a line, where `build`, `fetch` and `canopy` printed a traceback, and one given an argument it doesn't take
+  says so, where `build`, `fetch` and `canopy` went on without it. `domus --help` lists the commands, and
+  `domus video --help` and `domus prep --help` the steps.
+
 ## 2026.11.44
 
 - **For site projects:** on a site whose options' frame has the lot on its left (`[frame] side = "left"`), the viewer's

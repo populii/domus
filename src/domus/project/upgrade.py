@@ -7,7 +7,6 @@ is for editing it: its files then say what the model is built from, in this Domu
 their comments, are copied to .domus/upgrade/ first, and are checked to say just what the site said in memory.
 """
 
-import argparse
 import datetime
 import shutil
 import tomllib
@@ -80,20 +79,22 @@ def verify(root, fmt, writes):
                              "This is a fault in Domus: please report it.")
 
 
-def upgrade(root, dry_run=False):
+def upgrade(root, dry_run=False, say=print):
+    """`domus site upgrade`: writes the site's migrations into its files, keeping the files as they were in
+    .domus/upgrade/; with `dry_run`, only says what would change. What it does goes to `say`."""
     root = Path(root).resolve()
     if not (root / "data" / "site.toml").exists():
-        raise DomusError(f"{root} isn't a site project: it has no data/site.toml.")
+        raise DomusError(f"{root} isn't a site project: it has no data/site.toml. domus new or domus create starts one.")
     fmt, writes, notes = plan(root)
     if fmt >= formats.FORMAT:
-        print(f"{root} is in format {fmt} already: there's nothing to upgrade.")
+        say(f"{root} is in format {fmt} already: there's nothing to upgrade.")
         return 0
     verify(root, fmt, writes)
-    print(f"{root}, format {fmt} to {formats.FORMAT}:")
+    say(f"{root}, format {fmt} to {formats.FORMAT}:")
     for note in notes:
-        print(f"  {note}")
+        say(f"  {note}")
     if dry_run:
-        print("Nothing written (--dry-run).")
+        say("Nothing written (--dry-run).")
         return 0
     stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d-%H%M%S")
     backup = root / ".domus" / "upgrade" / f"format-{fmt}-{stamp}"
@@ -102,48 +103,5 @@ def upgrade(root, dry_run=False):
         shutil.copy2(path, backup / path.relative_to(root))
     for path, text in writes.items():
         path.write_text(text, encoding="utf-8", newline="")
-    print(f"Written. The files as they were are in {backup}.")
+    say(f"Written. The files as they were are in {backup}.")
     return 0
-
-
-def main(site, argv=None):
-    ap = argparse.ArgumentParser(prog="domus site", description="The site folder itself.")
-    sub = ap.add_subparsers(dest="action", required=True)
-    up = sub.add_parser("upgrade", help="write the site's migrations into its files, so they say what this Domus reads")
-    up.add_argument("--dry-run", action="store_true", help="say what would change, and write nothing")
-    tr = sub.add_parser("trust", help="let this machine's builds run the site's extensions, as they are now")
-    tr.add_argument("--revoke", action="store_true", help="stop trusting them")
-    for action, what in (("shift", "move named features of the site's layers by one vector, saying so in their basis"),
-                         ("edit", "change, add or delete named features of the site's layers"),
-                         ("regrade", "give ground-fix points the levels a placed cloud shows")):
-        ed = sub.add_parser(action, help=what)
-        if action == "regrade":
-            ed.add_argument("clouds", help="the cloud: <tag>-dense or <tag>-site in data/video, or several, comma-separated")
-        ed.add_argument("spec", help="what to change: a JSON file (domus.project.edits says what goes in it)")
-        ed.add_argument("backup", help="a fresh folder for the files as they were")
-        ed.add_argument("--apply", action="store_true", help="write the changes (without it, only say what they'd be)")
-    args = ap.parse_args(argv)
-    if args.action in ("shift", "edit", "regrade"):
-        import json
-
-        from . import edits
-
-        spec = json.loads(Path(args.spec).read_text(encoding="utf-8"))
-        if args.action == "regrade":
-            edits.regrade(site, args.clouds.split(","), spec, args.backup, args.apply)
-        else:
-            getattr(edits, args.action)(site, spec, args.backup, args.apply)
-        return 0
-
-    if args.action == "trust":
-        from . import extensions
-
-        done = extensions.trust(site.path, site.settings(), args.revoke)
-        if not done:
-            print("This site declares no extensions ([domus] extensions in data/site.toml).")
-        for rel, sha in done:
-            print(f"{'No longer trusted' if args.revoke else 'Trusted'}: {rel}" + (f" (SHA-256 {sha})" if sha else ""))
-        if done and not args.revoke:
-            print(f"Builds on this machine will run them until they change. Recorded in {extensions.trust_file()}.")
-        return 0
-    return upgrade(site.path, args.dry_run)

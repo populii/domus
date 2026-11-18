@@ -37,12 +37,11 @@ def test_only_named_marks_on_the_line_are_kept(nztm_site):
     assert feats[0]["properties"]["confidence"] == "LINZ, +-0.2 m"
 
 
-def test_height_marks_come_nearest_first_and_join_the_layer_only_by_name(nztm_site, monkeypatch, tmp_path, capsys, at_site):
+def test_height_marks_come_nearest_first_and_join_the_layer_only_by_name(nztm_site, monkeypatch, tmp_path, capsys, domus):
     (tmp_path / "data" / "site").mkdir(parents=True)
     (tmp_path / "data" / "site" / "boundary.geojson").write_text(json.dumps(
         {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {"type": "Polygon", "coordinates": [LOT]}}]}), encoding="utf-8")
     (tmp_path / "data" / "site.toml").write_text("[domus]\nformat = 3\n\n[crs]\nepsg = 2193\n", encoding="utf-8")
-    s = at_site(tmp_path)
     monkeypatch.setenv("DOMUS_LINZ_KEY", "k")
     asked = []
 
@@ -52,16 +51,16 @@ def test_height_marks_come_nearest_first_and_join_the_layer_only_by_name(nztm_si
 
     monkeypatch.setattr(publicdata, "_wfs", fake)
     out_file = tmp_path / "data" / "site" / "features-survey-marks.geojson"
-    marks.main(s, [])
+    domus("--site", tmp_path, "marks")
     printed = capsys.readouterr().out
     assert asked == ["layer-50774", "layer-50784"]
     assert printed.index("NEAR") < printed.index("FAR")
     assert len(json.loads(out_file.read_text(encoding="utf-8"))["features"]) == 1
-    marks.main(s, ["--height-mark", "NEAR"])
+    domus("--site", tmp_path, "marks", "--height-mark", "NEAR")
     last = json.loads(out_file.read_text(encoding="utf-8"))["features"][-1]["properties"]
     assert last["id"] == "linz-height-mark" and last["name"] == "NEAR (35.3 m)"
     with pytest.raises(SystemExit, match="No height mark"):
-        marks.main(s, ["--height-mark", "NOPE"])
+        domus("--site", tmp_path, "marks", "--height-mark", "NOPE")
 
 
 def test_marks_and_title_search_round_the_main_lot_not_the_first(nztm_site, monkeypatch, tmp_path, at_site):
@@ -81,10 +80,10 @@ def test_marks_and_title_search_round_the_main_lot_not_the_first(nztm_site, monk
         marks.lot_on_nztm(s)
 
 
-def test_it_asks_for_the_key(monkeypatch, project):
+def test_it_asks_for_the_key(monkeypatch, project, domus):
     monkeypatch.delenv("DOMUS_LINZ_KEY", raising=False)
     with pytest.raises(SystemExit, match="DOMUS_LINZ_KEY"):
-        marks.main(project, [])
+        domus("marks")
 
 
 def run_python(code, **env):

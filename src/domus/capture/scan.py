@@ -16,7 +16,6 @@ is in true metres in its own frame, so unlike a video it needs no scale, only a 
 Writes data/video/<tag>-scan.npz, which `domus video export` picks up for the next build.
 """
 
-import argparse
 import csv
 import re
 from pathlib import Path
@@ -214,41 +213,38 @@ def place(xyz, control, up=None):
     return xyz @ R.T + t, np.linalg.norm(src @ R.T + t - dst, axis=1)
 
 
-def main(site, argv=None):
-    ap = argparse.ArgumentParser(prog="domus scan", description="Bring in a phone LiDAR scan as a point cloud.")
-    ap.add_argument("file")
-    ap.add_argument("--tag", required=True, help="a short name for this scan")
-    how = ap.add_mutually_exclusive_group(required=True)
-    how.add_argument("--control", help="CSV with x,y,z,E,N,H for points in both the scan and on the grid")
-    how.add_argument("--epsg", type=int, help="the file is already on this grid")
-    ap.add_argument("--up", choices=["y", "z"], help="the scan's vertical axis, taken as true")
-    args = ap.parse_args(argv)
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", args.tag):
-        ap.error("--tag takes letters, digits, - and _")
-    xyz, rgb = read_cloud(args.file)
+def good_tag(tag):
+    """Whether a scan's tag will do as part of a file's name: letters, digits, - and _."""
+    return bool(re.fullmatch(r"[A-Za-z0-9_-]+", tag))
+
+
+def bring_in(site, file, tag, control=None, epsg=None, up=None, say=print):
+    """`domus scan`: the scan in `file` as a point cloud on the site's grid, data/video/<tag>-scan.npz, placed by the
+    points in the CSV `control` (with `up`, the scan's vertical axis, taken as true) or, for a file already on a grid,
+    by that grid's `epsg`. Says how it went to `say`, and gives the file it wrote."""
+    if not good_tag(tag):
+        raise DomusError("A scan's tag takes letters, digits, - and _")
+    if (control is None) == (epsg is None):
+        raise DomusError("Give a scan one of control (a CSV of points in both) or epsg (the grid it's on)")
+    xyz, rgb = read_cloud(file)
     ok = np.isfinite(xyz).all(axis=1)
     xyz, rgb = xyz[ok], rgb[ok]
-    print(f"{args.file}: {len(xyz):,} points")
-    if args.control:
-        placed, res = place(xyz, read_control(args.control), args.up)
-        print(f"control: {len(res)} points, residuals median {np.median(res):.3f} m, largest {res.max():.3f} m")
+    say(f"{file}: {len(xyz):,} points")
+    if control:
+        placed, res = place(xyz, read_control(control), up)
+        say(f"control: {len(res)} points, residuals median {np.median(res):.3f} m, largest {res.max():.3f} m")
         if res.max() > WARN_RESIDUAL_M:
-            print(f"warning: a control point is over {WARN_RESIDUAL_M} m off. Check it was picked at the same place in both.")
+            say(f"warning: a control point is over {WARN_RESIDUAL_M} m off. Check it was picked at the same place in both.")
     else:
-        e, n = Transformer.from_crs(args.epsg, site.grid.epsg, always_xy=True).transform(xyz[:, 0], xyz[:, 1])
+        e, n = Transformer.from_crs(epsg, site.grid.epsg, always_xy=True).transform(xyz[:, 0], xyz[:, 1])
         placed = np.column_stack([e, n, xyz[:, 2]])
     x0, y0, x1, y1 = site.settings()["model"]["extent"]
     inside = (placed[:, 0] > x0) & (placed[:, 0] < x1) & (placed[:, 1] > y0) & (placed[:, 1] < y1)
-    print(f"{inside.sum():,} points fall inside the model's extent")
+    say(f"{inside.sum():,} points fall inside the model's extent")
     if not inside.any():
-        print("warning: none of the scan lands on the placed. Check the control points' coordinates.")
-    out = site.path / "data" / "video" / f"{args.tag}-scan.npz"
+        say("warning: none of the scan lands on the placed. Check the control points' coordinates.")
+    out = site.path / "data" / "video" / f"{tag}-scan.npz"
     out.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(out, xyz=placed, rgb=rgb, nview=np.full(len(placed), 3, np.uint8))
-    print(f"wrote {out}. Next: domus video export, then domus build")
-
-
-if __name__ == "__main__":
-    from ..project.site import started
-
-    main(started())       # run by itself, on the site the environment names
+    say(f"wrote {out}. Next: domus video export, then domus build")
+    return out

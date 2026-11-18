@@ -19,7 +19,7 @@ os.environ["DOMUS_STRICT_SITE"] = "1"       # a part of Domus is handed its site
 def site():
     from domus import demo
 
-    demo.main([os.environ["DOMUS_SITE"]])
+    demo.write(os.environ["DOMUS_SITE"])
     return Path(os.environ["DOMUS_SITE"])
 
 
@@ -41,6 +41,29 @@ def at_site():
 
     with ExitStack() as stack:
         yield lambda path, output=None: stack.enter_context(sites.use(sites.Site(path, output)))
+
+
+@pytest.fixture
+def domus(monkeypatch):
+    """The command line, in this process: domus("--site", path, "marks") runs `domus --site PATH marks` and gives what
+    it returns; an error ends it as the command line's would, with SystemExit. The site it was given, DOMUS_SITE and
+    DOMUS_OUTPUT, and sys.argv are as they were after the test."""
+    import sys
+
+    from domus import api
+    from domus.app import cli
+    from domus.project import site as sites
+
+    monkeypatch.setattr(sites, "_started", sites._started)
+    monkeypatch.setattr(api, "_opened", dict(api._opened))
+    monkeypatch.setattr(sys, "argv", list(sys.argv))
+    before = {name: os.environ.get(name) for name in ("DOMUS_SITE", "DOMUS_OUTPUT")}
+    yield lambda *args: cli.main([str(a) for a in args])
+    for name, value in before.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
 
 
 @pytest.fixture(scope="session")

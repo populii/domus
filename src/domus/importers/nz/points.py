@@ -15,7 +15,6 @@ Sources, both LINZ's surveys (CC BY 4.0):
     domus points [--ground]
 """
 
-import argparse
 import io
 import json
 import os
@@ -33,6 +32,7 @@ from pathlib import Path
 import numpy as np
 from pyproj import Transformer
 
+from ...errors import DomusError
 from ...geo import crs
 from ...project import rasters
 from . import linz, publicdata
@@ -42,6 +42,12 @@ LAZ = "application/vnd.laszip+copc"     # the only LAZ LINZ offers for point clo
 EXPORT_WAIT_S = 900
 CATALOG = "https://portal.opentopography.org/API/otCatalog"
 BULK = "https://opentopography.s3.sdsc.edu/pc-bulk/"
+
+
+class NoPointCloud(DomusError):
+    """No point cloud covers the site: a site can do without one."""
+
+
 def laz_path(site):
     """The LiDAR points over the site, data/lidar/points.laz."""
     return site.path / "data" / "lidar" / "points.laz"
@@ -296,10 +302,11 @@ def write_ground(site, pts, bounds, path=None, res=0.5):
     return float(seen.mean())
 
 
-def main(site, argv=None):
-    ap = argparse.ArgumentParser(prog="domus points", description="The LiDAR point cloud over the site, classified.")
-    ap.add_argument("--ground", action="store_true", help=f"also write a 0.5 m ground model from the ground points to {ground_dem_path(site).name}")
-    args = ap.parse_args(argv)
+def fetch(site, ground=False, say=print):
+    """`domus points`: the classified LiDAR point cloud over the site, from LINZ (with a key that can export) or
+    OpenTopography, written to data/lidar/points.laz; with `ground`, a 0.5 m ground model from its ground points too
+    (data/lidar/dem-points.tif). Gives {points, path, ground_share}: how many points, where, and the share of the
+    ground model's cells a ground point reached (None without `ground`)."""
     bounds = linz.site_bounds(site)
     key = os.environ.get("DOMUS_LINZ_KEY", "").strip()
     count = None
@@ -307,30 +314,31 @@ def main(site, argv=None):
         try:
             hit = linz_survey(bounds)
             if not hit:
-                print("  LINZ has no point cloud covering this site; trying OpenTopography")
+                say("  LINZ has no point cloud covering this site; trying OpenTopography")
             else:
                 name, dataset = hit
-                print(f"Point cloud: {name}, exporting from LINZ (usually under a minute)")
+                say(f"Point cloud: {name}, exporting from LINZ (usually under a minute)")
                 with tempfile.TemporaryDirectory() as tmp:
                     count = crop([p.as_uri() for p in linz_export(dataset, bounds, key, tmp)], bounds, laz_path(site))
                 short, end, urls = dataset.rstrip("/").rsplit("/", 1)[-1], "", [dataset]
         except (OSError, ValueError, KeyError) as e:
-            print(f"  LINZ's export didn't work ({e}). A key needs the exports:read and exports:write scopes. Trying OpenTopography")
+            say(f"  LINZ's export didn't work ({e}). A key needs the exports:read and exports:write scopes. Trying OpenTopography")
     if count is None:
         found = find(bounds)
         if not found:
-            raise SystemExit("No point cloud covers this site. The 1 m models are all there is.")
+            raise NoPointCloud("No point cloud covers this site. The 1 m models are all there is.")
         name, short, end, urls = found
-        print(f"Point cloud: {name} (to {end}), {len(urls)} tile(s) from OpenTopography; whole tiles, tens of MB each")
+        say(f"Point cloud: {name} (to {end}), {len(urls)} tile(s) from OpenTopography; whole tiles, tens of MB each")
         count = crop(urls, bounds, laz_path(site))
     area = (bounds[2] - bounds[0]) * (bounds[3] - bounds[1])
-    print(f"  {count} points, {count / area:.1f} a square metre -> {laz_path(site)}")
+    say(f"  {count} points, {count / area:.1f} a square metre -> {laz_path(site)}")
     record_path(site).write_text(json.dumps({"title": name, "id": short, "to": end, "tiles": urls}, indent=2) + "\n", encoding="utf-8")
     dem = json.loads((site.path / "data" / "linz-sources.json").read_text(encoding="utf-8")).get("ground model", {}).get("title") \
         if (site.path / "data" / "linz-sources.json").exists() else None
     if dem:
-        print(f"  The ground model is {dem}: if the years differ, anything changed between them won't agree.")
-    if args.ground:
+        say(f"  The ground model is {dem}: if the years differ, anything changed between them won't agree.")
+    share = None
+    if ground:
         share = write_ground(site, read(laz_path(site)), bounds)
-        print(f"  ground points reach {share:.0%} of the 0.5 m cells -> {ground_dem_path(site)}. Use it with [rasters] dem = \"data/lidar/dem-points.tif\"")
-    return 0
+        say(f"  ground points reach {share:.0%} of the 0.5 m cells -> {ground_dem_path(site)}. Use it with [rasters] dem = \"data/lidar/dem-points.tif\"")
+    return {"points": count, "path": laz_path(site), "ground_share": share}

@@ -10,11 +10,11 @@ in the easement instrument on the title. NZ Property Titles, NZ Non-Primary Parc
 LINZ, CC BY 4.0.
 """
 
-import argparse
 import os
 
 from shapely.geometry import shape
 
+from ...errors import DomusError
 from ...geo import geojson
 from . import marks, publicdata
 
@@ -94,19 +94,20 @@ def easements(site):
     return [f for f in read(site) if f["properties"].get("kind") == "easement"]
 
 
-def main(site, argv=None):
-    argparse.ArgumentParser(prog="domus title", description="The lot's title and the easements around it, from LINZ.").parse_args(argv)
+def update(site, say=print):
+    """`domus title`: the site's lot's title and the easements near it, from LINZ, written to data/site/title.geojson.
+    Gives the features written. Needs DOMUS_LINZ_KEY."""
     key = os.environ.get("DOMUS_LINZ_KEY")
     if not key:
-        raise SystemExit("This needs DOMUS_LINZ_KEY: a free key from data.linz.govt.nz.")
+        raise DomusError("This needs DOMUS_LINZ_KEY: a free key from data.linz.govt.nz.")
     feats = fetch(site, key)
     for f in feats:
         p = f["properties"]
         if p["kind"] == "title":
-            print(f"{p['name']}: {p['estate']}, {p['type']}")
+            say(f"{p['name']}: {p['estate']}, {p['type']}")
         else:
-            print(f"{p['name']} ({p['intent']}){', on the lot' if p['on_lot'] else ', nearby'}")
+            say(f"{p['name']} ({p['intent']}){', on the lot' if p['on_lot'] else ', nearby'}")
     geojson.write(title_path(site), geojson.collection(feats, "title", "The lot's title and nearby easements, from LINZ (CC BY 4.0)",
                                                epsg=site.grid.epsg))
-    print(f"{len(feats)} features -> {title_path(site)}. Run domus build, then look in the Boundaries group.")
-    return 0
+    say(f"{len(feats)} features -> {title_path(site)}. Run domus build, then look in the Boundaries group.")
+    return feats

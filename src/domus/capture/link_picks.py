@@ -11,9 +11,9 @@ squares on those. Writes data/video/<second>-to-<first>.json, which
 `domus video place <second> --via <first>` reads.
 """
 
+import argparse
 import itertools
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -44,7 +44,13 @@ def triangulated(site, tag, picks_path):
 
 
 def main(site):
-    a_tag, a_picks, b_tag, b_picks = sys.argv[1:5]
+    ap = argparse.ArgumentParser(prog="domus video link-picks", description=__doc__.split("\n\n")[0])
+    ap.add_argument("a_tag", metavar="TAG_A", help="the reconstruction whose frame the other is carried into")
+    ap.add_argument("a_picks", metavar="PICKS_A", help="points marked in its clip's frames, a picks file")
+    ap.add_argument("b_tag", metavar="TAG_B", help="the reconstruction carried into it")
+    ap.add_argument("b_picks", metavar="PICKS_B", help="the same points marked in its clip's frames")
+    args = ap.parse_args()
+    a_tag, a_picks, b_tag, b_picks = args.a_tag, args.a_picks, args.b_tag, args.b_picks
     pa, pb = triangulated(site, a_tag, a_picks), triangulated(site, b_tag, b_picks)
     ids = sorted(pa.keys() & pb.keys())
     print(f"{len(ids)} shared features: {ids}")

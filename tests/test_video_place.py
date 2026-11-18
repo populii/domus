@@ -83,7 +83,7 @@ def test_placing_takes_the_eaves_from_the_roof_unless_the_site_gives_them(tmp_pa
     from domus import demo
     from domus.capture import georef_sfm
 
-    demo.main([str(tmp_path / "demo")])
+    demo.write(tmp_path / "demo")
     if above is not None:          # [house] is the last table in the demo's site.toml
         with open(tmp_path / "demo" / "data" / "site.toml", "a", encoding="utf-8", newline="\n") as fh:
             fh.write(f"roof_at_wall_above_fl = {above}\n")

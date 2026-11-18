@@ -120,9 +120,10 @@ def find_survey(catalog_url, match, bounds, recent_years=0):
     return next(find_surveys(catalog_url, match, bounds, recent_years), None)
 
 
-def clip(name, urls, bounds, out_path, bands=None):
+def clip(name, urls, bounds, out_path, bands=None, say=print):
     """Read the window covering `bounds` from each COG and mosaic them on the first one's grid. `bands` (0-based) keeps
-    just those, losslessly; otherwise a photo keeps its first three as a JPEG."""
+    just those, losslessly; otherwise a photo keeps its first three as a JPEG. What it wrote, labelled `name`, goes to
+    `say`."""
     with rasterio.Env(**GDAL_ENV):
         with rasterio.open(urls[0]) as ref:
             res = ref.res
@@ -152,7 +153,7 @@ def clip(name, urls, bounds, out_path, bands=None):
                 out[(slice(None),) + region][:, take] = data[:, take]
                 filled[region] |= True
     if not filled.all():
-        print(f"  warning: {name} has {np.count_nonzero(~filled)} cells outside the source tiles")
+        say(f"  warning: {name} has {np.count_nonzero(~filled)} cells outside the source tiles")
     has_data = filled & (out[0] != nodata) if nodata is not None else filled
     profile.update(driver="GTiff", width=width, height=height, transform=transform,
                    tiled=False, blockxsize=None, blockysize=None)
@@ -170,7 +171,7 @@ def clip(name, urls, bounds, out_path, bands=None):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with rasterio.open(out_path, "w", **profile) as dst:
         dst.write(out)
-    print(f"  {name}: {width}x{height} px at {res[0]} m -> {out_path}")
+    say(f"  {name}: {width}x{height} px at {res[0]} m -> {out_path}")
     return float(has_data.mean())
 
 
@@ -204,29 +205,29 @@ SOURCES = (
 )
 
 
-def main(site):
-    """`domus fetch` for a site in New Zealand: its rasters from LINZ."""
+def main(site, say=print):
+    """`domus fetch` for a site in New Zealand: its rasters from LINZ, saying what it gets to `say`."""
     bounds = site_bounds(site)
-    print("NZTM2000 bounds:", [round(v, 2) for v in bounds])
+    say(f"NZTM2000 bounds: {[round(v, 2) for v in bounds]}")
     used = {}
     for name, catalog, match, raster_key, required, recent, bands in SOURCES:
         tried = False
         for title, urls in find_surveys(catalog, match, bounds, recent):
             tried = True
-            print(f"  {name}: {title}, {len(urls)} tile(s)")
-            if clip(name, urls, bounds, rasters.path(site, raster_key), bands) >= MIN_DATA_SHARE:
+            say(f"  {name}: {title}, {len(urls)} tile(s)")
+            if clip(name, urls, bounds, rasters.path(site, raster_key), bands, say=say) >= MIN_DATA_SHARE:
                 used[name] = {"title": title, "tiles": urls}
                 break
-            print(f"  {name}: {title} has no data over most of the site, trying the next")
+            say(f"  {name}: {title} has no data over most of the site, trying the next")
         else:
             if required:
-                raise SystemExit(f"LINZ has no {name} covering this site. A site can bring its own: see docs/new-site.md.")
-            print(f"  {name}: LINZ has none covering this site, carrying on without it")
+                raise DomusError(f"LINZ has no {name} covering this site. A site can bring its own: see docs/new-site.md.")
+            say(f"  {name}: LINZ has none covering this site, carrying on without it")
             if tried:      # the last clip tried is empty: don't leave it for the build
                 rasters.path(site, raster_key).unlink(missing_ok=True)
     record = site.path / "data" / "linz-sources.json"
     record.write_text(json.dumps(used, indent=2) + "\n", encoding="utf-8")
-    print(f"recorded the surveys used in {record}")
+    say(f"recorded the surveys used in {record}")
 
 
 if __name__ == "__main__":

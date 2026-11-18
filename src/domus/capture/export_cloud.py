@@ -17,6 +17,7 @@ entry (`set` indexes `ids`): its clouds moved by `dz_m` and turned by `turn_deg`
 seen from above) about `pivot` (E, N), so the viewer can show two placements of one clip side by side.
 """
 
+import argparse
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -67,6 +68,13 @@ def moved(xyz, entry):
 
 
 def main(site):
+    argparse.ArgumentParser(prog="domus video export", description=__doc__.split("\n\n")[0]).parse_args()
+    export(site)
+
+
+def export(site):
+    """The clouds in [video] clouds and the LiDAR scans, as data/video/points.npz, and [[video.compare]]'s sets as
+    data/video/compare.npz."""
     cfg = site.settings()
     tags = [*cfg.get("video", {}).get("clouds", []), *sorted(p.stem for p in (site.path / "data" / "video").glob("*-scan.npz"))]
     origin = np.array([*cfg["model"]["origin"], 0.0][:3], float)   # a site may give no height: any origin does here

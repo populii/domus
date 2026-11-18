@@ -51,7 +51,7 @@ def test_fetch_skips_a_survey_with_no_data_here(site, monkeypatch, tmp_path, at_
     surveys = {"ground model": [("Empty (2025)", ["e"]), ("Full (2025)", ["f"])]}
     monkeypatch.setattr(linz, "find_surveys", lambda catalog, match, bounds, recent: iter(surveys.get(next(
         s[0] for s in linz.SOURCES if s[2] is match), [])))
-    monkeypatch.setattr(linz, "clip", lambda name, urls, bounds, path, bands=None: 0.0 if urls == ["e"] else 1.0)
+    monkeypatch.setattr(linz, "clip", lambda name, urls, bounds, path, bands=None, say=print: 0.0 if urls == ["e"] else 1.0)
     linz.main(moved)
     import json
     used = json.loads((tmp_path / "data" / "linz-sources.json").read_text(encoding="utf-8"))

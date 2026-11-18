@@ -10,8 +10,8 @@ a 3D-3D correspondence. A similarity is fitted to those by RANSAC, then least sq
 inliers, and written to data/video/<second>-to-<first>.json.
 """
 
+import argparse
 import json
-import sys
 from collections import Counter
 
 import cv2
@@ -57,7 +57,11 @@ def load_model(site, tag):
 
 
 def main(site):
-    a_tag, b_tag = sys.argv[1], sys.argv[2]
+    ap = argparse.ArgumentParser(prog="domus video link", description=__doc__.split("\n\n")[0])
+    ap.add_argument("a_tag", metavar="TAG_A", help="the reconstruction whose frame the other is carried into")
+    ap.add_argument("b_tag", metavar="TAG_B", help="the reconstruction carried into it")
+    args = ap.parse_args()
+    a_tag, b_tag = args.a_tag, args.b_tag
     a, fa = load_model(site, a_tag)
     b, fb = load_model(site, b_tag)
     print(f"{a_tag}: {len(fa)} registered frames; {b_tag}: {len(fb)}", flush=True)

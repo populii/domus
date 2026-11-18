@@ -153,7 +153,7 @@ def test_a_scan_reaches_the_build(built, site, tmp_path, project):
     c = tmp_path / "control.csv"
     c.write_text("x,y,z,E,N,H\n" + "\n".join(",".join(map(str, [*a, *b])) for a, b in zip(local, grid)), encoding="utf-8")
     cli.main(["scan", str(f), "--tag", "walk", "--control", str(c), "--up", "z"])
-    export_cloud.main(project)
+    export_cloud.export(project)
     build.main(project)
     layers = json.loads((built / "model.json").read_text(encoding="utf-8"))["layers"]
     assert next(x for x in layers if x["id"] == "video-points")["count"] == 4

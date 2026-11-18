@@ -39,8 +39,9 @@ def site_box(site):
     return min(lon) - MARGIN_DEG, min(lat) - MARGIN_DEG, max(lon) + MARGIN_DEG, max(lat) + MARGIN_DEG
 
 
-def fetch(site):
-    """data/lidar/dem.tif: the site's patch of the Copernicus ground model, from the tiles it falls on."""
+def fetch(site, say=print):
+    """data/lidar/dem.tif: the site's patch of the Copernicus ground model, from the tiles it falls on, saying what it
+    gets to `say`."""
     west, south, east, north = site_box(site)
     urls = sorted({tile(lat, lon) for lat in (south, north) for lon in (west, east)})
     sources, used = [], []
@@ -50,7 +51,7 @@ def fetch(site):
                 sources.append(rasterio.open(url))
                 used.append(url)
             except RasterioIOError:
-                print(f"  no Copernicus tile at {url.rsplit('/', 1)[-1]} (the sea, most likely)")
+                say(f"  no Copernicus tile at {url.rsplit('/', 1)[-1]} (the sea, most likely)")
         if not sources:
             raise DomusError("The Copernicus ground model has no tile here. Put the site's own ground model in "
                              "data/lidar/dem.tif (see docs/new-site.md).")
@@ -69,5 +70,5 @@ def fetch(site):
         dst.units = ("metre",)
     record = site.path / "data" / "copernicus-sources.json"
     record.write_text(json.dumps({"tiles": used, "credit": CREDIT}, indent=2) + "\n", encoding="utf-8", newline="\n")
-    print(f"  ground model: Copernicus DEM GLO-30, {data.shape[2]}x{data.shape[1]} cells -> {out}")
-    print(f"recorded the tiles used in {record}")
+    say(f"  ground model: Copernicus DEM GLO-30, {data.shape[2]}x{data.shape[1]} cells -> {out}")
+    say(f"recorded the tiles used in {record}")

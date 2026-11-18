@@ -63,14 +63,12 @@ def test_new_project_is_buildable_config(tmp_path):
         newsite.write_project(tmp_path / "p", "again", ring)
 
 
-def test_new_takes_a_negative_latitude(tmp_path):
-    from domus import newsite
-
-    newsite.main([str(tmp_path / "p"), "--name", "A place", "--centre", "-43.53,172.63"])
+def test_new_takes_a_negative_latitude(tmp_path, domus):
+    domus("new", tmp_path / "p", "--name", "A place", "--centre", "-43.53,172.63")
     assert (tmp_path / "p" / "data" / "site" / "boundary.geojson").exists()
 
 
-def test_a_new_site_can_be_a_git_repository_of_its_own(tmp_path):
+def test_a_new_site_can_be_a_git_repository_of_its_own(tmp_path, domus):
     """`domus new` writes a .gitignore: git leaves out what Domus makes again (the built model, the build cache, the
     checks' reports, the server's logs, upgrade backups, video frames, the reconstructions' working files, pictures of
     checks, picks backups) and keeps what a person made, the viewer's saved sketches and the records of edits among it.
@@ -79,12 +77,10 @@ def test_a_new_site_can_be_a_git_repository_of_its_own(tmp_path):
     import shutil
     import subprocess
 
-    from domus import newsite
-
     if not shutil.which("git"):
         pytest.skip("git isn't installed")
     root = tmp_path / "p"
-    newsite.main([str(root), "--name", "A place", "--centre", "-43.53,172.63"])
+    domus("new", root, "--name", "A place", "--centre", "-43.53,172.63")
     made = ["viewer/data/model.json", ".domus/build-cache/ground-k1/entry.json", ".domus/checks/check_model.json",
             ".domus/build.log", ".domus/upgrade/format-2-20260101-000000/data/site.toml", "sources/raw/frames6/walk/t000.167.jpg",
             "data/video/cache/colmap/walk/database.db", "data/video/checks/walk-plan.jpg", "data/sources/canopy.jpg",
@@ -140,7 +136,7 @@ def boundary(path, ring, epsg=None):
     return path
 
 
-def test_a_site_abroad_goes_on_a_grid_in_metres(tmp_path):
+def test_a_site_abroad_goes_on_a_grid_in_metres(tmp_path, domus):
     import tomllib
 
     from domus import newsite
@@ -159,7 +155,7 @@ def test_a_site_abroad_goes_on_a_grid_in_metres(tmp_path):
     with pytest.raises(DomusError, match="isn't a grid in metres"):
         newsite.read_boundary(tmp_path / "b.geojson", 4326)
     # Away from New Zealand the height datum and credit line are the site's own to fill in.
-    newsite.main([str(tmp_path / "p"), "--name", "Abroad", "--boundary", str(tmp_path / "b.geojson")])
+    domus("new", tmp_path / "p", "--name", "Abroad", "--boundary", tmp_path / "b.geojson")
     cfg = tomllib.loads((tmp_path / "p" / "data" / "site.toml").read_text(encoding="utf-8"))
     assert cfg["crs"] == {"epsg": 27700, "label": "OSGB36 / British National Grid (EPSG:27700)", "vertical": ""}
     assert cfg["site"]["attribution"] == ""

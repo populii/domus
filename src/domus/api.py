@@ -24,11 +24,12 @@ setting, comes as a DomusError whose message says what.
 import copy
 import os
 import re
+from contextlib import contextmanager
 from pathlib import Path
 
 from .errors import DomusError
 
-__all__ = ["DomusError", "Site", "clip", "fit_affine", "linz_query", "open_site", "resample_line"]
+__all__ = ["DomusError", "Site", "clip", "create", "demo", "fit_affine", "linz_query", "new", "open_site", "resample_line"]
 
 LAYER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 _opened = {}
@@ -49,6 +50,36 @@ def open_site(path=None):
         started = sites.started()
         _opened[root] = Site(started if started.path == root else sites.Site(root))
     return _opened[root]
+
+
+def create(address, path=None, say=print):
+    """A site project for an address, from public data, as `domus create` does: in the folder `path` (one named from
+    the address unless given), with its lot, buildings, ground and photo fetched, its house and trees drafted, and its
+    model built. A folder already holding this address carries on with its build. Gives the site, opened.
+
+    `say` gets each line of progress; the fetch, draft and build run in a process of their own, which prints its own.
+    An address that matches more than one place raises a DomusError whose message is `WHICH: ` and then JSON with the
+    `address` and the `places` to choose from."""
+    from . import create as creating
+
+    return open_site(creating.from_address(address, path, say))
+
+
+def new(path, name, boundary=None, centre=None, size=30.0, epsg=None, say=print):
+    """Starts a site project, as `domus new` does: in the folder `path`, called `name`, on the lot in `boundary`, a
+    GeoJSON polygon's file, or while there's no boundary yet, on a stand-in square `size` metres across at `centre`,
+    (latitude, longitude). `epsg` names its grid, in metres: by default the boundary's own, else NZTM2000 in New
+    Zealand and the UTM zone elsewhere. Gives the site, opened; what to do next goes to `say`."""
+    from .project import newsite
+
+    return open_site(newsite.start(path, name, boundary, centre, size, epsg, say))
+
+
+def demo(path, say=print):
+    """Writes the made-up demo site into the folder `path`, as `domus demo` does, and gives it, opened."""
+    from .project import demo as made_up
+
+    return open_site(made_up.write(path, say))
 
 
 class Site:
@@ -161,11 +192,12 @@ class Site:
             option = found[0]
         return design.evaluate(self._project, option)
 
-    def build(self):
-        """Builds the model into `output`, as domus build does, and returns that folder."""
+    def build(self, fresh=False, say=print):
+        """Builds the model into `output`, as domus build does, and returns that folder. `fresh` draws everything
+        again, taking nothing from the last build. What it built goes to `say`."""
         from . import build
 
-        build.main(self._project)
+        build.main(self._project, fresh, say)
         return self.output
 
     def export(self, path, format=None, option=None):
@@ -187,6 +219,163 @@ class Site:
         from .checks import model as check
 
         return check.run(self._project, checks or check.CHECKS, tags, plots)
+
+    def fetch(self, say=print):
+        """Gets the site's rasters from the public source for where it is, as domus fetch does: LINZ's LiDAR ground and
+        surface models and aerial photo in New Zealand, the Copernicus ground model anywhere else. What it gets goes to
+        `say`."""
+        from . import importers
+
+        with self._writing():
+            importers.fetch(self._project, say)
+
+    def map_canopy(self, say=print):
+        """Maps candidate tree crowns from the LiDAR, as domus canopy does, for curating into data/site/trees.geojson,
+        and returns the file it wrote: data/sources/canopy.geojson, or the one `[rasters] canopy` names."""
+        from .model import canopy
+
+        with self._writing():
+            return canopy.map_site(self._project, say)
+
+    def fetch_marks(self, height_mark=None, say=print):
+        """Adds LINZ's survey marks around the lot, as domus marks does: the named boundary marks on its line, as the
+        layer features-survey-marks, with the height mark `height_mark` (its name as `say` gets it) when one's named.
+        The nearest height marks go to `say`. Returns the layer's features. It needs DOMUS_LINZ_KEY."""
+        from .importers.nz import marks
+
+        with self._writing():
+            return marks.fetch(self._project, height_mark, say)
+
+    def fetch_title(self, say=print):
+        """The lot's record of title and the easements on and near it, from LINZ, as domus title does: written to
+        data/site/title.geojson, and returned as its features. It needs DOMUS_LINZ_KEY."""
+        from .importers.nz import title
+
+        with self._writing():
+            return title.update(self._project, say)
+
+    def fetch_points(self, ground=False, say=print):
+        """The classified LiDAR point cloud over the site, as domus points does: from LINZ (with a DOMUS_LINZ_KEY that
+        can export) or OpenTopography, into data/lidar/points.laz, and with `ground` a 0.5 m ground model from its
+        ground points too, data/lidar/dem-points.tif. Returns `points`, how many; `path`, the file; and
+        `ground_share`, the share of the ground model's cells a ground point reached (None without `ground`). A site
+        no point cloud covers raises a DomusError."""
+        from .importers.nz import points
+
+        with self._writing():
+            return points.fetch(self._project, ground, say)
+
+    def scan(self, file, tag, control=None, epsg=None, up=None, say=print):
+        """Brings in a phone or tablet LiDAR scan, as domus scan does: the points in `file` (PLY, LAS, OBJ, or XYZ,
+        TXT, PTS or CSV text), placed on the site's grid by `control`, a CSV of points in both (x, y and z in the scan,
+        E, N and H on the grid), with `up` ("y" or "z") the scan's vertical axis taken as true; or, for a file already
+        on a grid, by that grid's `epsg`. `tag` names it: letters, digits, - and _. Returns the file it wrote,
+        data/video/<tag>-scan.npz, which the next `domus video export` takes in."""
+        from .capture import scan
+
+        with self._writing():
+            return scan.bring_in(self._project, file, tag, control, epsg, up, say)
+
+    def shots(self, spec, timeout=None, say=print):
+        """Takes pictures of the built model as the viewer draws it, as domus shots does, from `spec`, a JSON file
+        (docs/shots.md), within `timeout` seconds (ten minutes unless given). Each picture goes to `say` as it's
+        written. Returns [(path, what the viewer showed)]. It needs Playwright and its Chromium (the `shots` extra)."""
+        import math
+
+        from . import shots
+
+        timeout = shots.TIMEOUT_S if timeout is None else timeout
+        if isinstance(timeout, bool) or not isinstance(timeout, int | float) or not (math.isfinite(timeout) and timeout > 0):
+            raise DomusError("timeout is a number of seconds, more than 0")
+        return shots.take(shots.read_spec(spec), self.output, timeout, say)
+
+    def upgrade(self, dry_run=False, say=print):
+        """Writes the site's migrations into its own files, as domus site upgrade does, so they say what this Domus
+        reads, keeping the files as they were in .domus/upgrade/. With `dry_run`, it only says what would change. What
+        changes, and where the files as they were are, go to `say`."""
+        from .project import upgrade
+
+        with self._writing():
+            upgrade.upgrade(self.path, dry_run, say)
+
+    def trust(self, revoke=False, say=print):
+        """Lets this machine's builds run the site's extensions as they are now, as domus site trust does, or stops
+        them, with `revoke`, saying which to `say`. Returns [(file, SHA-256)], with None for the SHA-256 when revoked;
+        an empty list means the site declares none."""
+        from .project import extensions
+
+        done = extensions.trust(self.path, self._project.settings(), revoke)
+        if not done:
+            say("This site declares no extensions ([domus] extensions in data/site.toml).")
+        for rel, sha in done:
+            say(f"{'No longer trusted' if revoke else 'Trusted'}: {rel}" + (f" (SHA-256 {sha})" if sha else ""))
+        if done and not revoke:
+            say(f"Builds on this machine will run them until they change. Recorded in {extensions.trust_file()}.")
+        return done
+
+    def shift(self, spec, backup, apply=False, say=print):
+        """Moves named features of the site's layers by one vector, as domus site shift does, saying so in their basis:
+        `spec` is {"shift": [dE, dN], "dz", "basis", "files": {layer file: [ids] or "*"}}, or a JSON file holding it.
+        Without `apply` it only says what would change; with it, each file is backed up into `backup`, a fresh folder,
+        written, read back and checked."""
+        from .project import edits
+
+        with self._writing():
+            edits.shift(self._project, _spec(spec), backup, apply, say)
+
+    def edit(self, spec, backup, apply=False, say=print):
+        """Changes, adds and deletes named features of the site's layers, as domus site edit does: `spec` is
+        {layer file: [{"id", "so" or "en" (or "soz", "enz"), "props", "drop_props", "new", "delete"}]}, or a JSON file
+        holding it. Without `apply` it only says what would change; with it, as shift does."""
+        from .project import edits
+
+        with self._writing():
+            edits.edit(self._project, _spec(spec), backup, apply, say)
+
+    def regrade(self, clouds, spec, backup, apply=False, say=print):
+        """Gives ground-fix points and lines the levels a placed cloud shows, as domus site regrade does: `clouds` is
+        a cloud in data/video (<tag>-dense or <tag>-site) or a list of them, and `spec` {"features", "radius",
+        "percentile", "basis", ...}, or a JSON file holding it. Without `apply` it only says what would change; with
+        it, as shift does."""
+        from .project import edits
+
+        with self._writing():
+            edits.regrade(self._project, [clouds] if isinstance(clouds, str) else list(clouds), _spec(spec), backup, apply,
+                          say)
+
+    def _sketch(self, items):
+        """For the server: what a sketch from the viewer comes to on the site, for the viewer. Not in the promise."""
+        from .options import sketch
+
+        return sketch.evaluate(self._project, items)
+
+    def _sketch_option(self, items, name):
+        """For the server: a sketch from the viewer as a wall option's file, its TOML. Not in the promise."""
+        from .options import sketch
+
+        return sketch.to_toml(sketch.to_option(self._project, items, name))
+
+    @contextmanager
+    def _writing(self):
+        """Around something that writes the site's files: what Domus has read of them is forgotten after, so the next
+        to ask reads them as they are."""
+        try:
+            yield
+        finally:
+            self._project.forget_settings()
+            self._project.cache.clear()
+
+
+def _spec(spec):
+    """An edit's spec: a dict, or the path of a JSON file holding one."""
+    if isinstance(spec, dict):
+        return spec
+    import json
+
+    try:
+        return json.loads(Path(spec).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise DomusError(f"There's no {spec}") from None
 
 
 def resample_line(line, spacing):

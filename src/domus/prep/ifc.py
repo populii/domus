@@ -14,6 +14,7 @@ by a 2D rigid fit (ICP from the best of four quarter turns). Heights are the mod
 Point the site's [ifc] settings at the output to show it. Needs `pip install domus[ifc]`; the image has it.
 """
 
+import argparse
 import hashlib
 
 import ifcopenshell
@@ -119,6 +120,8 @@ def selected(g, p):
 
 
 def main(site):
+    argparse.ArgumentParser(prog="domus prep ifc", description="A designer's IFC model of the house on the site grid, as "
+                            "\"ifc\" in data/prep.json says (docs/from-documents.md).").parse_args()
     cfg = config(site, "ifc")
     src, dz = site.path / cfg["source"], cfg.get("datum_dz", 0.0)
     out = site.path / cfg["out"]

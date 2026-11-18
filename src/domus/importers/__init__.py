@@ -37,17 +37,17 @@ def in_nz(site):
     return in_new_zealand(*site.grid.to_lonlat((e0 + e1) / 2, (n0 + n1) / 2))
 
 
-def fetch(site):
+def fetch(site, say=print):
     """`domus fetch`: the site's rasters from the public source for where it is: LINZ's LiDAR and photos in New Zealand,
-    the Copernicus ground model anywhere else."""
+    the Copernicus ground model anywhere else. What it gets goes to `say`."""
     if in_nz(site):
         from .nz import linz
 
-        return linz.main(site)
+        return linz.main(site, say)
     from . import osm
 
     try:
-        return osm.fetch(site)
+        return osm.fetch(site, say)
     except OSError as e:
         raise DomusError(f"The Copernicus ground model didn't load ({e}). Try again shortly, or bring your own: put "
                          "the site's ground model in data/lidar/dem.tif (see docs/new-site.md).") from e

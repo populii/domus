@@ -433,19 +433,19 @@ def option_file(root, name):
 
 
 def save_option(root, name, items, own_output):
-    """Write the option through the site's own process, which reads its settings: the site its environment names."""
+    """Write the option through `domus sketch-option`, in a process of its own on the site its environment names,
+    which reads its settings."""
     path = option_file(root, name)
-    code = ("import json,sys;from domus import sketch;from domus.project.site import started;d=json.load(sys.stdin);"
-            "sys.stdout.write(sketch.to_toml(sketch.to_option(started(),d['items'],d['name'])))")
-    out = subprocess.run([sys.executable, "-c", code], input=json.dumps({"name": name, "items": items}), capture_output=True, text=True, encoding="utf-8",
-                         env=job_env(root, own_output), check=False, timeout=WORKER_TIMEOUT_S)
+    out = subprocess.run([sys.executable, "-m", "domus.app.cli", "sketch-option"], input=json.dumps({"name": name, "items": items}),
+                         capture_output=True, text=True, encoding="utf-8", env=job_env(root, own_output), check=False,
+                         timeout=WORKER_TIMEOUT_S)
     if out.returncode:
         sys.stderr.write(out.stderr)            # all of it, in the server's log
-        last = (out.stderr.strip().splitlines() or [""])[-1]
-        problem = "domus.errors.DomusError: "
-        raise DomusError(last.removeprefix(problem) if last.startswith(problem) else
-                         "That sketch couldn't be saved as an option. The server's log says why.")
-    path.write_text(out.stdout, encoding="utf-8", newline="\n")
+        raise DomusError("That sketch couldn't be saved as an option. The server's log says why.")
+    answer = json.loads(out.stdout)
+    if "error" in answer:                       # the site's settings or data need putting right: the message says what
+        raise DomusError(answer["error"])
+    path.write_text(answer["toml"], encoding="utf-8", newline="\n")
     return path
 
 

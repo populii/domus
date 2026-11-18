@@ -15,7 +15,6 @@ import datetime
 import functools
 import itertools
 import json
-import os
 import subprocess
 from types import SimpleNamespace
 
@@ -873,7 +872,7 @@ def add_features(b):
     removed = getattr(b, "removed_features", {})
     unknown = set(removed) - {f["properties"].get("id") for f in site_features}
     if unknown:
-        print(f"options remove site features that aren't in data/site/features-*.geojson: {', '.join(sorted(unknown))}")
+        b.say(f"options remove site features that aren't in data/site/features-*.geojson: {', '.join(sorted(unknown))}")
     merged = {}
     for group, items in features.build(site_features, ground).items():
         for m, mat, p in items:
@@ -1082,10 +1081,9 @@ def site_origin(cfg, dem):
     return origin
 
 
-def main(site, argv=None):
-    """`domus build [--fresh]` on the site: --fresh draws everything again, taking nothing from the last build."""
-    if "--fresh" in (argv or []):
-        os.environ["DOMUS_BUILD_CACHE"] = "0"
+def main(site, fresh=False, say=print):
+    """`domus build [--fresh]` on the site: builds its model into its output folder, saying what it made to `say`.
+    `fresh` draws everything again, taking nothing from the last build."""
     from ..project import extensions
 
     cfg = site.settings()
@@ -1099,7 +1097,7 @@ def main(site, argv=None):
                         ground=lambda e, n: dem.sample(np.atleast_1d(e), np.atleast_1d(n)),
                         labels=cfg.get("labels", {}), vertical=cfg.get("crs", {}).get("vertical", ""),
                         wall_defs=[walls.from_feature(f) for f in wall_feats], layers=[], summary={},
-                        cache=buildcache.Cache(site.path, site.output), extensions=checked)
+                        cache=buildcache.Cache(site.path, site.output, fresh), extensions=checked, say=say)
     add_ground(b)
     add_contours(b)
     add_boundaries(b)
@@ -1182,12 +1180,12 @@ def write_model(b):
                                                 "model_format": MODEL_FORMAT, **({"extensions": ran} if ran else {})}),
                                     encoding="utf-8")
     size = (b.site.output / "model.json").stat().st_size / 1e6
-    print(f"ground: {len(tin.vertices)} points, {len(tin)} triangles")
+    b.say(f"ground: {len(tin.vertices)} points, {len(tin)} triangles")
     if "house" in summary:
-        print(f"house: {json.dumps(summary['house'])}")
+        b.say(f"house: {json.dumps(summary['house'])}")
     for w in summary["walls"]:
-        print(f"wall {w['id']}: {w['length_m']} m long, exposed {w['height_min_m']}-{w['height_max_m']} m")
-    print(f"wrote {b.site.output / 'model.json'} ({size:.1f} MB) and textures")
+        b.say(f"wall {w['id']}: {w['length_m']} m long, exposed {w['height_min_m']}-{w['height_max_m']} m")
+    b.say(f"wrote {b.site.output / 'model.json'} ({size:.1f} MB) and textures")
 
 
 if __name__ == "__main__":

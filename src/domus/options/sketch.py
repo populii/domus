@@ -7,11 +7,9 @@ level ground behind it, `back` metres deep and `upstand` below its top. An area 
 """
 
 import json
-import sys
 
 import numpy as np
 
-from ..errors import DomusError
 from . import design
 
 DEFAULT_BACK_M = 3.0
@@ -134,15 +132,3 @@ def evaluate(site, items):
         "flags": [e["flag"] for e in res["edge"]] + [d["flag"] for d in res["drains"] if d.get("flag")],
         "grid": ground_grid(res),
     }
-
-
-def main(site, argv=None):
-    """The worker for the site: a request per line, an answer per line."""
-    for line in sys.stdin:
-        try:
-            answer = evaluate(site, json.loads(line)["items"])
-        except DomusError as e:     # the site's settings or data need putting right: the message says what
-            answer = {"error": str(e)}
-        except Exception as e:      # noqa: BLE001 - a sketch that can't be worked out is an answer, not the end of the worker
-            answer = {"error": f"{type(e).__name__}: {e}"}
-        print(json.dumps(answer, default=float), flush=True)

@@ -95,8 +95,8 @@ def test_fetch_asks_the_source_for_where_the_site_is(site, monkeypatch, project)
     from domus import linz
 
     asked = []
-    monkeypatch.setattr(linz, "main", lambda site: asked.append("LINZ"))
-    monkeypatch.setattr(osm, "fetch", lambda site: asked.append("Copernicus"))
+    monkeypatch.setattr(linz, "main", lambda site, say: asked.append("LINZ"))
+    monkeypatch.setattr(osm, "fetch", lambda site, say: asked.append("Copernicus"))
     importers.fetch(project)                                                   # the demo is in New Zealand's waters
     monkeypatch.setattr(importers, "in_nz", lambda site: False)
     importers.fetch(project)

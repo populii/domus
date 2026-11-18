@@ -12,11 +12,9 @@ NZTM2000 (EPSG:2193, with NZVD2016 heights: the LINZ data's own) in New Zealand 
 anywhere else; one in feet goes on the UTM zone too. --epsg names another grid in metres.
 """
 
-import argparse
 import json
 import re
 import shutil
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -162,36 +160,23 @@ def write_project(path, name, ring, note="", about="", epsg=NZTM, importer="manu
     return root
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser(prog="domus new", description="Start a site project.")
-    ap.add_argument("path")
-    ap.add_argument("--name", required=True, help="the site's name, shown in the viewer")
-    ap.add_argument("--boundary", help="a GeoJSON polygon of the lot")
-    ap.add_argument("--centre", help="latitude,longitude of the lot, when you have no boundary yet")
-    ap.add_argument("--size", type=float, default=30.0, help="side of the stand-in square, metres")
-    ap.add_argument("--epsg", type=int, help="the site's grid, in metres (default: the boundary's own, else one for where it is)")
-    # A New Zealand latitude starts with a minus, which argparse would read as another option.
-    argv = list(sys.argv[1:] if argv is None else argv)
-    if "--centre" in argv and argv.index("--centre") + 1 < len(argv):
-        k = argv.index("--centre")
-        argv[k:k + 2] = [f"--centre={argv[k + 1]}"]
-    args = ap.parse_args(argv)
-    if bool(args.boundary) == bool(args.centre):
-        ap.error("give one of --boundary or --centre")
-    if args.boundary:
-        (ring, epsg), note = read_boundary(args.boundary, args.epsg), f"from {Path(args.boundary).name}"
+def start(path, name, boundary=None, centre=None, size=30.0, epsg=None, say=print):
+    """`domus new`: a site project in the folder `path`, called `name`, on the lot in the GeoJSON file `boundary`, or
+    on a stand-in square `size` metres across at `centre`, (latitude, longitude). `epsg` names its grid, in metres
+    (by default the boundary's own, else one for where it is). Says what to do next to `say`, and gives the folder."""
+    if (boundary is None) == (centre is None):
+        raise DomusError("Give a new site one of boundary (a GeoJSON polygon of the lot) or centre (its latitude and longitude)")
+    if boundary is not None:
+        (ring, epsg), note = read_boundary(boundary, epsg), f"from {Path(boundary).name}"
     else:
-        lat, lon = (float(v) for v in args.centre.split(","))
-        (ring, epsg), note = square_boundary(lat, lon, args.size, args.epsg), "a stand-in square; replace it with the real boundary"
-    root = write_project(args.path, args.name, ring, note, epsg=epsg)
-    print(f"Started {root} on {CRS.from_epsg(epsg).name} (EPSG:{epsg}).")
+        lat, lon = centre
+        (ring, epsg), note = square_boundary(lat, lon, size, epsg), "a stand-in square; replace it with the real boundary"
+    root = write_project(path, name, ring, note, epsg=epsg)
+    say(f"Started {root} on {CRS.from_epsg(epsg).name} (EPSG:{epsg}).")
     if epsg == NZTM:
-        print(f"Next:\n  domus --site {root} fetch\n  domus --site {root} build\n  domus --site {root} serve")
+        say(f"Next:\n  domus --site {root} fetch\n  domus --site {root} build\n  domus --site {root} serve")
     else:
-        print(f"Next: put the site's ground model in {root / 'data' / 'lidar' / 'dem.tif'} (and its surface model and photo"
-              f" if you have them: see docs/new-site.md), name its height datum in data/site.toml, then\n"
-              f"  domus --site {root} build\n  domus --site {root} serve")
-
-
-if __name__ == "__main__":
-    main()
+        say(f"Next: put the site's ground model in {root / 'data' / 'lidar' / 'dem.tif'} (and its surface model and photo"
+            f" if you have them: see docs/new-site.md), name its height datum in data/site.toml, then\n"
+            f"  domus --site {root} build\n  domus --site {root} serve")
+    return root

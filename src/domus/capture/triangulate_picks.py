@@ -10,10 +10,10 @@ go to site coordinates (the site's grid and height datum) with that model's plac
 Writes data/video/picks/<name>-site.csv.
 """
 
+import argparse
 import csv
 import json
 import math
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -43,8 +43,12 @@ def reproject(rec, x, obs):
 
 
 def main(site):
-    picks_path = Path(sys.argv[1])
-    tags = sys.argv[2:]
+    ap = argparse.ArgumentParser(prog="domus video pick", description=__doc__.split("\n\n")[0])
+    ap.add_argument("picks", help="the picks file, data/video/picks/NAME.json")
+    ap.add_argument("tags", metavar="TAG", nargs="*", help="the placed reconstructions to triangulate with, first first")
+    args = ap.parse_args()
+    picks_path = Path(args.picks)
+    tags = args.tags
     picks = json.loads(picks_path.read_text(encoding="utf-8"))
     models = []
     for tag in tags:

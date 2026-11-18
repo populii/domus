@@ -136,6 +136,17 @@ def test_the_worker_says_what_setting_needs_putting_right_and_stays_up(site, tmp
         p.wait(10)
 
 
+def test_saving_a_sketch_says_what_needs_putting_right(site, tmp_path):
+    from domus.errors import DomusError
+
+    root = tmp_path / "site"
+    shutil.copytree(site / "options", root / "options")        # no data/site.toml: it isn't a site project
+    wall = {"id": 1, "kind": "wall", "name": "W", "en": [[0, 0], [5, 0]], "material": "timber", "mode": "height", "height": 0.5}
+    with pytest.raises(DomusError, match="isn't a site project"):
+        serve.save_option(root, "W", [wall], own_output=True)
+    assert not list((root / "options").glob("sketch-*.toml"))
+
+
 def call(port, method, path, body=None):
     c = http.client.HTTPConnection("127.0.0.1", port)
     c.request(method, path, body, {"Content-Type": "application/json"} if body is not None else {})

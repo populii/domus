@@ -13,9 +13,10 @@ from domus import api
 from domus.errors import DomusError
 
 # The promise: these stay, from one release to the next. Removing or renaming one needs a deprecation first.
-PUBLIC = {"DomusError", "Site", "clip", "fit_affine", "linz_query", "open_site", "resample_line"}
-SITE_METHODS = {"build", "check", "evaluate", "export", "frame", "grid", "ground", "house_walls", "layer", "lot",
-                "options", "output", "path", "settings", "title"}
+PUBLIC = {"DomusError", "Site", "clip", "create", "demo", "fit_affine", "linz_query", "new", "open_site", "resample_line"}
+SITE_METHODS = {"build", "check", "edit", "evaluate", "export", "fetch", "fetch_marks", "fetch_points", "fetch_title", "frame",
+                "grid", "ground", "house_walls", "layer", "lot", "map_canopy", "options", "output", "path", "regrade", "scan",
+                "settings", "shift", "shots", "title", "trust", "upgrade"}
 
 
 def test_the_promised_names_are_all_there():
@@ -112,7 +113,7 @@ def test_two_sites_in_one_process_are_read_apart(site, tmp_path):
     assert top_b == pytest.approx(top_a + 0.2, abs=0.02)
     assert a.evaluate(option)["walls"][0]["top_max"] == top_a
     here = json.loads((b.build() / "model.json").read_text(encoding="utf-8"))
-    r = run("from domus import build; from domus.project.site import started; build.main(started(), ['--fresh'])",
+    r = run("from domus import build; from domus.project.site import started; build.main(started(), fresh=True)",
             DOMUS_SITE=str(other), DOMUS_OUTPUT=str(tmp_path / "apart"))
     assert r.returncode == 0, r.stderr
     apart = json.loads((tmp_path / "apart" / "model.json").read_text(encoding="utf-8"))
@@ -152,6 +153,31 @@ def test_a_sites_own_tests_get_it_and_build_it_out_of_the_way(site, tmp_path):
                        capture_output=True, text=True, encoding="utf-8", env={**keep, "PYTHONUTF8": "1"}, check=False, timeout=600)
     assert r.returncode == 0 and "1 passed" in r.stdout, r.stdout + r.stderr
     assert not (root / "viewer").exists()           # the site's own model, which a server would show, is left alone
+
+
+def test_the_commands_are_the_apis_own(tmp_path):
+    said = []
+    demo = api.demo(tmp_path / "demo", say=said.append)
+    assert demo.path == (tmp_path / "demo").resolve() and demo.title == "Demo site (made up)"
+    assert said[-1].startswith(f"Wrote the demo site to {demo.path}")
+    demo.upgrade(dry_run=True, say=said.append)
+    assert "there's nothing to upgrade" in said[-1]                          # it's at this Domus's format already
+    assert demo.trust(say=said.append) == [] and "declares no extensions" in said[-1]
+    built = []
+    assert demo.build(fresh=True, say=built.append) == demo.output and built[-1].startswith("wrote ")
+    assert (demo.output / "model.json").exists()
+    place = api.new(tmp_path / "new", "A place", centre=(-43.53, 172.63), say=said.append)
+    assert place.grid.epsg == 2193 and place.title == "A place" and said[-1].startswith("Next:")
+    with pytest.raises(DomusError, match="one of boundary"):
+        api.new(tmp_path / "neither", "Nowhere")
+    with pytest.raises(DomusError, match="tag takes letters"):
+        demo.scan(tmp_path / "walk.ply", "a walk", epsg=2193)
+    with pytest.raises(DomusError, match="one of control"):
+        demo.scan(tmp_path / "walk.ply", "walk")
+    with pytest.raises(DomusError, match="timeout"):
+        demo.shots(tmp_path / "shots.json", timeout=0)
+    with pytest.raises(DomusError, match="There's no"):
+        demo.shift(tmp_path / "nothing.json", tmp_path / "backup")
 
 
 def test_the_helpers(monkeypatch):

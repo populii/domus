@@ -20,7 +20,6 @@ one copy of a texture covers.
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import cv2
@@ -297,10 +296,14 @@ def apply_rects(mask, ext, spec):
 
 
 def house_textures(site):
+    ap = argparse.ArgumentParser(prog="domus prep house-textures", description="Rectify house walls from photos and "
+                                 "placed video, as \"house_textures\" in data/prep.json says (docs/from-documents.md).")
+    ap.add_argument("groups", metavar="group", nargs="*", help="the sources to rectify, by name (default: all of them)")
+    asked = ap.parse_args().groups
     out = site.path / "data" / "house"
     out.mkdir(parents=True, exist_ok=True)
     sources = config(site, "house_textures")["sources"]
-    wanted = sys.argv[1:] or list(sources)
+    wanted = asked or list(sources)
     groups = faces_by_group(site)
     index_path = out / "faces.json"
     index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {}

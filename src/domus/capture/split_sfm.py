@@ -8,8 +8,8 @@ and -sfm.json; nothing is re-adjusted. Used where a long model bends or changes 
 walk, so that each piece can be placed on the site grid by itself (tools/georef_sfm.py).
 """
 
+import argparse
 import json
-import sys
 
 import numpy as np
 
@@ -25,7 +25,13 @@ def seconds(name):
 
 
 def main(site):
-    src, new, t0, t1 = sys.argv[1], sys.argv[2], float(sys.argv[3]), float(sys.argv[4])
+    ap = argparse.ArgumentParser(prog="domus video split", description=__doc__.split("\n\n")[0])
+    ap.add_argument("src", metavar="TAG", help="the reconstruction to cut from")
+    ap.add_argument("new", metavar="NEW", help="the new reconstruction's tag")
+    ap.add_argument("t0", metavar="T0", type=float, help="the span's start, seconds into the clip")
+    ap.add_argument("t1", metavar="T1", type=float, help="its end, seconds into the clip")
+    args = ap.parse_args()
+    src, new, t0, t1 = args.src, args.new, args.t0, args.t1
     vid = video_dir(site)
     d = np.load(vid / f"{src}-sfm.npz")
     t = np.array([seconds(n) for n in d["frame_names"]])

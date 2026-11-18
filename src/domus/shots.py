@@ -30,7 +30,6 @@ Playwright and its Chromium are an optional extra, imported only here: `uv sync 
 `uv run playwright install chromium`.
 """
 
-import argparse
 import functools
 import http.server
 import json
@@ -430,15 +429,3 @@ def take(spec, model_dir, timeout_s=TIMEOUT_S, say=print):
             except Error as e:
                 raise DomusError(f"The viewer stopped at {step}: {first_line(e)}") from None
     return taken
-
-
-def main(site, argv=None):
-    ap = argparse.ArgumentParser(prog="domus shots", description="Pictures of the viewer, from a spec (docs/shots.md).")
-    ap.add_argument("spec", help="the spec, a JSON file")
-    ap.add_argument("--timeout", type=float, default=TIMEOUT_S,
-                    help=f"seconds the whole run may take, starting the browser included (default {TIMEOUT_S:g})")
-    args = ap.parse_args(argv)
-    if not (math.isfinite(args.timeout) and args.timeout > 0):
-        raise DomusError("--timeout is a number of seconds, more than 0")
-    spec = read_spec(args.spec)
-    take(spec, site.output, args.timeout)

@@ -7,12 +7,12 @@ layer only when you name it with --height-mark, since it's usually some way off 
 NZ Survey Boundary Marks and NZ Geodetic Vertical Marks, LINZ, CC BY 4.0.
 """
 
-import argparse
 import json
 import os
 
 from shapely.geometry import Point, Polygon
 
+from ...errors import DomusError
 from ...geo import geojson
 from . import publicdata
 
@@ -66,31 +66,32 @@ def height_feature(row, grid):
                            "condition": p.get("mark_condition"), "order": p.get("order")}}
 
 
-def main(site, argv=None):
-    ap = argparse.ArgumentParser(prog="domus marks", description="LINZ's survey marks around the lot, as a site layer.")
-    ap.add_argument("--height-mark", help="add this height mark to the layer, by its name as printed")
-    args = ap.parse_args(argv)
+def fetch(site, height_mark=None, say=print):
+    """`domus marks`: the named boundary marks on the site's lot's line, written as its features-survey-marks layer,
+    with the height mark `height_mark` too when it's named. Says the nearest height marks. Gives the features written.
+    Needs DOMUS_LINZ_KEY."""
     key = os.environ.get("DOMUS_LINZ_KEY")
     if not key:
-        raise SystemExit("This needs DOMUS_LINZ_KEY: a free key from data.linz.govt.nz.")
+        raise DomusError("This needs DOMUS_LINZ_KEY: a free key from data.linz.govt.nz.")
     lot = lot_on_nztm(site)
     feats = boundary_features(publicdata._wfs(key, BOUNDARY_MARKS, around(lot, BOUNDARY_SEARCH_M), 200), lot, site.grid)
     for f in feats:
-        print(f"{f['properties']['name']}: {f['properties']['note'].split(' from')[0]} from the boundary")
+        say(f"{f['properties']['name']}: {f['properties']['note'].split(' from')[0]} from the boundary")
     heights = nearest_height_marks(publicdata._wfs(key, VERTICAL_MARKS, around(lot, HEIGHT_SEARCH_M), 200), lot)
     if not heights:
-        print(f"No height marks within {HEIGHT_SEARCH_M} m.")
+        say(f"No height marks within {HEIGHT_SEARCH_M} m.")
     for d, f in heights[:HEIGHT_MARKS_SHOWN]:
         p = f["properties"]
-        print(f"Height mark {p.get('current_mark_name')}: {p.get('normal_orthometric_height')} m, {p.get('coordinate_system')}, "
-              f"{p.get('mark_condition')}, order {p.get('order')}, {d:.0f} m from the lot")
-    if args.height_mark:
-        match = [f for _, f in heights if f["properties"].get("current_mark_name") == args.height_mark]
+        say(f"Height mark {p.get('current_mark_name')}: {p.get('normal_orthometric_height')} m, {p.get('coordinate_system')}, "
+            f"{p.get('mark_condition')}, order {p.get('order')}, {d:.0f} m from the lot")
+    if height_mark:
+        match = [f for _, f in heights if f["properties"].get("current_mark_name") == height_mark]
         if not match:
-            raise SystemExit(f"No height mark called {args.height_mark!r} within {HEIGHT_SEARCH_M} m.")
+            raise DomusError(f"No height mark called {height_mark!r} within {HEIGHT_SEARCH_M} m.")
         feats.append(height_feature(match[0], site.grid))
     out = site.path / "data" / "site" / "features-survey-marks.geojson"
     out.write_text(json.dumps({"type": "FeatureCollection", "name": "features-survey-marks",
                                "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{site.grid.epsg}"}},
                                "features": feats}, indent=1) + "\n", encoding="utf-8", newline="\n")
-    print(f"{len(feats)} marks -> {out}. Run domus build, then turn on the Survey layer.")
+    say(f"{len(feats)} marks -> {out}. Run domus build, then turn on the Survey layer.")
+    return feats
