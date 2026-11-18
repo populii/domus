@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** a site's grid is a value of its own. `site.grid` in `domus.api` gives the site's grid and
+  heights: its EPSG code, name and vertical datum, its origin and its other height datums, with the sums that turn
+  points between its grid, NZTM2000 and longitude and latitude, and heights between the model's datum and another
+  ([docs/api.md](docs/api.md)). Inside Domus, `domus.geo.crs` is now the grid maths, a `Grid` made from a site's
+  settings that reads no site, and the site's folder, output, settings and format are its Site's. crs's names
+  that read the current site (`crs.ROOT`, `crs.OUTPUT`, `crs.settings()`, `crs.site_format()`, `crs.site_epsg()`,
+  `crs.label()`, `crs.site_to_nztm()`, `crs.nztm_to_site()`, `crs.site_to_lonlat()`, `crs.datums()`,
+  `crs.to_model_height()` and `crs.from_model_height()`) work as they did, and are deprecated: they'll warn, and later
+  go. A site's tools and tests can use `api.open_site()`'s `path`, `output`, `settings()` and `grid` instead.
+
 ## 2026.11.40
 
 - **For site projects:** `domus export PATH`, and `site.export(path, format=None, option=None)` in the public API,

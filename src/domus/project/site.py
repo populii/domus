@@ -1,4 +1,5 @@
-"""A site project as a workflow holds it: its folder, where its model is built, and what Domus has read of it so far.
+"""A site project as a workflow holds it: its folder, where its model is built, its settings, the format its files are
+in and its grid, and what Domus has read of it so far.
 
 Domus's modules read the site that is current. That's the one the process was started for (DOMUS_SITE, else the
 current folder, with its model built into DOMUS_OUTPUT if that's set), found the first time something asks for it, or
@@ -14,21 +15,65 @@ one process can hold several sites, one after another or in turn, and each is re
 import contextvars
 import functools
 import os
+import sys
+import tomllib
 from contextlib import contextmanager
 from pathlib import Path
+
+from . import formats, schema
 
 
 class Site:
     """A site project: its folder (`path`), the folder its model is built into (`output`, viewer/data in the site
-    unless given), and what Domus has read of it (`cache`, filled by the functions marked `cached`)."""
+    unless given), its settings (`settings()`, from `settings_file`), the format its own files are in (`format()`), its
+    grid (`grid`), and what Domus has read of it (`cache`, filled by the functions marked `cached`)."""
 
     def __init__(self, path, output=None):
         self.path = Path(path).resolve()
         self.output = Path(output).resolve() if output else self.path / "viewer" / "data"
         self.cache = {}
+        self._settings = self._grid = None
 
     def __repr__(self):
         return f"Site({str(self.path)!r})"
+
+    @property
+    def settings_file(self):
+        """Its settings' file, data/site.toml."""
+        return self.path / "data" / "site.toml"
+
+    def _toml(self):
+        return tomllib.loads(self.settings_file.read_text(encoding="utf-8"))
+
+    def settings(self):
+        """data/site.toml at this Domus's format, whatever format the site is in (domus.project.formats), read through
+        the settings schema (domus.project.schema): a key the file leaves out reads as its default. It's read the first
+        time it's asked for, and kept: forget_settings() has it read again."""
+        if self._settings is None:
+            site = formats.site(self._toml())
+            for warning in schema.unknown(site, schema.SITE, "data/site.toml: "):
+                print(f"Warning: {warning}", file=sys.stderr)
+            self._settings = schema.Settings(site, schema.SITE, "data/site.toml: ")
+        return self._settings
+
+    def forget_settings(self):
+        """Forgets the settings read so far, and the grid made from them: the next to ask reads data/site.toml again."""
+        self._settings = self._grid = None
+
+    def format(self):
+        """The format the site's own files are in, as data/site.toml says now (settings() has them at this Domus's)."""
+        return formats.format_of(self._toml())
+
+    @property
+    def grid(self):
+        """Its grid and heights, from its settings: a domus.geo.crs.Grid, which turns points between its grid, NZTM2000
+        and longitude and latitude, and heights between its datums."""
+        if self._grid is None:
+            # Imported here, so holding a site takes no more than the standard library.
+            from ..geo.crs import Grid
+
+            self._grid = Grid.from_settings(self.settings())
+        return self._grid
 
 
 _current = contextvars.ContextVar("domus_site", default=None)

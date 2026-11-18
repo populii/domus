@@ -1,6 +1,6 @@
 """The settings schema: every key data/site.toml and options/_site.toml can hold, with its default and a line of help.
 
-Code reads settings through it. crs.settings() and design.settings() give a Settings, which answers a key a site
+Code reads settings through it. A Site's settings() and design.settings() give a Settings, which answers a key a site
 leaves out with the schema's default, so a default lives here and in no other place. A key a site writes that the
 schema doesn't know gets a warning naming the nearest one it does. In the tests (DOMUS_STRICT_SETTINGS=1), reading a
 key the schema doesn't declare, or giving one a default other than the schema's, is an error, so the schema can't fall

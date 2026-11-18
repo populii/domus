@@ -74,15 +74,20 @@ class Site:
 
     def settings(self):
         """data/site.toml, as a dict. It's a copy: changing it changes nothing."""
-        from .geo import crs
-
-        with self._use():
-            return copy.deepcopy(dict(crs.settings()))
+        return copy.deepcopy(dict(self._project.settings()))
 
     @property
     def title(self):
         """The site's name for people: `[site] title`, else its folder's name."""
         return self.settings().get("site", {}).get("title") or self.path.name
+
+    @property
+    def grid(self):
+        """The site's grid and heights (`[crs]`, `[model] origin` and `[datums]` in data/site.toml): `epsg`, `label`,
+        `vertical`, `origin` and `datums` (each with `key`, `label` and `offset_m`). to_nztm(e, n), from_nztm(x, y)
+        and to_lonlat(e, n) turn points between its grid, NZTM2000 and longitude and latitude, and
+        to_model_height(level, datum) and from_model_height(h, datum) heights between the model's datum and another."""
+        return self._project.grid
 
     def layer(self, name):
         """The features of data/site/<name>.geojson, such as "trees" or "walls-existing": a list of GeoJSON features,

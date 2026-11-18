@@ -1,111 +1,185 @@
-"""The site project, its coordinate systems and height datums.
+"""A site's grid and height datums, and the transforms between its grid, NZTM2000 and longitude and latitude.
 
-A site project is a folder holding data/site.toml, data/site/*.geojson, options/ and so on. The one Domus reads is the
-current site (domus.project.site): the one the process was started for (DOMUS_SITE, or the current folder), or one a
-workflow made current. ROOT and OUTPUT are its folder and the folder its model is built into, looked up each time.
+A site's data is on the grid its data/site.toml names, [crs] epsg, with heights on [crs] vertical. A site can list
+other height datums its documents use, [datums.<key>] label and offset_m, where their level = the model's height +
+offset_m. A Grid holds all of that and the viewer's origin, [model] origin, and does the sums. It's made from a
+site's settings (Grid.from_settings) and reads no site itself: a Site (domus.project.site) has its own, `site.grid`.
+Rasters are read on their own grids (domus.geo.raster).
 
-Site data is on the grid named by [crs] epsg in data/site.toml, heights on [crs] vertical. Rasters are read on
-their own grids (domus.raster).
-A site can list other height datums its documents use: [datums.<key>] label, offset_m, where
-their level = the model's height + offset_m.
+The names this module had when it read the current site as well (ROOT, OUTPUT, settings(), site_format(),
+site_epsg(), label(), site_to_nztm(), nztm_to_site(), site_to_lonlat(), datums(), to_model_height() and
+from_model_height()) still give the current site's (domus.project.site.current()), for site code written before and
+for the modules not yet handed their site. They're deprecated: a Site's path, output, settings(), format() and grid
+give the same.
 """
 
-import sys
-import tomllib
+from dataclasses import dataclass
+from functools import lru_cache
 
-from pyproj import Transformer
+from pyproj import CRS, Transformer
 
-from ..project.site import cached, current
+from ..errors import DomusError
 
 NZTM_EPSG = 2193
+LONLAT_EPSG = 4326
+
+
+@dataclass(frozen=True)
+class Datum:
+    """Another height datum a site's documents use, `key` in [datums]: their level = the model's height + offset_m."""
+
+    key: str
+    label: str
+    offset_m: float
+
+
+@dataclass(frozen=True)
+class Grid:
+    """A site's grid and heights: the grid's EPSG code (`epsg`, a grid in metres) and its name for people (`label`),
+    the height datum's name (`vertical`, "" for none named), the viewer's origin as the site gives it (`origin`: E, N
+    and maybe a height, or None) and the other height datums its documents use (`datums`). Its methods turn points
+    between the grid, NZTM2000 and longitude and latitude, and heights between the datums."""
+
+    epsg: int
+    label: str = ""
+    vertical: str = ""
+    origin: tuple | None = None
+    datums: tuple[Datum, ...] = ()
+
+    def __post_init__(self):
+        if not self.label:              # the grid's own name and code, unless the site gives one
+            object.__setattr__(self, "label", f"{_name(self.epsg)} (EPSG:{self.epsg})")
+
+    @classmethod
+    def from_settings(cls, settings):
+        """The grid a site's settings give (data/site.toml as read): [crs] epsg, label and vertical, [model] origin
+        and [datums]. Since site format 3 the grid has no default, so a site that doesn't name it is refused."""
+        given = settings.get("crs", {})
+        epsg = given.get("epsg")
+        if epsg is None:
+            raise DomusError("data/site.toml: [crs] epsg is missing. Give the site's grid as its EPSG code, such as 2193 "
+                             "for NZTM2000 or 27700 for the British National Grid")
+        datums = []
+        for key, d in settings.get("datums", {}).items():
+            if "offset_m" not in d:
+                raise DomusError(f"data/site.toml: [datums.{key}] has no offset_m, its level less the model's height")
+            datums.append(Datum(key, d.get("label", key), d["offset_m"]))
+        origin = settings.get("model", {}).get("origin")
+        return cls(int(epsg), given.get("label") or "", given.get("vertical", ""),
+                   tuple(origin) if origin is not None else None, tuple(datums))
+
+    def to_nztm(self, e, n):
+        """Points on this grid on NZTM2000 (EPSG:2193), as (x, y)."""
+        return _transformer(self.epsg, NZTM_EPSG).transform(e, n)
+
+    def from_nztm(self, x, y):
+        """Points on NZTM2000 on this grid, as (e, n)."""
+        return _transformer(NZTM_EPSG, self.epsg).transform(x, y)
+
+    def to_lonlat(self, e, n):
+        """Points on this grid as longitude and latitude (WGS 84, EPSG:4326), as (lon, lat)."""
+        return _transformer(self.epsg, LONLAT_EPSG).transform(e, n)
+
+    def datum(self, key):
+        """The other height datum `key`: a KeyError if the site has no such datum."""
+        for d in self.datums:
+            if d.key == key:
+                return d
+        raise KeyError(key)
+
+    def to_model_height(self, level, key):
+        """A level on the datum `key` as a height on the model's datum."""
+        return level - self.datum(key).offset_m
+
+    def from_model_height(self, h, key):
+        """A height on the model's datum as a level on the datum `key`."""
+        return h + self.datum(key).offset_m
+
+
+@lru_cache
+def _name(epsg):
+    return CRS.from_epsg(epsg).name
+
+
+@lru_cache
+def _transformer(source, target):
+    return Transformer.from_crs(source, target, always_xy=True)
+
+
+# The names from before the grid was split from the site, deprecated: each gives the current site's, as it did. A
+# Site (domus.project.site) has them all: its path, output, settings(), format() and grid.
+
+def _site():
+    # The one way from here to a site, for these names alone (see pyproject.toml's import rules).
+    from ..project.site import current
+
+    return current()
 
 
 def __getattr__(name):
-    """ROOT and OUTPUT: the current site's folder, and the folder its model is built into."""
+    """ROOT and OUTPUT, deprecated: the current site's folder (Site.path), and the folder its model is built into
+    (Site.output)."""
     if name == "ROOT":
-        return current().path
+        return _site().path
     if name == "OUTPUT":
-        return current().output
+        return _site().output
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-@cached
 def settings():
-    """data/site.toml, at this Domus's format whatever format the site is in (domus.project.formats), read through
-    the settings schema (domus.project.schema): a key the file leaves out reads as its default."""
-    from ..project import formats, schema
+    """Deprecated, Site.settings(): the current site's settings. settings.cache_clear() has them read again."""
+    return _site().settings()
 
-    site = formats.site(tomllib.loads((current().path / "data" / "site.toml").read_text(encoding="utf-8")))
-    for warning in schema.unknown(site, schema.SITE, "data/site.toml: "):
-        print(f"Warning: {warning}", file=sys.stderr)
-    return schema.Settings(site, schema.SITE, "data/site.toml: ")
+
+settings.cache_clear = lambda: _site().forget_settings()
 
 
 def site_format():
-    """The format the site's own files are in, as data/site.toml says (settings() has them at this Domus's)."""
-    from ..project import formats
+    """Deprecated, Site.format(): the format the current site's own files are in."""
+    return _site().format()
 
-    return formats.format_of(tomllib.loads((current().path / "data" / "site.toml").read_text(encoding="utf-8")))
+
+def _grid():
+    # Made from crs.settings at each call, as these read it before, so code that replaces crs.settings (tests do)
+    # still has them read its own.
+    return Grid.from_settings(settings())
 
 
 def site_epsg():
-    """The site's grid, [crs] epsg. Since site format 3 it has no default: older sites get NZTM2000 as they did."""
-    epsg = settings().get("crs", {}).get("epsg")
-    if epsg is None:
-        from ..errors import DomusError
-
-        raise DomusError("data/site.toml: [crs] epsg is missing. Give the site's grid as its EPSG code, such as 2193 "
-                         "for NZTM2000 or 27700 for the British National Grid")
-    return int(epsg)
+    """Deprecated, Site.grid.epsg: the current site's grid, [crs] epsg."""
+    return _grid().epsg
 
 
 def label():
-    """The site grid's name for people: [crs] label, else the grid's own name and code."""
-    given = settings().get("crs", {}).get("label")
-    if given:
-        return given
-    from pyproj import CRS
-
-    return f"{CRS.from_epsg(site_epsg()).name} (EPSG:{site_epsg()})"
-
-
-@cached
-def _to_nztm():
-    return Transformer.from_crs(site_epsg(), NZTM_EPSG, always_xy=True)
-
-
-@cached
-def _to_site():
-    return Transformer.from_crs(NZTM_EPSG, site_epsg(), always_xy=True)
-
-
-@cached
-def _to_lonlat():
-    return Transformer.from_crs(site_epsg(), 4326, always_xy=True)
+    """Deprecated, Site.grid.label: the current site's grid's name for people."""
+    return _grid().label
 
 
 def site_to_nztm(e, n):
-    return _to_nztm().transform(e, n)
+    """Deprecated, Site.grid.to_nztm(e, n), on the current site."""
+    return _grid().to_nztm(e, n)
 
 
 def nztm_to_site(x, y):
-    return _to_site().transform(x, y)
+    """Deprecated, Site.grid.from_nztm(x, y), on the current site."""
+    return _grid().from_nztm(x, y)
 
 
 def site_to_lonlat(e, n):
-    return _to_lonlat().transform(e, n)
+    """Deprecated, Site.grid.to_lonlat(e, n), on the current site."""
+    return _grid().to_lonlat(e, n)
 
 
 def datums():
-    """The site's other height datums: [{key, label, offset_m}], for labels and the viewer."""
-    return [{"key": k, "label": d.get("label", k), "offset_m": d["offset_m"]}
-            for k, d in settings().get("datums", {}).items()]
+    """Deprecated, Site.grid.datums: the current site's other height datums, as [{key, label, offset_m}]."""
+    return [{"key": d.key, "label": d.label, "offset_m": d.offset_m} for d in _grid().datums]
 
 
 def to_model_height(level, key):
-    """A level on the datum `key` as a height in the model's datum."""
-    return level - settings()["datums"][key]["offset_m"]
+    """Deprecated, Site.grid.to_model_height(level, key), on the current site."""
+    return _grid().to_model_height(level, key)
 
 
 def from_model_height(h, key):
-    return h + settings()["datums"][key]["offset_m"]
+    """Deprecated, Site.grid.from_model_height(h, key), on the current site."""
+    return _grid().from_model_height(h, key)

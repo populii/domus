@@ -82,6 +82,17 @@ forbidden_modules = ["domus.geo.crs", "domus.api", "domus.build", "domus.cli", "
                      "domus.options.design", "domus.options.sketch", "domus.project"]
 
 [[tool.importlinter.contracts]]
+name = "The grid maths read no site: a site's Grid is made from its settings"
+type = "forbidden"
+source_modules = ["domus.geo.crs"]
+forbidden_modules = ["domus.project", "domus.api", "domus.testing", "domus.build", "domus.cli", "domus.serve", "domus.create",
+                     "domus.shots", "domus.export", "domus.model", "domus.options", "domus.checks", "domus.capture",
+                     "domus.prep", "domus.importers", "domus.geo.raster"]
+# crs's names from before the split (crs.ROOT, crs.settings() and the rest, deprecated) give the current site's
+# through this one import, until they're removed.
+ignore_imports = ["domus.geo.crs -> domus.project.site"]
+
+[[tool.importlinter.contracts]]
 name = "Only the command line imports the server, and nothing imports the command line"
 type = "forbidden"
 source_modules = ["domus.**"]

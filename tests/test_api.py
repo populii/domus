@@ -14,8 +14,8 @@ from domus.errors import DomusError
 
 # The promise: these stay, from one release to the next. Removing or renaming one needs a deprecation first.
 PUBLIC = {"DomusError", "Site", "clip", "fit_affine", "linz_query", "open_site", "resample_line"}
-SITE_METHODS = {"build", "check", "evaluate", "export", "frame", "ground", "house_walls", "layer", "lot", "options",
-                "output", "path", "settings", "title"}
+SITE_METHODS = {"build", "check", "evaluate", "export", "frame", "grid", "ground", "house_walls", "layer", "lot",
+                "options", "output", "path", "settings", "title"}
 
 
 def test_the_promised_names_are_all_there():
@@ -39,6 +39,16 @@ def test_its_settings_are_a_copy(site):
     s = api.open_site()
     s.settings()["site"]["title"] = "changed"
     assert s.title == "Demo site (made up)"
+
+
+def test_its_grid_turns_points_and_heights(site):
+    grid = api.open_site().grid
+    assert grid.epsg == 2193 and grid.vertical == "NZVD2016" and grid.datums == ()
+    e, n = grid.origin[:2]
+    x, y = grid.to_nztm(e, n)
+    assert grid.from_nztm(x, y) == pytest.approx((e, n))
+    lon, lat = grid.to_lonlat(e, n)
+    assert 165 < lon < 180 and -48 < lat < -34                  # off New Zealand's coast, where the demo is made up
 
 
 def test_the_ground_comes_back_the_shape_it_was_asked(site):

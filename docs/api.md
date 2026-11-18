@@ -39,6 +39,7 @@ Everything is on the site's own grid (`[crs] epsg` in `data/site.toml`), with he
 | `site.path` | The site project's folder |
 | `site.title` | `[site] title`, else the folder's name |
 | `site.settings()` | `data/site.toml` as a dict, a copy |
+| `site.grid` | The site's grid and heights: `epsg`, `label`, `vertical`, `origin` (`[model] origin`) and `datums`, its other height datums (each with `key`, `label` and `offset_m`). `grid.to_nztm(e, n)`, `grid.from_nztm(x, y)` and `grid.to_lonlat(e, n)` turn points between the site's grid, NZTM2000 and longitude and latitude; `grid.to_model_height(level, datum)` and `grid.from_model_height(h, datum)` turn heights between the model's datum and another |
 | `site.lot()` | The lot as a shapely Polygon in plan: `boundary.geojson`'s feature that `[boundary] main` names, else its first |
 | `site.house_walls()` | The house's walls (`house-walls` in `house.geojson`) as a shapely Polygon in plan, or None |
 | `site.layer(name)` | The features of `data/site/<name>.geojson`, such as `"trees"`: a list of GeoJSON features, empty if there's no such layer |

@@ -20,9 +20,12 @@ property's site.
   earlier release and a "For site projects" note in the changelog; the rest of the package can change in any release.
 - `DOMUS_SITE` names the site a process starts with, read the first time Domus needs the site. Modules read the
   current site (`domus.project.site`: `current()`, and `use(site)` to make another current for a while) and keep what
-  they read of it on it (`cached`), never in a module's own globals. `api.open_site` opens any number of sites for
-  site tools and agents, and `domus.testing.use_site` names the one a site's tests are for. Library code raises
-  `DomusError` for anything a person can put right, never `SystemExit`: the command line shows the message.
+  they read of it on it (`cached`), never in a module's own globals. A Site has its folder (`path`), `output`,
+  `settings()`, `format()` and `grid` (a `domus.geo.crs.Grid`: the grid maths, which read no site), and new code reads
+  those, not `crs.ROOT`, `crs.settings()` or crs's other names from before, which are deprecated. `api.open_site`
+  opens any number of sites for site tools and agents, and `domus.testing.use_site` names the one a site's tests
+  are for. Library code raises `DomusError` for anything a person can put right, never `SystemExit`: the command
+  line shows the message.
 - Keep real sites' plans, photos, addresses and names out of the repo's tracked files, including comments and tests.
   Anything only one site needs goes in that site: its data, settings, tools and tests, never in common.
 - A site tool that proves general can move into common: give its numbers settings, test it on the made-up sites,
