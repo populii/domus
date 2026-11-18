@@ -15,36 +15,37 @@ import os
 
 from shapely.geometry import shape
 
-from ...geo import crs, geojson
+from ...geo import geojson
 from . import marks, publicdata
 
 TITLES, EASEMENTS, LINEAR_EASEMENTS = "layer-50804", "layer-50782", "layer-50783"
 EASEMENT_SEARCH_M = 10.0
 ON_LOT_M2, ON_LOT_M = 1.0, 0.3
-def title_path():
-    """The lot's title and easements, data/site/title.geojson."""
-    return crs.ROOT / "data" / "site" / "title.geojson"
+def title_path(site):
+    """The site's lot's title and easements, data/site/title.geojson."""
+    return site.path / "data" / "site" / "title.geojson"
 
 
-def _to_site(coords):
+def _to_site(coords, grid):
     if isinstance(coords[0], (int, float)):
-        return [round(v, 3) for v in crs.nztm_to_site(*coords[:2])]
-    return [_to_site(c) for c in coords]
+        return [round(v, 3) for v in grid.from_nztm(*coords[:2])]
+    return [_to_site(c, grid) for c in coords]
 
 
-def on_site(geometry):
-    return {"type": geometry["type"], "coordinates": _to_site(geometry["coordinates"])}
+def on_site(geometry, grid):
+    """A geometry on NZTM, on the site's grid."""
+    return {"type": geometry["type"], "coordinates": _to_site(geometry["coordinates"], grid)}
 
 
-def title_features(rows, lot):
-    """The titles that hold the lot: those covering a point inside it."""
+def title_features(rows, lot, grid):
+    """The titles that hold the lot: those covering a point inside it, on the site's grid."""
     inside = lot.representative_point()
     out = []
     for f in rows:
         if not f.get("geometry") or not shape(f["geometry"]).contains(inside):
             continue
         p = f["properties"]
-        out.append({"type": "Feature", "geometry": on_site(f["geometry"]),
+        out.append({"type": "Feature", "geometry": on_site(f["geometry"], grid),
                     "properties": {"id": f"linz-title-{p['title_no']}", "kind": "title", "name": f"Title {p['title_no']}",
                                    "title_no": p["title_no"], "estate": p.get("estate_description"), "type": p.get("type"),
                                    "status": p.get("status"), "issued": p.get("issue_date"), "source": "LINZ NZ Property Titles",
@@ -52,8 +53,8 @@ def title_features(rows, lot):
     return out
 
 
-def easement_features(rows, lot, reach=EASEMENT_SEARCH_M):
-    """The current easements and covenants touching the lot or within `reach` of it."""
+def easement_features(rows, lot, grid, reach=EASEMENT_SEARCH_M):
+    """The current easements and covenants touching the lot or within `reach` of it, on the site's grid."""
     near = lot.buffer(reach)
     out, seen = [], set()
     for f in rows:
@@ -64,7 +65,7 @@ def easement_features(rows, lot, reach=EASEMENT_SEARCH_M):
         g = shape(f["geometry"])
         # Parcels and the curated lot can differ by some centimetres: on the lot means a real share of it, not a sliver.
         on_lot = g.intersection(lot).area > max(ON_LOT_M2, 0.02 * g.area) if g.area else g.intersects(lot.buffer(-ON_LOT_M))
-        out.append({"type": "Feature", "geometry": on_site(f["geometry"]),
+        out.append({"type": "Feature", "geometry": on_site(f["geometry"], grid),
                     "properties": {"id": f"linz-easement-{p['id']}", "kind": "easement", "name": p.get("appellation") or "Easement",
                                    "intent": p.get("parcel_intent"), "titles": p.get("titles"), "on_lot": bool(on_lot),
                                    "area_m2": p.get("survey_area") or p.get("calc_area"), "source": "LINZ NZ Non-Primary Parcels",
@@ -73,37 +74,39 @@ def easement_features(rows, lot, reach=EASEMENT_SEARCH_M):
     return out
 
 
-def fetch(key):
-    """title.geojson's features, from LINZ."""
-    lot = marks.lot_on_nztm()
+def fetch(site, key):
+    """The site's title.geojson's features, from LINZ."""
+    lot = marks.lot_on_nztm(site)
     x, y = lot.representative_point().coords[0]
-    titles = title_features(publicdata._wfs(key, TITLES, publicdata._bbox_cql(x - 1, y - 1, x + 1, y + 1)), lot)
+    titles = title_features(publicdata._wfs(key, TITLES, publicdata._bbox_cql(x - 1, y - 1, x + 1, y + 1)), lot, site.grid)
     near = marks.around(lot, EASEMENT_SEARCH_M)
     rows = publicdata._wfs(key, EASEMENTS, near, 200) + publicdata._wfs(key, LINEAR_EASEMENTS, near, 200)
-    return titles + easement_features(rows, lot)
+    return titles + easement_features(rows, lot, site.grid)
 
 
-def read():
-    return [f for f in geojson.read_optional(title_path()) or []]
+def read(site):
+    """The site's title.geojson's features, if it has one."""
+    return [f for f in geojson.read_optional(title_path(site)) or []]
 
 
-def easements():
-    return [f for f in read() if f["properties"].get("kind") == "easement"]
+def easements(site):
+    """The easements in the site's title.geojson."""
+    return [f for f in read(site) if f["properties"].get("kind") == "easement"]
 
 
-def main(argv=None):
+def main(site, argv=None):
     argparse.ArgumentParser(prog="domus title", description="The lot's title and the easements around it, from LINZ.").parse_args(argv)
     key = os.environ.get("DOMUS_LINZ_KEY")
     if not key:
         raise SystemExit("This needs DOMUS_LINZ_KEY: a free key from data.linz.govt.nz.")
-    feats = fetch(key)
+    feats = fetch(site, key)
     for f in feats:
         p = f["properties"]
         if p["kind"] == "title":
             print(f"{p['name']}: {p['estate']}, {p['type']}")
         else:
             print(f"{p['name']} ({p['intent']}){', on the lot' if p['on_lot'] else ', nearby'}")
-    geojson.write(title_path(), geojson.collection(feats, "title", "The lot's title and nearby easements, from LINZ (CC BY 4.0)",
-                                           epsg=crs.site_epsg()))
-    print(f"{len(feats)} features -> {title_path()}. Run domus build, then look in the Boundaries group.")
+    geojson.write(title_path(site), geojson.collection(feats, "title", "The lot's title and nearby easements, from LINZ (CC BY 4.0)",
+                                               epsg=site.grid.epsg))
+    print(f"{len(feats)} features -> {title_path(site)}. Run domus build, then look in the Boundaries group.")
     return 0

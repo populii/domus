@@ -10,20 +10,21 @@ for the format.
 import tomllib
 from pathlib import Path
 
-from ..geo import crs
+from ..project.site import given
 
 
-def options_dir():
+def options_dir(site):
     """The site's wall options, options/."""
-    return crs.ROOT / "options"
+    return site.path / "options"
 
 
-def load_all():
+def load_all(site):
+    """The site's wall options, each as load() gives it."""
     out = []
-    for path in sorted(options_dir().glob("*.toml")):
+    for path in sorted(options_dir(site).glob("*.toml")):
         if path.name.startswith("_"):
             continue
-        out.append(load(path))
+        out.append(load(path, site))
     return out
 
 
@@ -51,24 +52,27 @@ def restyled(cfg, path):
     return {**base, "stairs": stairs, **own, "walls": walls}
 
 
-def current(cfg):
-    """An option as loaded, at this Domus's format: an older site's are migrated in memory (domus.project.formats)."""
-    from ..geo import crs
+def current(site, cfg):
+    """An option of the site's as loaded, at this Domus's format: an older site's are migrated in memory
+    (domus.project.formats)."""
     from ..project import formats
 
-    fmt = crs.site_format()
+    fmt = site.format()
     if fmt >= formats.FORMAT:
         return cfg
     from . import design
 
-    return formats.option(cfg, fmt, design.settings().get("frame"))
+    return formats.option(cfg, fmt, design.settings(site).get("frame"))
 
 
-def load(path):
+def load(path, site=None):
+    """The option in the file at `path`, one of the site's. Site code calls it without a site (deprecated), and then it
+    reads the current one."""
+    site = given(site)
     cfg = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     if "based_on" in cfg:
         cfg = restyled(cfg, path)
-    cfg = current(cfg)
+    cfg = current(site, cfg)
     return {
         **cfg,
         "id": Path(path).stem,
@@ -78,5 +82,5 @@ def load(path):
         "walls": cfg.get("walls", []),
         "terraces": cfg.get("terraces", []),
         "stairs": cfg.get("stairs", []),
-        "path": Path(path).relative_to(crs.ROOT).as_posix(),
+        "path": Path(path).relative_to(site.path).as_posix(),
     }

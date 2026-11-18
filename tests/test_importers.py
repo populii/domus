@@ -64,10 +64,10 @@ def test_copernicus_tiles_are_named_for_their_south_west_corner():
     assert "S34_00_E151_00" in osm.tile(-33.9, 151.2) and "N00_00_E000_00" in osm.tile(0.5, 0.5)
 
 
-def test_fetch_takes_the_site_s_patch_of_the_ground_model(site, tmp_path, monkeypatch, at_site):
+def test_fetch_takes_the_site_s_patch_of_the_ground_model(site, tmp_path, monkeypatch, at_site, project):
     from domus import raster
 
-    west, south, east, north = osm.site_box()
+    west, south, east, north = osm.site_box(project)
     step = 1 / 3600                                                     # one arc-second, as GLO-30's are here
     x0, y0 = west - 10 * step, north + 10 * step
     cols, rows = int((east - west) / step) + 20, int((north - south) / step) + 20
@@ -81,9 +81,9 @@ def test_fetch_takes_the_site_s_patch_of_the_ground_model(site, tmp_path, monkey
     (tmp_path / "data").mkdir()
     (tmp_path / "data" / "site.toml").write_bytes((site / "data" / "site.toml").read_bytes())     # the demo, moved
     monkeypatch.setattr(osm, "tile", lambda lat, lon: str(tile))
-    at_site(tmp_path)
-    assert raster.DEM == tmp_path / "data" / "lidar" / "dem.tif"
-    osm.fetch()
+    moved = at_site(tmp_path)
+    assert raster.DEM == tmp_path / "data" / "lidar" / "dem.tif"                # the old name, on the current site
+    osm.fetch(moved)
     with rasterio.open(tmp_path / "data" / "lidar" / "dem.tif") as src:
         assert src.crs.to_epsg() == 4326 and src.units == ("metre",)
         b, m = src.bounds, osm.MARGIN_DEG                               # the model's extent, at least, is in it
@@ -91,15 +91,15 @@ def test_fetch_takes_the_site_s_patch_of_the_ground_model(site, tmp_path, monkey
     assert "Copernicus" in (tmp_path / "data" / "copernicus-sources.json").read_text(encoding="utf-8")
 
 
-def test_fetch_asks_the_source_for_where_the_site_is(site, monkeypatch):
+def test_fetch_asks_the_source_for_where_the_site_is(site, monkeypatch, project):
     from domus import linz
 
     asked = []
-    monkeypatch.setattr(linz, "main", lambda: asked.append("LINZ"))
-    monkeypatch.setattr(osm, "fetch", lambda: asked.append("Copernicus"))
-    importers.fetch()                                                   # the demo is in New Zealand's waters
-    monkeypatch.setattr(importers, "in_nz", lambda: False)
-    importers.fetch()
+    monkeypatch.setattr(linz, "main", lambda site: asked.append("LINZ"))
+    monkeypatch.setattr(osm, "fetch", lambda site: asked.append("Copernicus"))
+    importers.fetch(project)                                                   # the demo is in New Zealand's waters
+    monkeypatch.setattr(importers, "in_nz", lambda site: False)
+    importers.fetch(project)
     assert asked == ["LINZ", "Copernicus"]
 
 
@@ -115,10 +115,10 @@ def test_a_place_abroad_is_written_with_its_own_grid_datum_and_credit(tmp_path):
     assert "Copernicus" in cfg["site"]["attribution"] and "Copernicus" in cfg["site"]["about"]
 
 
-def test_the_checklist_speaks_of_new_zealand_only_there(site):
-    from domus import crs, enrich
+def test_the_checklist_speaks_of_new_zealand_only_there(site, project):
+    from domus import enrich
 
-    here = {c["id"]: c for c in enrich.checklist(crs.settings())}       # the demo, off New Zealand's coast
+    here = {c["id"]: c for c in enrich.checklist(project)}       # the demo, off New Zealand's coast
     assert "LINZ" in here["boundary"]["where"] and here["lim"]["title"] == "LIM report"
     away = {i: (t, where) for i, t, why, where, how, pat in enrich.sources(False)}
     assert "LINZ" not in away["boundary"][1] and away["lim"][0] == "Council property report"

@@ -106,7 +106,7 @@ def upgrade(root, dry_run=False):
     return 0
 
 
-def main(argv=None):
+def main(site, argv=None):
     ap = argparse.ArgumentParser(prog="domus site", description="The site folder itself.")
     sub = ap.add_subparsers(dest="action", required=True)
     up = sub.add_parser("upgrade", help="write the site's migrations into its files, so they say what this Domus reads")
@@ -123,8 +123,6 @@ def main(argv=None):
         ed.add_argument("backup", help="a fresh folder for the files as they were")
         ed.add_argument("--apply", action="store_true", help="write the changes (without it, only say what they'd be)")
     args = ap.parse_args(argv)
-    from ..geo import crs
-
     if args.action in ("shift", "edit", "regrade"):
         import json
 
@@ -132,15 +130,15 @@ def main(argv=None):
 
         spec = json.loads(Path(args.spec).read_text(encoding="utf-8"))
         if args.action == "regrade":
-            edits.regrade(args.clouds.split(","), spec, args.backup, args.apply)
+            edits.regrade(site, args.clouds.split(","), spec, args.backup, args.apply)
         else:
-            getattr(edits, args.action)(spec, args.backup, args.apply)
+            getattr(edits, args.action)(site, spec, args.backup, args.apply)
         return 0
 
     if args.action == "trust":
         from . import extensions
 
-        done = extensions.trust(crs.ROOT, crs.settings(), args.revoke)
+        done = extensions.trust(site.path, site.settings(), args.revoke)
         if not done:
             print("This site declares no extensions ([domus] extensions in data/site.toml).")
         for rel, sha in done:
@@ -148,4 +146,4 @@ def main(argv=None):
         if done and not args.revoke:
             print(f"Builds on this machine will run them until they change. Recorded in {extensions.trust_file()}.")
         return 0
-    return upgrade(crs.ROOT, args.dry_run)
+    return upgrade(site.path, args.dry_run)

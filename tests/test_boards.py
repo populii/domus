@@ -107,18 +107,18 @@ def house_photo(site):
             (folder / name).unlink()
 
 
-def run(*args):
+def run(project, *args):
     from domus import prep
 
     argv = sys.argv
     try:
-        return prep.main(["boards", *args])
+        return prep.main(project, ["boards", *args])
     finally:
         sys.argv = argv
 
 
-def test_domus_prep_boards_reads_the_sites_wall_photos(house_photo, capsys):
-    assert run("--above", "13.0") == 0
+def test_domus_prep_boards_reads_the_sites_wall_photos(house_photo, capsys, project):
+    assert run(project, "--above", "13.0") == 0
     out = capsys.readouterr().out
     assert out.startswith("made-up-wall: 8 bands from 0.00 to 4.00 m along it\n")
     spacing = float(re.search(r"made-up-wall: spacing ([\d.]+) mm, the median of 8 bands", out)[1])
@@ -126,10 +126,10 @@ def test_domus_prep_boards_reads_the_sites_wall_photos(house_photo, capsys):
     first = [float(h) for h in re.findall(r"the first at or above 13\.000: ([\d.]+)", out)]
     assert len(first) == 8 and sum(off_lap(h) < 0.004 for h in first) >= 5       # the window's bands may miss
     with pytest.raises(DomusError, match="no face 'south': it has made-up-wall"):
-        run("south")
+        run(project, "south")
 
 
-def test_a_site_without_wall_photos_says_so(site):
+def test_a_site_without_wall_photos_says_so(site, project):
     assert not (site / "data" / "house" / "faces.json").exists()
     with pytest.raises(DomusError, match="house-textures"):
-        run()
+        run(project)

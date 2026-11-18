@@ -14,7 +14,7 @@ import numpy as np
 import shapely
 from shapely.geometry import LineString, Point, Polygon
 
-from ..geo import crs, geojson, raster
+from ..geo import geojson
 
 SPOT_SPACING_M = 6.0
 
@@ -71,34 +71,35 @@ def sources(in_nz):
     return out
 
 
-def has_any(pattern):
-    return any(p.is_file() and re.search(pattern, p.name, re.IGNORECASE) for p in (crs.ROOT / "sources" / "raw").rglob("*")) \
-        if (crs.ROOT / "sources" / "raw").is_dir() else False
+def has_any(site, pattern):
+    """Whether a file in the site's sources/raw/ has a name `pattern` finds."""
+    raw = site.path / "sources" / "raw"
+    return any(p.is_file() and re.search(pattern, p.name, re.IGNORECASE) for p in raw.rglob("*")) if raw.is_dir() else False
 
 
-def checklist(cfg):
+def checklist(site):
     """The sources in order of value, each with whether the site's files already show it."""
+    cfg, root = site.settings(), site.path
     found = {
-        "boundary": not _boundary_is_public(),
-        "measure": (crs.ROOT / "data" / "site" / "ground-fixes.geojson").exists() or (crs.ROOT / "data" / "site" / "walls-existing.geojson").exists(),
-        "video": any((crs.ROOT / "data" / "video").glob("*-site.npz")),
-        "scan": any((crs.ROOT / "data" / "video").glob("*-scan.npz")),
-        "plans": bool(cfg.get("drapes")) or (crs.ROOT / "data" / "georef").is_dir(),
-        "drains": (crs.ROOT / "data" / "site" / "services.geojson").exists(),
-        "photos": (crs.ROOT / "data" / "house" / "faces.json").exists() or (crs.ROOT / "data" / "features").is_dir(),
+        "boundary": not _boundary_is_public(site),
+        "measure": (root / "data" / "site" / "ground-fixes.geojson").exists() or (root / "data" / "site" / "walls-existing.geojson").exists(),
+        "video": any((root / "data" / "video").glob("*-site.npz")),
+        "scan": any((root / "data" / "video").glob("*-scan.npz")),
+        "plans": bool(cfg.get("drapes")) or (root / "data" / "georef").is_dir(),
+        "drains": (root / "data" / "site" / "services.geojson").exists(),
+        "photos": (root / "data" / "house" / "faces.json").exists() or (root / "data" / "features").is_dir(),
         "ifc": "ifc" in cfg,
     }
-    from ..geo.crs import site_to_lonlat
     from ..project.newsite import in_new_zealand
 
     e0, n0, e1, n1 = cfg["model"]["extent"]
-    here = sources(in_new_zealand(*site_to_lonlat((e0 + e1) / 2, (n0 + n1) / 2)))
-    return [{"id": i, "title": t, "why": why, "where": where, "how": how, "found": bool(found.get(i) or has_any(pat))}
+    here = sources(in_new_zealand(*site.grid.to_lonlat((e0 + e1) / 2, (n0 + n1) / 2)))
+    return [{"id": i, "title": t, "why": why, "where": where, "how": how, "found": bool(found.get(i) or has_any(site, pat))}
             for i, t, why, where, how, pat in here]
 
 
-def _boundary_is_public():
-    feats = geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"]
+def _boundary_is_public(site):
+    feats = geojson.read(site.path / "data" / "site" / "boundary.geojson")["features"]
     src = str(feats[0]["properties"].get("source", ""))
     return "A guide, not a survey" in src or "stand-in" in src or "square" in src
 
@@ -112,8 +113,9 @@ def ring_points(poly, spacing):
     return [ring.interpolate(d) for d in np.arange(0, ring.length, spacing)]
 
 
-def weak_spots(lot, ground, avoid=None, step=1.0):
-    """Places in the lot the LiDAR sees worst, away from the house: (x, y, what), the worst few, spread out."""
+def weak_spots(lot, ground, avoid=None, step=1.0, surface=None):
+    """Places in the lot the LiDAR sees worst, away from the house: (x, y, what), the worst few, spread out. `surface`
+    is the site's surface model (anything with sample(e, n)), for the ground under trees, or None if it has none."""
     x0, y0, x1, y1 = lot.bounds
     E, N = np.meshgrid(np.arange(x0, x1, step), np.arange(y0, y1, step))
     inside = shapely.contains_xy(lot, E, N)
@@ -123,8 +125,8 @@ def weak_spots(lot, ground, avoid=None, step=1.0):
     gy, gx = np.gradient(np.nan_to_num(H, nan=float(np.nanmean(H))), step)
     slope = np.hypot(gx, gy)
     canopy = np.zeros(E.shape)
-    if raster.DSM.exists():
-        canopy = np.nan_to_num(raster.dsm().sample(E, N) - H, nan=0.0)
+    if surface is not None:
+        canopy = np.nan_to_num(surface.sample(E, N) - H, nan=0.0)
     scores = []
     for i, j in zip(*np.nonzero(inside)):
         if canopy[i, j] > 2.5:
@@ -140,9 +142,10 @@ def weak_spots(lot, ground, avoid=None, step=1.0):
     return out
 
 
-def walk_route(lot_ring, house_ring, ground):
+def walk_route(lot_ring, house_ring, ground, surface=None):
     """{path: [[x, y]...], stops: [{n, x, y, text}...]}: round the lot's inside edge with a short detour to each weak spot,
-    then round the house. Detours leave from the edge, so no leg crosses the house."""
+    then round the house. Detours leave from the edge, so no leg crosses the house. `surface` is the site's surface
+    model, or None if it has none (weak_spots)."""
     lot = Polygon(lot_ring).buffer(0)
     edge = lot.buffer(-1.0)
     if edge.is_empty:
@@ -155,7 +158,7 @@ def walk_route(lot_ring, house_ring, ground):
     loop = LineString([*[(p.x, p.y) for p in edge_pts], (edge_pts[0].x, edge_pts[0].y)])
     # Each spot leaves the edge at its nearest point, in order along the walk.
     spurs = []
-    for x, y, what in weak_spots(lot, ground, keep_clear):
+    for x, y, what in weak_spots(lot, ground, keep_clear, surface=surface):
         d = loop.project(Point(x, y))
         q = loop.interpolate(d)
         if keep_clear is None or not LineString([(q.x, q.y), (x, y)]).intersects(keep_clear):

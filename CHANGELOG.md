@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **For site projects:** every part of Domus is handed the site it works on, where it read the current one, so
+  nothing can mix one site up with another in a process that holds several. The command line and the server read
+  `DOMUS_SITE` (or `--site`) once and hand the site down, and a job in a process of its own gets the site's folder.
+  A build's extensions get the site being built: they got the one `DOMUS_SITE` names, another for a site opened by
+  its path. A site's tools that call Domus's internals without a site, as `design.frame()`, `design.settings()`,
+  `design.Design(option)`, `design.Terrace`, `terrain.ground()`, `terrain.wall_levels()`, `terrain.build()`,
+  `options.load()`, `raster.dem()`, `raster.dsm()`, `raster.DEM`, `build.paved_under_canopy()`,
+  `build.aerial_sampler()` and `build.ground_photo_sampler()` do, keep working on the current site, and are
+  deprecated: each takes the site now (`site=`, or first). Domus's other internals take it as their first argument,
+  and the public API needs none of this.
 - The README, AGENTS.md and CONTRIBUTING.md are rewritten. The README tells the story of how a model comes about,
   with diagrams and pictures of the made-up sites and a small 3D model to turn; AGENTS.md is an agent's step-by-step
   manual, from setting a site up to the video walk (the first thing to reach for), fitting, adapting a site and the

@@ -19,14 +19,13 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from ..geo import crs
 from . import sfm
 from .sfm_georef import apply, load, triangulate_pixels
 
 
-def video_dir():
+def video_dir(site):
     """The site's video work, data/video/."""
-    return crs.ROOT / "data" / "video"
+    return site.path / "data" / "video"
 
 
 def reproject(rec, x, obs):
@@ -43,17 +42,17 @@ def reproject(rec, x, obs):
     return np.array(errs), math.degrees(math.acos(max(-1.0, min(1.0, cosmin))))
 
 
-def main():
+def main(site):
     picks_path = Path(sys.argv[1])
     tags = sys.argv[2:]
     picks = json.loads(picks_path.read_text(encoding="utf-8"))
     models = []
     for tag in tags:
-        geo = video_dir() / f"{tag}-georef.json"
+        geo = video_dir(site) / f"{tag}-georef.json"
         if not geo.exists():
             print(f"{tag}: not placed on the site yet, skipped")
             continue
-        rec = load(video_dir() / f"{tag}-sfm.npz")
+        rec = load(video_dir(site) / f"{tag}-sfm.npz")
         main_clip = tag.split("-")[0]
         reg = {n for n, rv in zip(rec["names"], rec["rvecs"]) if np.all(np.isfinite(rv))}
         models.append((tag, main_clip, rec, reg, np.array(json.loads(geo.read_text(encoding="utf-8"))["params"])))
@@ -97,8 +96,10 @@ def main():
         w.writeheader()
         for r in rows:
             w.writerow({k: r.get(k, "") for k in fields})
-    print(f"wrote {out.relative_to(crs.ROOT)}")
+    print(f"wrote {out.relative_to(site.path)}")
 
 
 if __name__ == "__main__":
-    main()
+    from ..project.site import started
+
+    main(started())       # run by itself, on the site the environment names

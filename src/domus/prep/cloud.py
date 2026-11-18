@@ -33,21 +33,22 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from ..errors import DomusError
-from ..geo import crs, geojson, raster
+from ..geo import geojson
 from ..model import terrain
+from ..project import rasters
 
 
-def video_dir():
+def video_dir(site):
     """The site's video work, data/video/."""
-    return crs.ROOT / "data" / "video"
+    return site.path / "data" / "video"
 
 
-def read_clouds(names, all_points=False):
+def read_clouds(site, names, all_points=False):
     """The points (N x 3) and their colours (N x 3, grey where a cloud has none) of the clouds `names`, together."""
     xyz, rgb = [], []
     for name in names:
         given = Path(name)
-        path = given if given.suffix == ".npz" and given.exists() else video_dir() / (name if name.endswith(".npz") else f"{name}.npz")
+        path = given if given.suffix == ".npz" and given.exists() else video_dir(site) / (name if name.endswith(".npz") else f"{name}.npz")
         if not path.exists():
             raise DomusError(f"There's no cloud {name}: name a placed reconstruction's data/video/<tag>-site or "
                              "<tag>-dense, or give an .npz file with xyz")
@@ -59,13 +60,13 @@ def read_clouds(names, all_points=False):
     return np.vstack(xyz), np.vstack(rgb)
 
 
-def axes(grid=False):
+def axes(site, grid=False):
     """(to the box's coordinates, from them) for the options' frame, or the site's grid with `grid`."""
     if grid:
         return (lambda en: np.asarray(en, float)[..., :2]), (lambda uv: np.asarray(uv, float))
     from ..options import design
 
-    fr = design.frame()
+    fr = design.frame(site)
     return fr.so, fr.en
 
 
@@ -80,13 +81,13 @@ def box_of(corners):
     return lo, hi
 
 
-def compare(xyz, corners, cell=1.0, pct=20.0, nmin=12, against="model", grid=False, by="points"):
+def compare(site, xyz, corners, cell=1.0, pct=20.0, nmin=12, against="model", grid=False, by="points"):
     """The cloud's ground against the reference ground, cell by cell: [(u, v, points, difference, level)], u and v
     the cell's centre in the box's coordinates and `cell` its size (one, or along and across). The difference is the
     `pct` percentile of the points' heights over the reference ground (the model's, or the LiDAR's with
     against="lidar"), or with by="level" the cell's `pct` percentile level less the median of the reference ground
     under its points within 3 cm of that level; the level is the cloud's height at the percentile."""
-    to_box, _ = axes(grid)
+    to_box, _ = axes(site, grid)
     (u0, v0), (u1, v1) = box_of(corners)
     uv = to_box(xyz[:, :2])
     inside = (uv[:, 0] >= u0) & (uv[:, 0] < u1) & (uv[:, 1] >= v0) & (uv[:, 1] < v1)
@@ -96,7 +97,7 @@ def compare(xyz, corners, cell=1.0, pct=20.0, nmin=12, against="model", grid=Fal
     if by not in ("points", "level"):
         raise DomusError(f"by = {by!r}: give points or level")
     cu, cv = (cell, cell) if np.isscalar(cell) else (float(cell[0]), float(cell[-1]))
-    ref = terrain.ground() if against == "model" else raster.dem()
+    ref = terrain.ground(site) if against == "model" else rasters.dem(site)
     under = ref.sample(xyz[:, 0], xyz[:, 1])
     iu = np.floor((uv[:, 0] - u0) / cu).astype(np.int64)
     iv = np.floor((uv[:, 1] - v0) / cv).astype(np.int64)
@@ -121,18 +122,18 @@ def compare(xyz, corners, cell=1.0, pct=20.0, nmin=12, against="model", grid=Fal
     return rows
 
 
-def plan(xyz, rgb, corners, out, px=0.02, mode="top", above=None, lines=False, grid=False):
+def plan(site, xyz, rgb, corners, out, px=0.02, mode="top", above=None, lines=False, grid=False):
     """The cloud from above over the box, written to `out`: each pixel the colour of the highest point in it (`mode`
     "low": the lowest; "height": grey by the lowest point's height over the model's ground, 0 to 1 m). Returns the
     image's size and how many points it drew."""
-    to_box, _ = axes(grid)
+    to_box, _ = axes(site, grid)
     (u0, v0), (u1, v1) = box_of(corners)
     w, h = int(round((u1 - u0) / px)), int(round((v1 - v0) / px))
     uv = to_box(xyz[:, :2])
     keep = (uv[:, 0] > u0) & (uv[:, 0] < u1) & (uv[:, 1] > v0) & (uv[:, 1] < v1)
     g = None
     if above is not None or mode == "height":
-        g = terrain.ground().sample(xyz[:, 0], xyz[:, 1])
+        g = terrain.ground(site).sample(xyz[:, 0], xyz[:, 1])
     if above is not None:
         keep &= ~(xyz[:, 2] > g + above)
     uv, z, colour = uv[keep], xyz[keep, 2], rgb[keep]
@@ -163,18 +164,18 @@ def plan(xyz, rgb, corners, out, px=0.02, mode="top", above=None, lines=False, g
         d.line([at(u0, v), at(u1, v)], fill=(110, 110, 110), width=1)
         d.text((2, at(u0, v)[1] - 11), f"{names[1]} {v:.0f}", fill=(255, 255, 0))
     if lines:
-        site = crs.ROOT / "data" / "site"
+        layers = site.path / "data" / "site"
 
         def draw(coords, colour):
             p = to_box(np.asarray(coords, float)[:, :2])
             d.line([at(a, b) for a, b in p], fill=colour, width=1)
 
-        for f in geojson.read_optional(site / "boundary.geojson"):
+        for f in geojson.read_optional(layers / "boundary.geojson"):
             if f["geometry"]["type"] == "Polygon":
                 draw(f["geometry"]["coordinates"][0], (255, 40, 40))
-        for f in geojson.read_optional(site / "walls-existing.geojson"):
+        for f in geojson.read_optional(layers / "walls-existing.geojson"):
             draw(f["geometry"]["coordinates"], (255, 230, 0))
-        for f in geojson.read_optional(site / "house.geojson"):
+        for f in geojson.read_optional(layers / "house.geojson"):
             if f["properties"].get("id") == "house-walls":
                 draw(f["geometry"]["coordinates"][0], (255, 255, 255))
     Path(out).parent.mkdir(parents=True, exist_ok=True)
@@ -189,7 +190,7 @@ def _corners(text):
         raise DomusError(f'Give the box as its two corners, "s,o s,o": {e}') from e
 
 
-def main():
+def main(site):
     """`domus prep cloud`: the cloud's ground against the model's or the LiDAR's, cell by cell."""
     ap = argparse.ArgumentParser(prog="domus prep cloud", description=__doc__.split("\n\n")[0])
     ap.add_argument("clouds", help="the clouds, <tag>-site or <tag>-dense in data/video (or .npz files), comma-separated")
@@ -205,10 +206,10 @@ def main():
     ap.add_argument("--grid", action="store_true", help="the box is on the site's grid, not the options' frame")
     ap.add_argument("--csv", help="also write the table to this file")
     args = ap.parse_args()
-    xyz, _ = read_clouds(args.clouds.split(","), args.all)
+    xyz, _ = read_clouds(site, args.clouds.split(","), args.all)
     if len(args.cell) > 2:
         raise DomusError("--cell takes one size, or two: along the box and across it")
-    rows = compare(xyz, _corners(args.box), args.cell, args.pct, args.nmin, args.against, args.grid, args.by)
+    rows = compare(site, xyz, _corners(args.box), args.cell, args.pct, args.nmin, args.against, args.grid, args.by)
     names = ("E", "N") if args.grid else ("s", "o")
     head = [names[0], names[1], "points", "cloud - ground (cm)", "cloud level"]
     print(f"{names[0]:>9} {names[1]:>9} {'points':>7} {'cm':>6} {'level':>8}   (cloud's {args.pct:g}th percentile "
@@ -229,7 +230,7 @@ def main():
     return 0
 
 
-def plan_main():
+def plan_main(site):
     """`domus prep cloud-plan`: the cloud from above over a box."""
     ap = argparse.ArgumentParser(prog="domus prep cloud-plan", description="A placed cloud from above, in its own colours.")
     ap.add_argument("clouds", help="the clouds, <tag>-site or <tag>-dense in data/video (or .npz files), comma-separated")
@@ -243,7 +244,7 @@ def plan_main():
     ap.add_argument("--all", action="store_true", help="every point of a -site cloud, not only those three cameras saw")
     ap.add_argument("--grid", action="store_true", help="the box is on the site's grid, not the options' frame")
     args = ap.parse_args()
-    xyz, rgb = read_clouds(args.clouds.split(","), args.all)
-    size, n = plan(xyz, rgb, _corners(args.box), args.out, args.px, args.mode, args.above, args.lines, args.grid)
+    xyz, rgb = read_clouds(site, args.clouds.split(","), args.all)
+    size, n = plan(site, xyz, rgb, _corners(args.box), args.out, args.px, args.mode, args.above, args.lines, args.grid)
     print(f"wrote {args.out} ({size[0]} x {size[1]} px, {n} points)")
     return 0

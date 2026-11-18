@@ -123,7 +123,7 @@ gives the usage of each of them.
 
 | Variable | What it does |
 |---|---|
-| `DOMUS_SITE` | The site folder a process works on, read the first time Domus needs it. `--site` sets it |
+| `DOMUS_SITE` | The site folder a process works on: the command line and the server read it once and hand the site down. `--site` sets it |
 | `DOMUS_OUTPUT` | Where the model is built, instead of the site's `viewer/data/`. `--site` clears it |
 | `DOMUS_LINZ_KEY` | A free LINZ Data Service key, for New Zealand's parcels, buildings, titles and survey marks |
 | `DOMUS_SITES` | A folder of sites, for one server holding many |
@@ -918,10 +918,14 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md) f
   `uv run python tools/settings_doc.py` to rewrite the tables in docs/site-format.md. The tests fail on a setting the
   code reads that the schema doesn't declare, or reads with another default.
 - **Errors a person can fix** raise `DomusError`, never `SystemExit`: the command line shows the message.
-- **A site is read through its Site:** its folder (`path`), `output`, `settings()`, `format()` and `grid`, read when
-  first needed and kept with that site, never in a module's own globals, so one process can hold several sites. The
-  grid maths read no site. The older names for the current site's folder and settings (`crs.ROOT`, `crs.settings()`
-  and the rest) are deprecated: new code reads the Site's.
+- **Every part that reads a site is handed it:** a Site (`domus.project.site`), with its folder (`path`), `output`,
+  `settings()`, `format()` and `grid`, taken as the function's first argument. What a part reads of a site is kept with
+  that site, never in a module's own globals, so one process can hold several. The command line and the server read
+  `DOMUS_SITE` once and hand the site down; a job in a process of its own gets the site's folder. The pure layers
+  (`geo`, the model's pure parts and `scheme`) read no site at all. Nothing reads the current site: the older names
+  that do (`crs.ROOT`, `crs.settings()`, `raster.dem()` and the rest, and calls such as `design.frame()` without a
+  site) are kept for site code and deprecated. The tests run in strict mode, where a part called without its site is
+  an error, and `tests/test_handed.py` looks for code that reads the old way.
 - **Text files are UTF-8**, named on every read and write; a test checks.
 - **The viewer** loads nothing from other hosts (new libraries go in its `vendor` folder), and its page is a body with
   no doctype or head. **The server** uses the standard library only. The import rules in `pyproject.toml` hold both.

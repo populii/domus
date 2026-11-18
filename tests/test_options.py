@@ -9,11 +9,18 @@ import numpy as np
 import pytest
 
 
+def demo():
+    """The demo site, as the `project` fixture has it: the one the tests' process was started for (tests/conftest.py)."""
+    from domus.project.site import started
+
+    return started()
+
+
 def ground_at(s, o):
     from domus import design, terrain
 
-    en = design.frame().en(np.array([[s, o]]))
-    return float(terrain.ground().sample(en[:, 0], en[:, 1])[0])
+    en = design.frame(demo()).en(np.array([[s, o]]))
+    return float(terrain.ground(demo()).sample(en[:, 0], en[:, 1])[0])
 
 
 @pytest.fixture
@@ -29,48 +36,48 @@ def two_lawns(site):
     }
 
 
-def test_steps_take_their_levels_from_the_lawns_they_join(two_lawns):
+def test_steps_take_their_levels_from_the_lawns_they_join(two_lawns, project):
     from domus import design
 
     low, opt = two_lawns
-    d = design.Design(opt)
+    d = design.Design(opt, site=project)
     st = d.stairs[0]
     assert st.foot == pytest.approx(low, abs=0.01) and st.head == pytest.approx(low + 0.68, abs=0.01)
     assert st.n == 4                                    # 0.68 m in risers of about 0.17 m
-    mid = design.frame().en(np.array([[9.4, 5.0]]))     # the ground under the flight is a ramp just below the treads
+    mid = design.frame(project).en(np.array([[9.4, 5.0]]))     # the ground under the flight is a ramp just below the treads
     assert float(d.sample(mid[:, 0], mid[:, 1])[0]) == pytest.approx(low + 0.34 - 0.03, abs=0.01)
-    res = design.evaluate(opt)
+    res = design.evaluate(project, opt)
     s = res["stairs"][0]
     assert (s["risers"], s["riser_m"], s["going_m"], s["flags"]) == (4, 0.17, 0.3, [])
     z = s["mesh"].vertices[:, 2]
     assert z.max() == pytest.approx(st.head) and z.min() >= st.foot - 0.31
 
 
-def test_steps_drawn_from_the_top_come_out_the_same(two_lawns):
+def test_steps_drawn_from_the_top_come_out_the_same(two_lawns, project):
     from domus import design
 
     low, opt = two_lawns
     opt["stairs"][0]["line_so"] = opt["stairs"][0]["line_so"][::-1]
-    st = design.Design(opt).stairs[0]
+    st = design.Design(opt, site=project).stairs[0]
     assert st.foot == pytest.approx(low, abs=0.01) and st.rise == pytest.approx(0.68, abs=0.02)
-    assert design.frame().so(st.a)[0] == pytest.approx(8.8)     # its foot is the lower end
+    assert design.frame(project).so(st.a)[0] == pytest.approx(8.8)     # its foot is the lower end
 
 
-def test_a_short_flight_is_flagged_as_steep(two_lawns):
+def test_a_short_flight_is_flagged_as_steep(two_lawns, project):
     from domus import design
 
     _, opt = two_lawns
     opt["stairs"][0]["line_so"] = [[9.4, 5.0], [10.0, 5.0]]
-    flags = design.evaluate(opt)["stairs"][0]["flags"]
+    flags = design.evaluate(project, opt)["stairs"][0]["flags"]
     assert len(flags) == 1 and "steep" in flags[0]
 
 
-def test_a_lawn_edge_under_the_steps_gets_no_batter(two_lawns):
+def test_a_lawn_edge_under_the_steps_gets_no_batter(two_lawns, project):
     """The upper lawn's edge is free where the wall stops short of it; the flight there holds it instead."""
     from domus import design
 
     _, opt = two_lawns
-    d = design.Design(opt)
+    d = design.Design(opt, site=project)
     upper_free = d.free[1]
     flight = d.stairs[0].poly
     assert not upper_free.intersects(flight.buffer(-0.05))
@@ -126,14 +133,14 @@ def test_a_wall_with_no_photo_is_drawn_with_its_painted_picture(built):
     assert layers["wall-W1"]["texture"] == "wall-block.jpg" and (built / "wall-block.jpg").exists()
 
 
-def test_fill_against_the_house_is_reported_as_that(site):
+def test_fill_against_the_house_is_reported_as_that(site, project):
     """A bed raised against the house's north wall: the house holds it, so it's the cladding to mind, not a wall to add."""
     from domus import design
 
     level = round(ground_at(13.5, 11.0) + 0.4, 2)
     opt = {"terraces": [{"id": "bed", "kind": "planting", "level": level, "at_so": [13.5, 11.0],
                          "polygon_so": [[12.5, 7.0], [15.5, 7.0], [15.5, 15.0], [12.5, 15.0]]}]}
-    flags = [e["flag"] for e in design.evaluate(opt)["edge"]]
+    flags = [e["flag"] for e in design.evaluate(project, opt)["edge"]]
     assert any("against the house" in f for f in flags)
     assert not any("needs a wall" in f for f in flags)
 
@@ -163,38 +170,38 @@ def stepped_wall(low):
                        "retained_side": "left", "tops": [low + 0.9, low + 0.6]}]}
 
 
-def test_a_wall_can_step_in_level_bays(site):
+def test_a_wall_can_step_in_level_bays(site, project):
     from domus import design
 
     low = round(ground_at(8.0, 10.0), 2)
-    w = design.evaluate(stepped_wall(low))["walls"][0]
+    w = design.evaluate(project, stepped_wall(low))["walls"][0]
     assert (w["top_min"], w["top_max"]) == (pytest.approx(low + 0.6), pytest.approx(low + 0.9))
     v = w["mesh"].vertices
-    so = design.frame().so(v[:, :2])
+    so = design.frame(project).so(v[:, :2])
     boards = np.abs(so[:, 0] - 10.0) < 1e-6                         # the face of the boards, not the posts
     for o0, o1, levels in ((6.5, 8.5, {0.9}), (9.5, 12.0, {0.6}), (9.0, 9.0, {0.9, 0.6})):   # level along each bay, both at the step
         here = boards & (so[:, 1] > o0 - 1e-6) & (so[:, 1] < o1 + 1e-6)
         assert {round(float(z) - low, 2) for z in v[here, 2]} & {0.9, 0.6} == levels
     with pytest.raises(ValueError, match="needs 2 of them"):
-        design.Design({"walls": [{**stepped_wall(low)["walls"][0], "tops": [low]}]})
+        design.Design({"walls": [{**stepped_wall(low)["walls"][0], "tops": [low]}]}, site=project)
 
 
-def test_a_timber_wall_has_its_posts_and_a_block_wall_none(site):
+def test_a_timber_wall_has_its_posts_and_a_block_wall_none(site, project):
     from domus import design, walls
 
     low = round(ground_at(8.0, 10.0), 2)
-    w = design.Design(stepped_wall(low)).wall_levels()[0]
+    w = design.Design(stepped_wall(low), site=project).wall_levels()[0]
     assert walls.post_positions(w) == pytest.approx([0, 1.5, 3.0, 4.2, 5.4, 6.6])     # ends, the step, and between
     m, _ = walls.mesh(w)
-    so = design.frame().so(m.vertices[:, :2])
+    so = design.frame(project).so(m.vertices[:, :2])
     assert so[:, 0].min() == pytest.approx(10.0 - walls.POST_PROUD_M)       # the posts stand out from the boards
     assert m.vertices[:, 2].max() == pytest.approx(low + 0.9 + walls.POST_PROUD_M)
     assert len(m.uv) == len(m.vertices) == len(m.cap)
     block, _ = walls.mesh({**w, "material": "block"})
-    assert design.frame().so(block.vertices[:, :2])[:, 0].min() == pytest.approx(10.0)
+    assert design.frame(project).so(block.vertices[:, :2])[:, 0].min() == pytest.approx(10.0)
 
 
-def test_the_ground_behind_a_wall_is_the_ground_it_holds(site):
+def test_the_ground_behind_a_wall_is_the_ground_it_holds(site, project):
     """A wall that stands above the ground behind it, as a level bay does over falling ground, leaves that
     ground where it is."""
     from scipy.interpolate import LinearNDInterpolator
@@ -204,17 +211,17 @@ def test_the_ground_behind_a_wall_is_the_ground_it_holds(site):
     low = round(ground_at(8.0, 10.0), 2)
     opt = {"walls": [{"id": "W", "material": "block", "line_so": [[10.0, 6.0], [10.0, 12.0]], "retained_side": "left",
                       "top": low + 1.5}]}
-    d = design.Design(opt)
-    fr = design.frame()
+    d = design.Design(opt, site=project)
+    fr = design.frame(project)
     e, n = fr.en(np.array([[10.0, 6.0], [10.0, 12.0]])).T
-    tin = terrain.build([e.min() - 3, n.min() - 3, e.max() + 3, n.max() + 3], 0.5, d.wall_levels(), surface=d.sample)
+    tin = terrain.build([e.min() - 3, n.min() - 3, e.max() + 3, n.max() + 3], 0.5, d.wall_levels(), surface=d.sample, site=project)
     behind = fr.en(np.array([[10.4, 9.0]]))                         # just behind its back
     z = float(LinearNDInterpolator(tin.vertices[:, :2], tin.vertices[:, 2])(behind)[0])
     assert z == pytest.approx(float(d.sample(behind[:, 0], behind[:, 1])[0]), abs=0.1)
     assert z < low + 1.0
 
 
-def test_a_wall_can_name_its_block(site, tmp_path):
+def test_a_wall_can_name_its_block(site, tmp_path, project):
     """A wall that names its block is drawn in it at its true size: one picture of the capping course, the
     courses under it and the cap's top, as long as four blocks, in the block's own colour."""
     from PIL import Image
@@ -224,7 +231,7 @@ def test_a_wall_can_name_its_block(site, tmp_path):
     low = round(ground_at(8.0, 10.0), 2)
     cfg = {"id": "W", "material": "segmental", "unit_m": [0.457, 0.2], "cap_m": 0.1, "colour": "#7f868b",
            "line_so": [[10.0, 6.0], [10.0, 12.0]], "retained_side": "left", "top": low + 0.9}
-    w = design.Design({"walls": [cfg]}).wall_levels()[0]
+    w = design.Design({"walls": [cfg]}, site=project).wall_levels()[0]
     assert walls.units(w) == (0.457, 0.2, 0.1, "#7f868b")
     (tu, tv), bays = walls.texture_size(w)
     assert tu == pytest.approx(4 * 0.457) and tv == pytest.approx(0.1 + 16 * 0.2 + walls.UNIT_TOP_M) and not bays
@@ -240,7 +247,7 @@ def test_a_wall_can_name_its_block(site, tmp_path):
     assert m.uv[courses, 0].max() == pytest.approx(6.0 / tu) and len(m.uv) == len(m.vertices)
     (start, end, joints), = w["set_out"]["caps"]                      # thirteen capping units reach along its 6 m
     assert (start, end, len(joints)) == (0.0, pytest.approx(6.0), 14) and np.diff(joints) == pytest.approx(6.0 / 13)
-    plain = design.Design({"walls": [{k: v for k, v in cfg.items() if k not in ("unit_m", "cap_m", "colour")}]}).wall_levels()[0]
+    plain = design.Design({"walls": [{k: v for k, v in cfg.items() if k not in ("unit_m", "cap_m", "colour")}]}, site=project).wall_levels()[0]
     assert walls.units(plain) is None and walls.wall_image(plain, tmp_path) == "wall-segmental.jpg"
 
 
@@ -272,12 +279,12 @@ line_so = [[0, 2], [1, 2]]
     assert same["walls"][0]["unit_m"] == [0.457, 0.2] and "material" not in same["stairs"][0]
 
 
-def test_steps_can_be_railway_sleepers(two_lawns):
+def test_steps_can_be_railway_sleepers(two_lawns, project):
     """A flight of sleepers is two sleepers to a tread, each with faces of its own, and carries the picture's uv."""
     from domus import design
 
     low, opt = two_lawns
-    s = design.evaluate({**opt, "stairs": [{**opt["stairs"][0], "material": "sleepers"}]})["stairs"][0]
+    s = design.evaluate(project, {**opt, "stairs": [{**opt["stairs"][0], "material": "sleepers"}]})["stairs"][0]
     m = s["mesh"]
     assert (s["material"], s["risers"]) == ("sleepers", 4) and design.STEP_LOOKS["sleepers"][1][0] == "steps-sleepers.jpg"
     assert m.uv.shape == (len(m.vertices), 2) and len(m.vertices) == 4 * (4 * 7) + 4       # 7 faces a tread, and the back
@@ -297,7 +304,7 @@ def test_a_walls_back_does_not_fold_at_a_corner():
     assert np.allclose(offset_behind(step, 0.3, 1), [[0, 0.3], [1, 0.3], [1, 0.3], [2, 0.3]])
 
 
-def test_the_ground_has_a_clean_edge_at_steps_and_at_a_building(site):
+def test_the_ground_has_a_clean_edge_at_steps_and_at_a_building(site, project):
     """Round a flight of steps the ground is the ground beside it up to the line and the ground under it from
     there; at a building it runs level to the wall, and meets what is under the building just inside it."""
     import shapely
@@ -306,7 +313,7 @@ def test_the_ground_has_a_clean_edge_at_steps_and_at_a_building(site):
 
     from domus import design, terrain
 
-    e, n = design.frame().en(np.array([[8.0, 10.0]]))[0]
+    e, n = design.frame(project).en(np.array([[8.0, 10.0]]))[0]
     pit = box(e - 1, n - 1, e + 1, n + 1)
 
     def surface(E, N):
@@ -317,15 +324,15 @@ def test_the_ground_has_a_clean_edge_at_steps_and_at_a_building(site):
         return float(LinearNDInterpolator(tin.vertices[:, :2] - mid, tin.vertices[:, 2])(e + de - mid[0], n + 0.13 - mid[1]))
 
     extent = [e - 4, n - 4, e + 4, n + 4]
-    smeared = terrain.build(extent, 0.5, surface=surface)
+    smeared = terrain.build(extent, 0.5, surface=surface, site=project)
     assert 10.05 < at(smeared, 0.9) < 10.95                         # without an edge the step is spread over a grid cell
-    steps = terrain.build(extent, 0.5, surface=surface, edges=[(pit, False)])
+    steps = terrain.build(extent, 0.5, surface=surface, edges=[(pit, False)], site=project)
     assert at(steps, 0.95) == pytest.approx(10.0) and at(steps, 1.05) == pytest.approx(11.0)
-    house = terrain.build(extent, 0.5, surface=surface, edges=[(pit, True)])
+    house = terrain.build(extent, 0.5, surface=surface, edges=[(pit, True)], site=project)
     assert at(house, 1.05) == pytest.approx(11.0) and at(house, 0.99) == pytest.approx(11.0) and at(house, 0.8) == pytest.approx(10.0)
 
 
-def test_the_ground_runs_on_under_a_bay_window(monkeypatch):
+def test_the_ground_runs_on_under_a_bay_window(monkeypatch, project):
     """A bay window hangs from the wall, so it takes no ground: an option regrades under it."""
     from shapely.geometry import box
 
@@ -337,12 +344,12 @@ def test_the_ground_runs_on_under_a_bay_window(monkeypatch):
     feats = [{"geometry": {"type": "Polygon", "coordinates": ring(0, 0, 10, 8)}, "properties": {"id": "house-walls"}},
              {"geometry": {"type": "Polygon", "coordinates": ring(2, 8, 4, 8.6)}, "properties": {"id": "bay", "part": "bay", "bottom_above_fl": -0.2}}]
     monkeypatch.setattr(design.geojson, "read_optional", lambda path: feats)
-    design.house_outline.cache_clear()
+    design.house_outline.cache_clear(project)
     try:
-        assert design.house_outline().area == pytest.approx(80.0)
-        assert design.house_building().area == pytest.approx(81.2)
+        assert design.house_outline(project).area == pytest.approx(80.0)
+        assert design.house_building(project).area == pytest.approx(81.2)
     finally:
-        design.house_outline.cache_clear()
+        design.house_outline.cache_clear(project)
 
 
 def sloping_foot(two_lawns):
@@ -351,21 +358,21 @@ def sloping_foot(two_lawns):
     from domus import design
 
     low, opt = two_lawns
-    en = design.frame().en(np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]))
+    en = design.frame(demo()).en(np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]))
     along, inward = en[1] - en[0], en[2] - en[0]
     o_is_left = along[0] * inward[1] - along[1] * inward[0] > 0      # facing up the flight, which runs along s
     stair = {**opt["stairs"][0], "width_m": 1.4, "foot": [low + 0.28, low], "head": low + 0.68, "risers": 4}
     return low, opt, stair, o_is_left
 
 
-def test_a_flight_can_stand_on_ground_that_slopes_across_its_foot(two_lawns):
+def test_a_flight_can_stand_on_ground_that_slopes_across_its_foot(two_lawns, project):
     """`foot` with two levels, the ground at the left and right ends of the foot line: the treads stay level, the
     foot line straight and every tread runs the full width. The lowest tread is level with the ground at the high
     end, and the risers above it are equal."""
     from domus import design
 
     low, opt, stair, _ = sloping_foot(two_lawns)
-    d = design.Design({**opt, "stairs": [stair]})
+    d = design.Design({**opt, "stairs": [stair]}, site=project)
     st = d.stairs[0]
     assert (st.foot, st.n, st.cross) == (low, 4, (low + 0.28, low))
     tops = [low + 0.28 + (0.68 - 0.28) * i / 3 for i in range(4)]
@@ -388,20 +395,20 @@ def test_a_flight_can_stand_on_ground_that_slopes_across_its_foot(two_lawns):
     assert float(d.sample(*at(0.1, -0.6))[0]) == pytest.approx(low + 0.68 * 0.1 / 1.2 - 0.03)
     # What is drawn under the treads is the ramp alone, which is below every one of them.
     assert float(d.drawn(*at(0.1, 0.5))[0]) == pytest.approx(low + 0.68 * 0.1 / 1.2 - 0.03)
-    s = design.evaluate({**opt, "stairs": [stair]})["stairs"][0]
+    s = design.evaluate(project, {**opt, "stairs": [stair]})["stairs"][0]
     assert (s["risers"], s["riser_m"], s["foot"], s["foot_rise_m"]) == (4, 0.133, low, 0.28) and "tread_widths_m" not in s
-    m = design.evaluate({**opt, "stairs": [{**stair, "material": "sleepers"}]})["stairs"][0]["mesh"]
+    m = design.evaluate(project, {**opt, "stairs": [{**stair, "material": "sleepers"}]})["stairs"][0]["mesh"]
     quads = 4 * 2 * 3 + 4 + 1                                # sleepers' tops and ends, risers, the back
     assert m.uv.shape == (len(m.vertices), 2) and len(m.vertices) == 4 * quads
     # Two equal levels are a level foot, and a foot above its head is a mistake.
-    plain = design.Design({**opt, "stairs": [{**stair, "foot": low}]}).stairs[0]
-    level = design.Design({**opt, "stairs": [{**stair, "foot": [low, low]}]}).stairs[0]
+    plain = design.Design({**opt, "stairs": [{**stair, "foot": low}]}, site=project).stairs[0]
+    level = design.Design({**opt, "stairs": [{**stair, "foot": [low, low]}]}, site=project).stairs[0]
     assert level.cross is None and np.array_equal(level.mesh().vertices, plain.mesh().vertices)
     with pytest.raises(ValueError, match="starts at the foot"):
-        design.Design({**opt, "stairs": [{**stair, "foot": [low + 0.9, low + 0.8]}]})
+        design.Design({**opt, "stairs": [{**stair, "foot": [low + 0.9, low + 0.8]}]}, site=project)
 
 
-def test_a_wall_beside_steps_on_a_sloping_foot_is_measured_at_its_own_face(two_lawns):
+def test_a_wall_beside_steps_on_a_sloping_foot_is_measured_at_its_own_face(two_lawns, project):
     """A wall up the high side of such a flight stands on the ground under the flight at the wall, not on the
     lower ground 0.35 m out across the flight, where a wall's foot is otherwise read."""
     from domus import design
@@ -409,14 +416,14 @@ def test_a_wall_beside_steps_on_a_sloping_foot_is_measured_at_its_own_face(two_l
     low, opt, stair, o_is_left = sloping_foot(two_lawns)
     high_side = 5.7 if o_is_left else 4.3           # the flight's centre line is o = 5.0, and its left is the high end
     cheek = {"id": "C", "line_so": [[8.8, high_side], [10.0, high_side]], "top": low + 1.0, "retained_side": "left"}
-    d = design.Design({**opt, "walls": [*opt["walls"], cheek], "stairs": [stair]})
+    d = design.Design({**opt, "walls": [*opt["walls"], cheek], "stairs": [stair]}, site=project)
     w = next(x for x in d.wall_levels() if x["id"] == "C")
     assert w["toe"][1] == pytest.approx(low + 0.28 - 0.03, abs=0.005)        # the foot line's ground at the wall, run in level
     out = w["samples"][1] - w["normals"][1] * 0.35
     assert float(d.sample(out[:1], out[1:])[0]) == pytest.approx(low + 0.21 - 0.03, abs=0.005)   # and 0.35 m out
 
 
-def test_an_option_keeps_the_lawns_it_leaves_alone(built):
+def test_an_option_keeps_the_lawns_it_leaves_alone(built, project):
     """A lawn that is there stays drawn where an option leaves it alone, on the option's ground, and its own layer
     names the options that redraw it. It is drawn as its grass without its bare patches, as the beds, their plants
     and the stumps are not drawn with an option: the soil under a clump of weeds would show as a bare spot. A new
@@ -428,7 +435,7 @@ def test_an_option_keeps_the_lawns_it_leaves_alone(built):
 
     model = json.loads((built / "model.json").read_text(encoding="utf-8"))
     by_id = {x["id"]: x for x in model["layers"]}
-    lawn = vegetation.lawns(canopy.read())[0]
+    lawn = vegetation.lawns(canopy.read(project))[0]
     assert by_id[f"veg-{lawn['id']}"]["redrawn_by"] == [o["id"] for o in model["summary"]["options"]]
     assert "hide_with" not in by_id[f"veg-{lawn['id']}"]            # that is for a feature an option takes out
     e0, n0 = model["origin"][:2]
@@ -438,12 +445,12 @@ def test_an_option_keeps_the_lawns_it_leaves_alone(built):
         tri = p[np.asarray(layer["drape"]["indices"]).reshape(-1, 3)]
         return unary_union([Polygon(np.column_stack([t[:, 0] + e0, n0 - t[:, 2]])) for t in tri])
 
-    defs = {o["id"]: o for o in options.load_all()}
+    defs = {o["id"]: o for o in options.load_all(project)}
     for o in model["summary"]["options"]:
         kept = by_id[f"option-{o['id']}-lawn-{lawn['id']}"]
         assert (kept["type"], kept["role"], kept["option"], kept["visible"]) == ("vegetation", "skin", o["id"], False)
         assert kept["drape"]["texture"] == f"{lawn['id']}-plain.jpg" and o["lawns_kept"] == [lawn["id"]]
-        d = design.Design(defs[o["id"]])
+        d = design.Design(defs[o["id"]], site=project)
         taken = unary_union([t.poly for t in d.terraces if t.kind != "ground"] + [st.poly for st in d.stairs])
         area = drawn(kept)
         assert area.area > 5 and lawn["poly"].buffer(0.01).contains(area) and area.intersection(taken).area < 0.01
@@ -465,7 +472,7 @@ def cornered(first, second, last=1.0):
     line = [[10.0, 6.0], [10.0, 6.0 + first], [10.0 + second, 6.0 + first], [10.0 + second, 6.0 + first - last]]
     for side in ("left", "right"):
         w = design.Design({"walls": [{**BLOCK, "id": "W", "line_so": line, "retained_side": side,
-                                      "top": round(ground_at(8.0, 10.0), 2) + 1.3}]}).wall_levels()[0]
+                                      "top": round(ground_at(8.0, 10.0), 2) + 1.3}]}, site=demo()).wall_levels()[0]
         if walls.stretches(w)[2] == [1, 1]:
             return w
     raise AssertionError("neither side makes them outside corners")
@@ -502,7 +509,7 @@ def test_a_block_wall_has_a_corner_block_at_each_outside_corner(site):
     assert inside["set_out"]["u0"] == pytest.approx([0.0, 3.5, 8.5])
 
 
-def test_a_block_walls_blocks_butt_turn_about_in_an_inside_corner(site):
+def test_a_block_walls_blocks_butt_turn_about_in_an_inside_corner(site, project):
     """Between an outside corner and an inside one the bond runs on half a block round each: whole blocks reach
     both where the stretches are whole numbers of half blocks. Where one is not, the outside corner keeps its
     joint, the cut block stands in the inside corner, and the wall says so."""
@@ -516,7 +523,7 @@ def test_a_block_walls_blocks_butt_turn_about_in_an_inside_corner(site):
         line = [[10.0, 6.0], [10.0, 6.0 + a], [10.0 + b, 6.0 + a], [10.0 + b, 6.0 + a + c], [11.0 + b, 6.0 + a + c]]
         for side in ("left", "right"):
             w = design.Design({"walls": [{**BLOCK, "id": "W", "line_so": line, "retained_side": side,
-                                          "top": round(ground_at(8.0, 10.0), 2) + 1.3}]}).wall_levels()[0]
+                                          "top": round(ground_at(8.0, 10.0), 2) + 1.3}]}, site=project).wall_levels()[0]
             if walls.stretches(w)[2] == [1, -1, 1]:
                 return w
         raise AssertionError("neither side makes the first corner an outside one")
@@ -531,7 +538,7 @@ def test_a_block_walls_blocks_butt_turn_about_in_an_inside_corner(site):
     assert odd["set_out"]["u0"] == pytest.approx([-3.0, 0.5, -3.25, 0.5])    # the joint is kept at the outside corner
 
 
-def test_capping_units_are_whole_from_each_corner_step_and_end(site):
+def test_capping_units_are_whole_from_each_corner_step_and_end(site, project):
     """A capping course is laid in units as long as the blocks: whole ones in from both ends of each length of
     top, the one cut to fit in the middle, and none of them a sliver. At an outside corner the unit of one face
     runs through to the corner and the next face's butts against it, its depth round the corner. The capping
@@ -554,7 +561,7 @@ def test_capping_units_are_whole_from_each_corner_step_and_end(site):
     assert np.diff(second) == pytest.approx([block, block, 4 * block - 0.27 - 3 * block, block])
     assert third[0] == pytest.approx(7 * block + 0.27) and min(np.diff(third)) >= walls.CAP_MIN_M
     m, _ = walls.mesh(w)
-    so = design.frame().so(m.vertices[:, :2])
+    so = design.frame(project).so(m.vertices[:, :2])
     edge = (np.abs(m.vertices[:, 2] - m.vertices[:, 2].max()) < 1e-9) & (np.abs(m.uv[:, 1]) < 1e-9) & (np.abs(so[:, 0] - 10.0) < 1e-6)
     inner = edge & (so[:, 1] > 6.01) & (so[:, 1] < 6.0 + 3 * block - 0.01)   # the front edge of the top, between the first face's ends
     units = m.uv[inner, 0] * walls.UNIT_BLOCKS - 0.25                         # the picture's cap has its joints a quarter along
@@ -583,7 +590,7 @@ def meeting(drop, low):
                       {**BLOCK, "id": "B", "line_so": [[10.0, 8.95], [10.0, 12.0]], "top": low + 1.3 - drop}]}
 
 
-def test_block_walls_that_meet_share_their_courses_and_their_bond(site):
+def test_block_walls_that_meet_share_their_courses_and_their_bond(site, project):
     """Two walls of the same block that stand against each other are set out as one: the same courses, the bond
     carried on from the one into the other, and the face they share drawn once. A top that is not a whole number
     of courses from the other's is reported."""
@@ -594,7 +601,7 @@ def test_block_walls_that_meet_share_their_courses_and_their_bond(site):
     opt = meeting(0.6, low)
     for w in opt["walls"]:
         w["retained_side"] = side
-    res = design.evaluate(opt)
+    res = design.evaluate(project, opt)
     a, b = (w["def"]["set_out"] for w in res["walls"])
     assert not a["notes"] and not b["notes"] and not any("course" in f for w in res["walls"] for f in w["flags"])
     assert a["datum"] == pytest.approx(low + 1.2) and b["datum"] == pytest.approx(low + 1.2)      # three courses over B's own
@@ -602,7 +609,7 @@ def test_block_walls_that_meet_share_their_courses_and_their_bond(site):
     assert b["u0"][0] + b["rate"][0] * 0.05 == pytest.approx(0.0, abs=1e-6) and b["rate"][0] == pytest.approx(a["rate"][0])
     assert b["hidden"] == [pytest.approx((0.0, 0.05), abs=1e-6)] and a["hidden"] == []
     m = res["walls"][1]["mesh"]
-    so = design.frame().so(m.vertices[:, :2])
+    so = design.frame(project).so(m.vertices[:, :2])
     on_face = (np.abs(so[:, 0] - 10.0) < 1e-6)[m.faces].all(axis=1)                               # the triangles of B's face
     assert so[m.faces[on_face], 1].min() == pytest.approx(9.0)                                    # which starts where A's ends
     assert so[:, 1].min() == pytest.approx(8.95)                                                  # while its top runs on into A
@@ -610,15 +617,15 @@ def test_block_walls_that_meet_share_their_courses_and_their_bond(site):
     odd = meeting(0.5, low)
     for w in odd["walls"]:
         w["retained_side"] = side
-    flags = design.evaluate(odd)["walls"][1]["flags"]
+    flags = design.evaluate(project, odd)["walls"][1]["flags"]
     assert any("100 mm off the courses of A" in f and "100 mm higher or 100 mm lower" in f for f in flags)
     # a wall on its own keeps its own courses, whatever its top
     alone = {"walls": [odd["walls"][1], {**odd["walls"][0], "line_so": [[10.0, 20.0], [10.0, 23.0], [12.0, 23.0]]}]}
-    lone = design.evaluate(alone)["walls"][0]
+    lone = design.evaluate(project, alone)["walls"][0]
     assert lone["def"]["set_out"]["datum"] == pytest.approx(low + 0.7) and not any("courses" in f for f in lone["flags"])
 
 
-def test_a_block_walls_courses_stay_level_where_its_top_steps(site):
+def test_a_block_walls_courses_stay_level_where_its_top_steps(site, project):
     """Under a top that steps the courses run through, each bay has its own capping course, and the end of the
     higher bay shows across the wall. A step that is not a whole number of courses is reported."""
     from domus import design, walls
@@ -626,11 +633,11 @@ def test_a_block_walls_courses_stay_level_where_its_top_steps(site):
     low = round(ground_at(8.0, 10.0), 2)
     cfg = {**BLOCK, "id": "W", "line_so": [[10.0, 6.0], [10.0, 9.0], [10.0, 12.6]], "retained_side": "left",
            "tops": [low + 1.1, low + 0.7]}
-    w = design.evaluate({"walls": [cfg]})["walls"][0]
+    w = design.evaluate(project, {"walls": [cfg]})["walls"][0]
     assert not any("course" in f for f in w["flags"])
     (_, tv), _ = walls.texture_size(w["def"])
     m = w["mesh"]
-    so = design.frame().so(m.vertices[:, :2])
+    so = design.frame(project).so(m.vertices[:, :2])
     down = np.round(m.uv[:, 1] * tv, 3)                               # metres down the picture: the cap is its first 0.1
     face = np.abs(so[:, 0] - 10.0) < 1e-6
 
@@ -644,11 +651,11 @@ def test_a_block_walls_courses_stay_level_where_its_top_steps(site):
     assert at(low + 0.7, 9.0, 9.0) == {0.0, -0.4}               # and at the step, the lower cap's top meets the end of the higher bay
     across = (np.abs(so[:, 1] - 9.0) < 1e-6) & (so[:, 0] > 10.0 + 1e-6)                           # the end of the higher bay
     assert m.vertices[across, 2].max() == pytest.approx(low + 1.1) and so[across, 0].max() == pytest.approx(10.27)
-    odd = design.evaluate({"walls": [{**cfg, "tops": [low + 1.1, low + 0.8]}]})["walls"][0]
+    odd = design.evaluate(project, {"walls": [{**cfg, "tops": [low + 1.1, low + 0.8]}]})["walls"][0]
     assert any("1 of its 2 top levels are not a whole number of 200 mm courses" in f for f in odd["flags"])
 
 
-def test_the_ground_keeps_its_level_up_to_a_walls_face_and_back(site):
+def test_the_ground_keeps_its_level_up_to_a_walls_face_and_back(site, project):
     """The step in the ground at a wall is inside the wall: just in front of its face the ground is the ground at
     its foot, and just behind its back the ground it holds."""
     from scipy.interpolate import LinearNDInterpolator
@@ -660,11 +667,11 @@ def test_the_ground_keeps_its_level_up_to_a_walls_face_and_back(site):
                       "thickness_m": 0.3}],
            "terraces": [{"id": "lower", "level": low, "at_so": [8.0, 9.0], "polygon_so": [[6, 6], [10, 6], [10, 12], [6, 12]]},
                         {"id": "upper", "level": low + 0.8, "at_so": [12.0, 9.0], "polygon_so": [[10, 6], [14, 6], [14, 12], [10, 12]]}]}
-    d = design.Design(opt)
+    d = design.Design(opt, site=project)
     w = d.wall_levels()[0]
-    fr = design.frame()
+    fr = design.frame(project)
     e, n = fr.en(np.array([[10.0, 6.0], [10.0, 12.0]])).T
-    tin = terrain.build([e.min() - 3, n.min() - 3, e.max() + 3, n.max() + 3], 0.5, [w], surface=d.sample)
+    tin = terrain.build([e.min() - 3, n.min() - 3, e.max() + 3, n.max() + 3], 0.5, [w], surface=d.sample, site=project)
     mid = tin.vertices[:, :2].mean(axis=0)
     ground = LinearNDInterpolator(tin.vertices[:, :2] - mid, tin.vertices[:, 2])
     behind = 1 if w["side"] == 1 else -1                              # which way along s the wall's body lies

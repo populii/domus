@@ -40,7 +40,7 @@ def stations(points, step):
     return keep
 
 
-def profile(points, offsets=(0.0,), step=0.5, grid=False):
+def profile(site, points, offsets=(0.0,), step=0.5, grid=False):
     """The ground along a line: [(distance along, station point, {offset: height})]. `points` are (s, o) in the
     options' frame, or (east, north) on the site's grid with `grid`."""
     pts = np.asarray(points, float).reshape(-1, 2)
@@ -51,11 +51,11 @@ def profile(points, offsets=(0.0,), step=0.5, grid=False):
     else:
         from ..options import design
 
-        fr = design.frame()
+        fr = design.frame(site)
         to_en = lambda p: fr.en(np.asarray(p, float))
         # o grows into the lot, which lies on the reference boundary's right looking along s (its left with side = "left")
-        turn = -1.0 if design.settings()["frame"].get("side", "right") == "right" else 1.0
-    g = terrain.ground()
+        turn = -1.0 if design.settings(site)["frame"].get("side", "right") == "right" else 1.0
+    g = terrain.ground(site)
     out = []
     for s, p, u in stations(pts, step):
         right = turn * np.array([u[1], -u[0]])
@@ -66,7 +66,7 @@ def profile(points, offsets=(0.0,), step=0.5, grid=False):
     return out
 
 
-def main():
+def main(site):
     ap = argparse.ArgumentParser(prog="domus prep profile", description=__doc__.split("\n\n")[0])
     ap.add_argument("points", help='the line\'s points, "s,o s,o ..." (or "east,north ..." with --grid)')
     ap.add_argument("--offsets", type=float, nargs="+", default=[0.0], help="metres across the line (left negative)")
@@ -78,7 +78,7 @@ def main():
         points = [[float(v) for v in p.split(",")] for p in args.points.split()]
     except ValueError as e:
         raise DomusError(f'Give the line\'s points as "s,o s,o ...": {e}') from e
-    rows = profile(points, args.offsets, args.step, args.grid)
+    rows = profile(site, points, args.offsets, args.step, args.grid)
     names = ("E", "N") if args.grid else ("s", "o")
     head = ["along", names[0], names[1], *(f"{o:+g}" for o in args.offsets)]
     print("  ".join(f"{h:>8}" for h in head))

@@ -44,13 +44,13 @@ def test_the_richer_site_paints_in_the_drive_under_its_trees(sites, at_site):
     from domus import build, demo
 
     root = sites / "richer"
-    at_site(root)
-    area = build.paved_under_canopy()
+    richer = at_site(root)
+    area = build.paved_under_canopy(richer)
     trees = [shape(f["geometry"]) for f in layer(root, "trees")["features"] if f["properties"]["id"].startswith("drive-tree")]
-    assert len(trees) == 2 and all(area.intersects(t) for t in trees) and build.paving_grain() is not None
+    assert len(trees) == 2 and all(area.intersects(t) for t in trees) and build.paving_grain(richer) is not None
     x0, y0 = demo.X0, demo.Y0
     E, N = np.meshgrid(x0 + 20 + (np.arange(125) + 0.5) * 0.08, y0 + 26 - (np.arange(250) + 0.5) * 0.08)
-    raw, painted = build.aerial_sampler(E, N).astype(int), build.ground_photo_sampler(E, N).astype(int)
+    raw, painted = build.aerial_sampler(E, N, site=richer).astype(int), build.ground_photo_sampler(E, N, site=richer).astype(int)
     green = lambda rgb: (rgb[:, 1] - (rgb[:, 0] + rgb[:, 2]) / 2) / rgb.mean(axis=1)
     crown = (np.hypot(E - (x0 + 22.9), N - (y0 + 12.0)) < 1.4) & (E > x0 + 23.0)        # inside the area and the crown
     assert green(raw[crown]).mean() > 0.4 and np.abs(green(painted[crown])).mean() < 0.06

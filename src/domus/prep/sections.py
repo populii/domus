@@ -14,19 +14,20 @@ import itertools
 import numpy as np
 from PIL import Image, ImageDraw
 
-from ..geo import crs, geojson, raster
+from ..geo import geojson
+from ..project import rasters
 from . import config
 
 
-def video_dir():
+def video_dir(site):
     """The site's video work, data/video/."""
-    return crs.ROOT / "data" / "video"
+    return site.path / "data" / "video"
 
 
-def edge_line():
+def edge_line(site):
     """The reference line and the point its chainage counts from."""
-    cfg = config("sections")
-    ring = geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0]
+    cfg = config(site, "sections")
+    ring = geojson.read(site.path / "data" / "site" / "boundary.geojson")["features"][0]["geometry"]["coordinates"][0]
     corners = [ring[i][:2] for i in cfg["line_corners"]]
     return np.array([*cfg.get("line_start", []), *corners], float), np.array(ring[cfg["origin_corner"]][:2], float)
 
@@ -58,24 +59,24 @@ def frame_of(pts, line, origin):
     return s, o
 
 
-def main():
+def main(site):
     ap = argparse.ArgumentParser(prog="domus prep sections")
     ap.add_argument("clouds", nargs="+")
     ap.add_argument("--step", type=float, default=1.0)
     ap.add_argument("--from", dest="s_from", type=float, default=-6.0)
     ap.add_argument("--to", type=float, default=16.0)
     args = ap.parse_args()
-    line, start = edge_line()
+    line, start = edge_line(site)
     clouds = []
     for name in args.clouds:
-        d = np.load(video_dir() / f"{name}.npz")
+        d = np.load(video_dir(site) / f"{name}.npz")
         xyz = d["xyz"]
         keep = d["nview"] >= 3 if "nview" in d else np.ones(len(xyz), bool)
         s, o = frame_of(xyz[keep], line, start)
         clouds.append((name, xyz[keep], d["rgb"][keep], s, o))
-    walls = geojson.read(crs.ROOT / "data" / "site" / "walls-existing.geojson")["features"]
-    dem = raster.dem()
-    out = video_dir() / "checks" / "sections"
+    walls = geojson.read(site.path / "data" / "site" / "walls-existing.geojson")["features"]
+    dem = rasters.dem(site)
+    out = video_dir(site) / "checks" / "sections"
     out.mkdir(parents=True, exist_ok=True)
     W, H, sc = 760, 520, 120.0
     tiles = []
@@ -140,6 +141,6 @@ def main():
     for k, t in enumerate(tiles):
         sheet.paste(t.resize((W // 2, H // 2)), ((k % cols) * W // 2, (k // cols) * H // 2))
     sheet.save(out / f"{args.clouds[0]}-sheet.jpg", quality=85)
-    print(f"{len(tiles)} sections -> {out.relative_to(crs.ROOT)}")
+    print(f"{len(tiles)} sections -> {out.relative_to(site.path)}")
 
 

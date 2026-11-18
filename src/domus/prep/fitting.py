@@ -27,13 +27,12 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from ..errors import DomusError
-from ..geo import crs
 from .cloud import read_clouds
 
 
-def video_dir():
+def video_dir(site):
     """The site's video work, data/video/."""
-    return crs.ROOT / "data" / "video"
+    return site.path / "data" / "video"
 
 
 def face_fit(so, z, item):
@@ -96,8 +95,8 @@ class Placed:
     """A placed reconstruction: its frames' cameras (data/video/<tag>-sfm.npz) and their placement on the site
     (data/video/<tag>-georef.json, or the file `georef`)."""
 
-    def __init__(self, tag, georef=None):
-        sfm, geo = video_dir() / f"{tag}-sfm.npz", georef or video_dir() / f"{tag}-georef.json"
+    def __init__(self, site, tag, georef=None):
+        sfm, geo = video_dir(site) / f"{tag}-sfm.npz", georef or video_dir(site) / f"{tag}-georef.json"
         for path in (sfm, geo):
             if not path.exists():
                 raise DomusError(f"{tag} isn't a placed reconstruction: there's no {path}")
@@ -153,7 +152,7 @@ class Placed:
         return c, what, out
 
 
-def face_main():
+def face_main(site):
     """`domus prep face-fit`."""
     ap = argparse.ArgumentParser(prog="domus prep face-fit", description="Fit vertical faces in a placed cloud.")
     ap.add_argument("cloud", help="the cloud: <tag>-dense or <tag>-site in data/video, or an .npz file")
@@ -162,14 +161,14 @@ def face_main():
     args = ap.parse_args()
     from ..options import design
 
-    xyz, _ = read_clouds([args.cloud], args.all)
-    so, z = design.frame().so(xyz[:, :2]), xyz[:, 2]
+    xyz, _ = read_clouds(site, [args.cloud], args.all)
+    so, z = design.frame(site).so(xyz[:, :2]), xyz[:, 2]
     for name, item in json.loads(Path(args.spec).read_text(encoding="utf-8")).items():
         print(face_line(name, item["along"], face_fit(so, z, item)))
     return 0
 
 
-def points_main():
+def points_main(site):
     """`domus prep frame-points`."""
     ap = argparse.ArgumentParser(prog="domus prep frame-points", description="Where a placed frame's pixels meet a plane.")
     ap.add_argument("tag", help="the placed reconstruction, data/video/<TAG>-sfm.npz and <TAG>-georef.json")
@@ -178,8 +177,8 @@ def points_main():
     args = ap.parse_args()
     from ..options import design
 
-    fr = design.frame()
-    placed = Placed(args.tag, args.georef)
+    fr = design.frame(site)
+    placed = Placed(site, args.tag, args.georef)
     for item in json.loads(Path(args.spec).read_text(encoding="utf-8")):
         found = placed.on_plane(item["frame"], item["plane"], item["points"], fr)
         if found is None:

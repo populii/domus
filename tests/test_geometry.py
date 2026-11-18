@@ -25,13 +25,13 @@ def test_crs_defaults_to_nztm(site):
     assert crs.datums() == []
 
 
-def test_designed_ground_holds_its_level(site):
+def test_designed_ground_holds_its_level(site, project):
     from domus import design, options
 
-    opt = next(o for o in options.load_all() if o["id"] == "a-one-wall")
-    d = design.Design(opt)
+    opt = next(o for o in options.load_all(project) if o["id"] == "a-one-wall")
+    d = design.Design(opt, site=project)
     t = opt["terraces"][0]
-    e, n = design.frame().en(np.array(t["at_so"]))
+    e, n = design.frame(project).en(np.array(t["at_so"]))
     assert d.sample(np.array([e]), np.array([n]))[0] == pytest.approx(t["level"], abs=0.01)
 
 

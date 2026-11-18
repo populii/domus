@@ -16,16 +16,14 @@ import av
 import cv2
 import numpy as np
 
-from ..geo import crs
 
-
-def main():
+def main(site):
     ap = argparse.ArgumentParser()
     ap.add_argument("video")
     ap.add_argument("--fps", type=float, default=6.0)
     args = ap.parse_args()
     video = Path(args.video)
-    out = crs.ROOT / "sources" / "raw" / "frames6" / video.stem
+    out = site.path / "sources" / "raw" / "frames6" / video.stem
     out.mkdir(parents=True, exist_ok=True)
 
     rows, best = [], {}
@@ -52,8 +50,10 @@ def main():
         w = csv.writer(fh)
         w.writerow(["frame", "t_s", "window", "sharpness", "kept"])
         w.writerows((*r, int(r[1] in kept)) for r in rows)
-    print(f"{video.name}: {len(rows)} frames decoded, {len(best)} kept in {out.relative_to(crs.ROOT)}")
+    print(f"{video.name}: {len(rows)} frames decoded, {len(best)} kept in {out.relative_to(site.path)}")
 
 
 if __name__ == "__main__":
-    main()
+    from ..project.site import started
+
+    main(started())       # run by itself, on the site the environment names

@@ -86,11 +86,10 @@ def osm_importer():
     return osm
 
 
-def fc(name, features):
-    from .geo import crs
-
+def fc(site, name, features):
+    """A layer of the site's, on its grid."""
     return {"type": "FeatureCollection", "name": name,
-            "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{crs.site_epsg()}"}}, "features": features}
+            "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{site.grid.epsg}"}}, "features": features}
 
 
 def write_json(path, value):
@@ -233,26 +232,26 @@ def clockwise(ring):
     return ring if area2 < 0 else ring[::-1]
 
 
-def draft_layers(root, found, lot, source):
-    """Run in a process with DOMUS_SITE set to the project, once its rasters are there."""
-    from .geo import crs, raster
+def draft_layers(site, found, lot, source):
+    """The site's drafted house, neighbours and plants, once its rasters are there."""
     from .importers.nz import points
     from .model import canopy, terrain, vegetation
+    from .project import rasters
 
-    site = crs.ROOT / "data" / "site"
-    dem = terrain.ground()
+    layers = site.path / "data" / "site"
+    dem = terrain.ground(site)
     ground = lambda e, n: dem.sample(np.atleast_1d(e), np.atleast_1d(n))
-    surface = (lambda e, n: raster.dsm().sample(np.atleast_1d(e), np.atleast_1d(n))) if raster.DSM.exists() else (
+    surface = (lambda e, n: rasters.dsm(site).sample(np.atleast_1d(e), np.atleast_1d(n))) if rasters.path(site, "dsm").exists() else (
         lambda e, n: np.full(np.shape(e), np.nan))
     house_ring, others = pick_house(found, lot)
     settings = []
-    cloud = points.read()
-    roof_points = points.on_site(cloud, cloud["cls"] == points.BUILDING) if cloud is not None else None
+    cloud = points.read(points.laz_path(site))
+    roof_points = points.on_site(cloud, site.grid, cloud["cls"] == points.BUILDING) if cloud is not None else None
     if house_ring:
         ring = clockwise(walls_from_roof([[round(a, 3), round(b, 3)] for a, b in house_ring]))
         h = fit_house(ring, ground, surface, roof_points)
         faces = [f"wall-{i}" for i in range(len(ring) - 1)]
-        write_json(site / "house.geojson", fc("house", [{
+        write_json(layers / "house.geojson", fc(site, "house", [{
             "type": "Feature", "geometry": {"type": "Polygon", "coordinates": [ring]},
             "properties": {"id": "house-walls", "name": "House (outline from public data)", "source": source, "soffit": h["soffit"], "faces": faces,
                            "basis": f"the public outline is the roof's edge: walls set {OVERHANG_M} m inside it for the eaves",
@@ -263,7 +262,7 @@ def draft_layers(root, found, lot, source):
                         + (f'roof_ridge_offset_m = {h["roof_ridge_offset_m"]}\n' if h.get("roof_ridge_offset_m") else "") +
                         f'roof_source = "LiDAR {h.get("roof_from", "surface model")} over the outline, an estimate"\n')
     feats = []
-    extent = _extent()
+    extent = _extent(site)
     for k, ring in enumerate(others):
         c = centroid(ring)
         if not (extent[0] < c[0] < extent[2] and extent[1] < c[1] < extent[3]):
@@ -278,23 +277,21 @@ def draft_layers(root, found, lot, source):
                       "properties": {"id": f"building-{k + 1}", "kind": "building", "name": f"Building {k + 1}", "material": "grey",
                                      "height_m": round(height, 1), "source": source, "confidence": "height from LiDAR"}})
     if feats:
-        write_json(site / "features-buildings.geojson", fc("features-buildings", feats))
-    if settings and "[house]" not in (crs.ROOT / "data" / "site.toml").read_text(encoding="utf-8"):
-        with open(crs.ROOT / "data" / "site.toml", "a", encoding="utf-8", newline="\n") as fh:
+        write_json(layers / "features-buildings.geojson", fc(site, "features-buildings", feats))
+    if settings and "[house]" not in site.settings_file.read_text(encoding="utf-8"):
+        with open(site.settings_file, "a", encoding="utf-8", newline="\n") as fh:
             fh.write("".join(settings))
-    if raster.DSM.exists() and raster.AERIAL.exists():
-        draft_trees(site, canopy, vegetation)
+    if rasters.path(site, "dsm").exists() and rasters.path(site, "aerial").exists():
+        draft_trees(site, layers, canopy, vegetation)
 
 
-def _extent():
-    from .geo import crs
-
-    return crs.settings()["model"]["extent"]
+def _extent(site):
+    return site.settings()["model"]["extent"]
 
 
-def draft_trees(site, canopy, vegetation):
-    """Crowns the LiDAR and aerial agree are plants, drawn as trees and shrubs."""
-    cands, _ = canopy.map_canopy(_extent())
+def draft_trees(site, layers, canopy, vegetation):
+    """Crowns the site's LiDAR and aerial agree are plants, drawn as trees and shrubs, into its `layers`."""
+    cands, _ = canopy.map_canopy(site, _extent(site))
     feats = []
     for k, c in enumerate(cands):
         kind = vegetation.guess_kind(c)
@@ -305,7 +302,7 @@ def draft_trees(site, canopy, vegetation):
             props.update(top="lidar", crown_base_m=round(max(0.8, 0.3 * float(c["height_max"])), 1), trunk_diameter_m=0.3, look="broadleaf")
         feats.append({"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [ring]}, "properties": props})
     if feats:
-        write_json(site / "trees.geojson", fc("trees", feats))
+        write_json(layers / "trees.geojson", fc(site, "trees", feats))
 
 
 def run_step(root, *args):
@@ -320,12 +317,14 @@ def run_step(root, *args):
         raise SystemExit("The build stopped: the lines above say why. Run the same address again to carry on.") from e
 
 
-def main(argv=None):
+def main(argv=None, named=None):
+    """`domus create ADDRESS [PATH]`: into PATH, else the site the command line was given (`named`, by --site or
+    DOMUS_SITE), else a folder named from the address."""
     ap = argparse.ArgumentParser(prog="domus create", description="Build a 3D model from an address and public data.")
     ap.add_argument("address")
     ap.add_argument("path", nargs="?", help="folder for the site project (default: from the address)")
     args = ap.parse_args(argv)
-    root = Path(args.path or os.environ.get("DOMUS_SITE") or slug(args.address))
+    root = Path(args.path) if args.path else named.path if named is not None else Path(slug(args.address))
     earlier = root / "data" / "public-lookup.json"
     if earlier.exists():
         if json.loads(earlier.read_text(encoding="utf-8")).get("query") != args.address:
@@ -347,38 +346,38 @@ def main(argv=None):
     return 0
 
 
-def rest():
-    """Runs with DOMUS_SITE set: fetch, draft, build."""
+def rest(site):
+    """In a process of its own, on the site: fetch, draft, build."""
     from . import build
-    from .geo import crs
 
-    found = json.loads((crs.ROOT / "data" / "public-lookup.json").read_text(encoding="utf-8"))
-    lot = json.loads((crs.ROOT / "data" / "site" / "boundary.geojson").read_text(encoding="utf-8"))["features"][0]["geometry"]["coordinates"][0]
-    importers.fetch()
+    found = json.loads((site.path / "data" / "public-lookup.json").read_text(encoding="utf-8"))
+    lot = json.loads((site.path / "data" / "site" / "boundary.geojson").read_text(encoding="utf-8"))["features"][0]["geometry"]["coordinates"][0]
+    importers.fetch(site)
     nz = found.get("importer", "nz") == "nz"
     if nz and publicdata.linz_key():
         from .importers.nz import title
 
         try:
-            title.main([])
+            title.main(site, [])
         except OSError as e:
             print(f"LINZ's title and easements didn't load ({e}); carrying on without them")
     if nz:
         from .importers.nz import points
 
         try:
-            points.main([])
+            points.main(site, [])
         except (OSError, SystemExit) as e:
             print(f"No point cloud ({e}); the roof is fitted to the 1 m surface model")
-    draft_layers(crs.ROOT, found, lot, found["source"])
-    crs.settings.cache_clear()    # the draft added [house]
-    build.main()
+    draft_layers(site, found, lot, found["source"])
+    site.forget_settings()    # the draft added [house]
+    build.main(site)
 
 
 if __name__ == "__main__":
     from .errors import as_command
+    from .project.site import started
 
     if sys.argv[1:] == ["--step", "rest"]:
-        as_command(rest)
+        as_command(lambda: rest(started()))     # run_step's process, on the site its environment names
     else:
         sys.exit(as_command(main))

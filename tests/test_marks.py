@@ -7,10 +7,12 @@ import sys
 
 import pytest
 
-from domus import crs, marks, publicdata
+from domus import marks, publicdata
 from domus.errors import DomusError
+from domus.geo.crs import Grid
 
 LOT = [[1000.0, 2000.0], [1020.0, 2000.0], [1020.0, 2020.0], [1000.0, 2020.0], [1000.0, 2000.0]]
+NZTM = Grid(2193)       # the sites here are on NZTM, so LINZ's coordinates are their own
 
 
 def mark(mark_id, name, x, y):
@@ -23,15 +25,13 @@ def height(name, x, y):
 
 
 @pytest.fixture
-def nztm_site(monkeypatch):
-    monkeypatch.setattr(crs, "site_to_nztm", lambda e, n: (e, n))
-    monkeypatch.setattr(crs, "nztm_to_site", lambda x, y: (x, y))
+def nztm_site():
     return marks.Polygon(LOT)
 
 
 def test_only_named_marks_on_the_line_are_kept(nztm_site):
     rows = [mark(1, "PEG 1 DP 9", 1000.5, 2010.0), mark(2, "UNMK 2 DP 9", 1000.0, 2005.0), mark(3, None, 1000.0, 2006.0), mark(4, "PEG 4 DP 9", 1040.0, 2010.0)]
-    feats = marks.boundary_features(rows, nztm_site)
+    feats = marks.boundary_features(rows, nztm_site, NZTM)
     assert [f["properties"]["name"] for f in feats] == ["PEG 1 DP 9"]
     assert feats[0]["properties"]["kind"] == "mark"
     assert feats[0]["properties"]["confidence"] == "LINZ, +-0.2 m"
@@ -42,8 +42,7 @@ def test_height_marks_come_nearest_first_and_join_the_layer_only_by_name(nztm_si
     (tmp_path / "data" / "site" / "boundary.geojson").write_text(json.dumps(
         {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {"type": "Polygon", "coordinates": [LOT]}}]}), encoding="utf-8")
     (tmp_path / "data" / "site.toml").write_text("[domus]\nformat = 3\n\n[crs]\nepsg = 2193\n", encoding="utf-8")
-    at_site(tmp_path)
-    monkeypatch.setattr(crs, "site_epsg", lambda: 2193)
+    s = at_site(tmp_path)
     monkeypatch.setenv("DOMUS_LINZ_KEY", "k")
     asked = []
 
@@ -53,16 +52,16 @@ def test_height_marks_come_nearest_first_and_join_the_layer_only_by_name(nztm_si
 
     monkeypatch.setattr(publicdata, "_wfs", fake)
     out_file = tmp_path / "data" / "site" / "features-survey-marks.geojson"
-    marks.main([])
+    marks.main(s, [])
     printed = capsys.readouterr().out
     assert asked == ["layer-50774", "layer-50784"]
     assert printed.index("NEAR") < printed.index("FAR")
     assert len(json.loads(out_file.read_text(encoding="utf-8"))["features"]) == 1
-    marks.main(["--height-mark", "NEAR"])
+    marks.main(s, ["--height-mark", "NEAR"])
     last = json.loads(out_file.read_text(encoding="utf-8"))["features"][-1]["properties"]
     assert last["id"] == "linz-height-mark" and last["name"] == "NEAR (35.3 m)"
     with pytest.raises(SystemExit, match="No height mark"):
-        marks.main(["--height-mark", "NOPE"])
+        marks.main(s, ["--height-mark", "NOPE"])
 
 
 def test_marks_and_title_search_round_the_main_lot_not_the_first(nztm_site, monkeypatch, tmp_path, at_site):
@@ -72,18 +71,20 @@ def test_marks_and_title_search_round_the_main_lot_not_the_first(nztm_site, monk
              {"type": "Feature", "properties": {"id": "lot"}, "geometry": {"type": "Polygon", "coordinates": [LOT]}}]
     (tmp_path / "data" / "site" / "boundary.geojson").write_text(json.dumps({"type": "FeatureCollection", "features": feats}),
                                                                  encoding="utf-8")
-    at_site(tmp_path)
-    monkeypatch.setattr(crs, "settings", lambda: {"boundary": {"main": "lot"}})
-    assert marks.lot_on_nztm().equals(marks.Polygon(LOT))
-    monkeypatch.setattr(crs, "settings", lambda: {"boundary": {"main": "gone"}})
+    toml = tmp_path / "data" / "site.toml"
+    toml.write_text('[domus]\nformat = 3\n\n[crs]\nepsg = 2193\n\n[boundary]\nmain = "lot"\n', encoding="utf-8")
+    s = at_site(tmp_path)
+    assert marks.lot_on_nztm(s).equals(marks.Polygon(LOT))
+    toml.write_text(toml.read_text(encoding="utf-8").replace('"lot"', '"gone"'), encoding="utf-8")
+    s.forget_settings()
     with pytest.raises(DomusError, match="'gone'"):
-        marks.lot_on_nztm()
+        marks.lot_on_nztm(s)
 
 
-def test_it_asks_for_the_key(monkeypatch):
+def test_it_asks_for_the_key(monkeypatch, project):
     monkeypatch.delenv("DOMUS_LINZ_KEY", raising=False)
     with pytest.raises(SystemExit, match="DOMUS_LINZ_KEY"):
-        marks.main([])
+        marks.main(project, [])
 
 
 def run_python(code, **env):

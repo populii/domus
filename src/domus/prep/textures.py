@@ -28,14 +28,14 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy.spatial.transform import Rotation
 
-from ..geo import crs, geojson
+from ..geo import geojson
 from ..model import house, terrain
 from . import config
 
 
-def raw_dir():
+def raw_dir(site):
     """The site's source documents and photos, sources/raw/."""
-    return crs.ROOT / "sources" / "raw"
+    return site.path / "sources" / "raw"
 PPM = 100
 
 
@@ -78,15 +78,15 @@ def seamless(a, axes, frac=0.18):
     return out
 
 
-def feature_textures():
+def feature_textures(site):
     ap = argparse.ArgumentParser(prog="domus prep feature-textures")
     ap.add_argument("--check", help="directory for the sources with their quads drawn on")
     args = ap.parse_args()
-    cfg = config("feature_textures")
-    out = crs.ROOT / "data" / "features"
+    cfg = config(site, "feature_textures")
+    out = site.path / "data" / "features"
     out.mkdir(parents=True, exist_ok=True)
     for name, t in cfg["textures"].items():
-        img = np.asarray(Image.open(raw_dir() / t["source"]).convert("RGB"))
+        img = np.asarray(Image.open(raw_dir(site) / t["source"]).convert("RGB"))
         tex = rectify(img, t["quad"], t["size"])
         note = ""
         if t.get("straighten"):
@@ -108,17 +108,17 @@ def feature_textures():
         print(f"{name}: {base} turned on its side")
 
 
-def wall_textures():
+def wall_textures(site):
     ap = argparse.ArgumentParser(prog="domus prep wall-textures")
     ap.add_argument("--check", help="directory for the frames with their quads drawn on")
     args = ap.parse_args()
-    cfg = config("wall_textures")
-    out = crs.ROOT / "data" / "walls"
+    cfg = config(site, "wall_textures")
+    out = site.path / "data" / "walls"
     out.mkdir(parents=True, exist_ok=True)
 
     def piece(name):
         p = cfg["pieces"][name]
-        return even_out(rectify(np.asarray(Image.open(raw_dir() / p["source"]).convert("RGB")), p["quad"], p["size"]))
+        return even_out(rectify(np.asarray(Image.open(raw_dir(site) / p["source"]).convert("RGB")), p["quad"], p["size"]))
 
     def save(a, name):
         a = a * cfg.get("gain", 1.0)
@@ -138,16 +138,16 @@ def wall_textures():
     if args.check:
         Path(args.check).mkdir(parents=True, exist_ok=True)
         for name, p in cfg["pieces"].items():
-            im = Image.open(raw_dir() / p["source"]).convert("RGB")
+            im = Image.open(raw_dir(site) / p["source"]).convert("RGB")
             ImageDraw.Draw(im).line([*map(tuple, p["quad"]), tuple(p["quad"][0])], fill=(255, 0, 0), width=3)
             im.save(Path(args.check) / f"src-{name}.jpg", quality=80)
 
 
-def faces_by_group():
-    cfg = crs.settings()
+def faces_by_group(site):
+    cfg = site.settings()
     hc = cfg["house"]
-    fc = geojson.read(crs.ROOT / "data" / "site" / "house.geojson")["features"]
-    g = terrain.ground()
+    fc = geojson.read(site.path / "data" / "site" / "house.geojson")["features"]
+    g = terrain.ground(site)
     hm = house.build(fc, hc["fl_upper"], hc["roof_pitch_deg"], hc["roof_plane_at_wall"],
                      hc["eaves_overhang_m"], lambda e, n: g.sample(np.atleast_1d(e), np.atleast_1d(n)), **house.roof_options(hc))
     groups = {}
@@ -186,10 +186,10 @@ def texel_grid(faces):
     return (W, H), (u_max, z0, z1), np.stack([E, N, Z], -1), nrm
 
 
-def from_photo(spec, faces):
+def from_photo(site, spec, faces):
     (W, H), ext, _, _ = texel_grid(faces)
     z1 = ext[2]
-    img = cv2.imread(str(raw_dir() / spec["photo"]))
+    img = cv2.imread(str(raw_dir(site) / spec["photo"]))
     tex = np.zeros((H, W, 3), np.uint8)
     mask = np.zeros((H, W), np.uint8)
     for pairs in spec["faces"].values():
@@ -205,13 +205,15 @@ def from_photo(spec, faces):
 
 
 class Frames:
-    def __init__(self, tag):
-        d = np.load(crs.ROOT / "data" / "video" / f"{tag}-sfm.npz")
-        self.tag, self.main = tag, tag.split("-")[0]
+    """A placed reconstruction of the site's: its frames' cameras and their placement."""
+
+    def __init__(self, site, tag):
+        d = np.load(site.path / "data" / "video" / f"{tag}-sfm.npz")
+        self.site, self.tag, self.main = site, tag, tag.split("-")[0]
         self.names = [str(n) for n in d["frame_names"]]
         self.rvecs, self.tvecs = d["rvecs"], d["tvecs"]
         self.f, self.k1, self.cx, self.cy = d["intrinsics"]
-        p = np.array(json.loads((crs.ROOT / "data" / "video" / f"{tag}-georef.json").read_text(encoding="utf-8"))["params"])
+        p = np.array(json.loads((site.path / "data" / "video" / f"{tag}-georef.json").read_text(encoding="utf-8"))["params"])
         self.s, self.R, self.t = np.exp(p[0]), Rotation.from_rotvec(p[1:4]).as_matrix(), p[4:7]
 
     def registered(self):
@@ -219,7 +221,7 @@ class Frames:
 
     def image(self, name):
         clip, stem = name.split("/", 1) if "/" in name else (self.main, name)
-        return cv2.imread(str(raw_dir() / "frames6" / clip / f"{stem}.jpg"))
+        return cv2.imread(str(raw_dir(self.site) / "frames6" / clip / f"{stem}.jpg"))
 
     def project(self, name, X):
         i = self.names.index(name)
@@ -236,9 +238,9 @@ class Frames:
         return self.s * self.R @ (-rc.T @ self.tvecs[i]) + self.t
 
 
-def from_frames(spec, faces, margin=30, sharp=8.0):
+def from_frames(site, spec, faces, margin=30, sharp=8.0):
     tag, sel = spec["frames"]
-    cams = Frames(tag)
+    cams = Frames(site, tag)
     names = cams.registered() if sel == "all" else sel
     (W, H), ext, X, nrm = texel_grid(faces)
     pts = X.reshape(-1, 3)
@@ -294,18 +296,18 @@ def apply_rects(mask, ext, spec):
     return mask
 
 
-def house_textures():
-    out = crs.ROOT / "data" / "house"
+def house_textures(site):
+    out = site.path / "data" / "house"
     out.mkdir(parents=True, exist_ok=True)
-    sources = config("house_textures")["sources"]
+    sources = config(site, "house_textures")["sources"]
     wanted = sys.argv[1:] or list(sources)
-    groups = faces_by_group()
+    groups = faces_by_group(site)
     index_path = out / "faces.json"
     index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {}
     for key in wanted:
         spec = sources[key]
         faces = groups[key]
-        tex, mask, ext = (from_photo if "photo" in spec else from_frames)(spec, faces)
+        tex, mask, ext = (from_photo if "photo" in spec else from_frames)(site, spec, faces)
         mask = apply_rects(mask, ext, spec)
         cv2.imwrite(str(out / f"{key}.jpg"), tex, [cv2.IMWRITE_JPEG_QUALITY, 85])
         cv2.imwrite(str(out / f"{key}-mask.png"), mask)

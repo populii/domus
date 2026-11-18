@@ -78,11 +78,11 @@ def test_ground_shift_uses_the_lowest_points(site):
     assert auto.ground_shift(np.vstack([floor, tree]), lambda a, b: np.full(np.shape(a), 40.0)) == pytest.approx(2.0)
 
 
-def test_cloud_rebuild_is_held_back_when_listed_clouds_are_missing(site):
+def test_cloud_rebuild_is_held_back_when_listed_clouds_are_missing(site, project):
     from domus.capture import auto
 
-    assert auto.missing_clouds({"video": {"clouds": ["nowhere-site"]}}) == ["nowhere-site"]
-    assert auto.missing_clouds({}) == []
+    assert auto.missing_clouds(project, {"video": {"clouds": ["nowhere-site"]}}) == ["nowhere-site"]
+    assert auto.missing_clouds(project, {}) == []
 
 
 @pytest.fixture

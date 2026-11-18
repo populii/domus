@@ -27,13 +27,13 @@ def test_a_face_is_fitted_through_its_points_and_against_the_model():
         "empty: only 0 points"
 
 
-def test_a_frames_pixels_meet_a_plane(site):
+def test_a_frames_pixels_meet_a_plane(site, project):
     from domus import design
     from domus.prep import fitting
 
     # One frame, its camera 40 m up at s 5, o 5, looking along the grid's north: a pixel half the focal length below
     # the middle looks down 1 in 2, and meets a level 1.5 m below the camera 3 m north of it.
-    fr = design.frame()
+    fr = design.frame(project)
     e, n = fr.en(np.array([5.0, 5.0]))
     looks = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, -1.0, 0.0]])     # camera axes on the site, by column
     video = site / "data" / "video"
@@ -42,7 +42,7 @@ def test_a_frames_pixels_meet_a_plane(site):
              intrinsics=np.array([1000.0, 0.0, 500.0, 400.0]), frame_names=np.array(["t001.000"]))
     (video / "made-up-georef.json").write_text(json.dumps({"params": [0, 0, 0, 0, e, n, 40.0]}), encoding="utf-8")
     try:
-        placed = fitting.Placed("made-up")
+        placed = fitting.Placed(project, "made-up")
         c, what, points = placed.on_plane("t001.000", {"level": 38.5}, {"below": (500, 900), "level": (500, 400)}, fr)
         assert np.allclose(c, [e, n, 40.0]) and what == "level 38.5"
         p, behind = points["below"]

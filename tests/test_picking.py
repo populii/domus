@@ -58,7 +58,7 @@ def test_marks_are_set_and_dropped_with_a_backup(tmp_path):
         picks_edit.apply(data, {"new": {"set": {"t001.000": [1, 1]}}})
 
 
-def test_two_lens_mapping_needs_the_reconstructions_workspace(site):
+def test_two_lens_mapping_needs_the_reconstructions_workspace(site, project):
     import argparse
 
     from domus.capture import two_lens
@@ -67,7 +67,7 @@ def test_two_lens_mapping_needs_the_reconstructions_workspace(site):
                               stage="copy", mapper="global", threads=1, min_matches=30, every=None, keep=None,
                               ranges=None, name="", model=None, as_=None)
     with pytest.raises(DomusError, match="run domus video reconstruct first"):
-        two_lens.run(args)
+        two_lens.run(project, args)
     with pytest.raises(DomusError, match="map first"):
-        two_lens.run(argparse.Namespace(**{**vars(args), "stage": "convert"}))
+        two_lens.run(project, argparse.Namespace(**{**vars(args), "stage": "convert"}))
     assert two_lens.stamp("t012.345.jpg") == 12.345

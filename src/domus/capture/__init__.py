@@ -22,9 +22,11 @@ STEPS = {
     "crop": ("crop", "A piece of a photo at full size, from a smaller copy's corners"),
     "picks-edit": ("picks_edit", "Add, move or drop marks in a picks file, keeping a backup"),
 }
+SITE_FREE = {"sheet", "crop", "picks-edit"}      # steps that work on the files they're given, not on a site
 
 
-def main(argv):
+def main(site, argv):
+    """`domus video <step> [args]` on the site: the step's own main, handed the site unless it needs none."""
     if not argv or argv[0] not in STEPS:
         print("usage: domus video <step> [args]\n\nSteps, each with its own --help:")
         for name, (_, what) in STEPS.items():
@@ -32,4 +34,4 @@ def main(argv):
         return 0 if not argv else 2
     module = importlib.import_module(f".{STEPS[argv[0]][0]}", __name__)
     sys.argv = [f"domus video {argv[0]}", *argv[1:]]
-    return module.main()
+    return module.main() if argv[0] in SITE_FREE else module.main(site)

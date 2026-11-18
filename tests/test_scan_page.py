@@ -71,14 +71,14 @@ def test_upload_size_is_capped(app):
     assert call(port, "POST", "/api/scan/3.mp4", None, head)[0] == 413
 
 
-def test_a_scan_counts_on_the_checklist(built, site):
-    from domus import crs, enrich
+def test_a_scan_counts_on_the_checklist(built, site, project):
+    from domus import enrich
 
     raw = site / "sources" / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     (raw / "scan-1.webm").write_bytes(b"x")
     try:
-        assert next(s for s in enrich.checklist(crs.settings()) if s["id"] == "video")["found"]
+        assert next(s for s in enrich.checklist(project) if s["id"] == "video")["found"]
     finally:
         (raw / "scan-1.webm").unlink()
 

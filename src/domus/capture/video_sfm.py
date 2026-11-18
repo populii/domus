@@ -18,7 +18,6 @@ import time
 import cv2
 import numpy as np
 
-from ..geo import crs
 from . import safe_npz, sfm
 
 T0 = time.time()
@@ -64,7 +63,7 @@ def choose_initial_pair(rec, matches, lo=4, hi=15, want=300, exclude=()):
     return best
 
 
-def main():
+def main(site):
     ap = argparse.ArgumentParser()
     ap.add_argument("clip")
     ap.add_argument("--step", type=int, default=1, help="use every n-th frame")
@@ -87,10 +86,10 @@ def main():
                     help="processes for features and matching")
     args = ap.parse_args()
 
-    src = crs.ROOT / "sources" / "raw" / "frames6" / args.clip
+    src = site.path / "sources" / "raw" / "frames6" / args.clip
     paths = sorted(src.glob("*.jpg"))[::args.step]
-    log(f"{len(paths)} frames from {src.relative_to(crs.ROOT)}")
-    cache = crs.ROOT / "data" / "video" / "cache"
+    log(f"{len(paths)} frames from {src.relative_to(site.path)}")
+    cache = site.path / "data" / "video" / "cache"
     cache.mkdir(parents=True, exist_ok=True)
     cfile = cache / f"{args.clip}-step{args.step}-w{args.window}.npz"
     if cfile.exists():
@@ -122,13 +121,13 @@ def main():
     args.tag = args.tag or tag
     n_main = len(frames)
     for clip in [c for c in args.extra.split(",") if c]:
-        add_extra_clip(frames, matches, clip, args.extra_step, n_main, cache)
+        add_extra_clip(site, frames, matches, clip, args.extra_step, n_main, cache)
     if args.loops:
         key = "+".join([args.clip, *[c for c in args.extra.split(",") if c]])
         matches.update(loop_matches(frames, matches, args.window, cache / f"{key}-step{args.step}-loops.npz",
                                     args.loop_candidates, args.workers))
     rec.tracks = sfm.build_tracks(len(frames), matches)
-    _continue_after_tracks(rec, frames, matches, args, n_main)
+    _continue_after_tracks(site, rec, frames, matches, args, n_main)
 
 
 def loop_matches(frames, matches, window, cfile, candidates=12, workers=1):
@@ -159,10 +158,10 @@ def loop_matches(frames, matches, window, cfile, candidates=12, workers=1):
     return found
 
 
-def add_extra_clip(frames, matches, clip, step, n_main, cache):
+def add_extra_clip(site, frames, matches, clip, step, n_main, cache):
     """Append another clip's frames: matched within the clip, and each against the most
     similar frames of the main clip (found by a quick match of their strongest features)."""
-    paths = sorted((crs.ROOT / "sources" / "raw" / "frames6" / clip).glob("*.jpg"))[::step]
+    paths = sorted((site.path / "sources" / "raw" / "frames6" / clip).glob("*.jpg"))[::step]
     cfile = cache / f"{clip}-extra-step{step}.npz"
     if cfile.exists():
         c = safe_npz.load(cfile)
@@ -206,10 +205,10 @@ def compute_matches(frames, window, workers=1, scratch=None):
     return matches
 
 
-def _continue_after_tracks(rec, frames, matches, args, n_main):
+def _continue_after_tracks(site, rec, frames, matches, args, n_main):
     lens = np.array([len(t) for t in rec.tracks])
     log(f"{len(rec.tracks)} tracks, median length {np.median(lens):.0f}, >=3 views: {(lens >= 3).sum()}")
-    out = crs.ROOT / "data" / "video"
+    out = site.path / "data" / "video"
     out.mkdir(parents=True, exist_ok=True)
 
     # Model 1 from the best start pair; if the clip's chain of views breaks, the frames left
@@ -246,4 +245,6 @@ def _continue_after_tracks(rec, frames, matches, args, n_main):
 
 
 if __name__ == "__main__":
-    main()
+    from ..project.site import started
+
+    main(started())       # run by itself, on the site the environment names

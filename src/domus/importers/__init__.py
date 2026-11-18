@@ -12,7 +12,6 @@ the public source for where it is.
 """
 
 from ..errors import DomusError
-from ..geo import crs
 from ..project.newsite import in_new_zealand
 from .nz import publicdata
 
@@ -32,23 +31,23 @@ def lookup(address):
     return {**found, "importer": "nz" if in_new_zealand(*found["lonlat"]) else "osm"}
 
 
-def in_nz():
+def in_nz(site):
     """Whether the site is in New Zealand, where LINZ's data covers it."""
-    e0, n0, e1, n1 = crs.settings()["model"]["extent"]
-    return in_new_zealand(*crs.site_to_lonlat((e0 + e1) / 2, (n0 + n1) / 2))
+    e0, n0, e1, n1 = site.settings()["model"]["extent"]
+    return in_new_zealand(*site.grid.to_lonlat((e0 + e1) / 2, (n0 + n1) / 2))
 
 
-def fetch():
+def fetch(site):
     """`domus fetch`: the site's rasters from the public source for where it is: LINZ's LiDAR and photos in New Zealand,
     the Copernicus ground model anywhere else."""
-    if in_nz():
+    if in_nz(site):
         from .nz import linz
 
-        return linz.main()
+        return linz.main(site)
     from . import osm
 
     try:
-        return osm.fetch()
+        return osm.fetch(site)
     except OSError as e:
         raise DomusError(f"The Copernicus ground model didn't load ({e}). Try again shortly, or bring your own: put "
                          "the site's ground model in data/lidar/dem.tif (see docs/new-site.md).") from e

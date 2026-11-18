@@ -49,7 +49,7 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 
 | Part | What's in it |
 |---|---|
-| `geo/` | Grids and datums (`crs`: a site's `Grid`, made from its settings, reading no site), rasters read on their own grids, GeoJSON, meshes, fits |
+| `geo/` | Grids and datums (`crs`: a site's `Grid`, made from its settings), rasters read on their own grids, GeoJSON, meshes, fits: none of it reads a site |
 | `model/` | The model's parts: the ground (`terrain` reads the site's, `tin` triangulates), the house and its looks, walls, small features, plants (`canopy` reads the site's, `vegetation` draws), drains |
 | `options/` | The wall options: `scheme` works them out, `design` reads a site's for it, `sketch` turns a drawing into one |
 | `build/` | The build, and its cache |
@@ -58,7 +58,7 @@ data, it has a test on the made-up sites, and it's documented. The changelog say
 | `capture/` | Videos into placed clouds, and phone scans |
 | `prep/` | A site's documents and photos into its data |
 | `importers/` | Places into site folders: New Zealand's (`nz/`), anywhere's (`osm`) |
-| `project/` | The site folder: the Site Domus reads (its folder, output, settings, format and grid), its settings' schema, formats and upgrades, trusted extensions, layer edits, `domus new` and the demo |
+| `project/` | The site folder: the Site each part is handed (its folder, output, settings, format and grid) and its rasters, its settings' schema, formats and upgrades, trusted extensions, layer edits, `domus new` and the demo |
 | top level | The command line, the server, the public API (`api`, `testing`), `create`, the viewer and the templates |
 
 The modules that moved there in 2026.11.38 can still be imported by their old names (`domus.terrain`, `domus.video`,
@@ -69,8 +69,8 @@ The modules that moved there in 2026.11.38 can still be imported by their old na
 Every setting a site can hold is declared once, with its default and a line of help, in `domus.project.schema`, and the
 code reads settings through it. The tests fail on a setting the code reads that the schema doesn't declare, or reads
 with another default, and docs/site-format.md's tables are written from it. Import rules in pyproject.toml, checked in CI, keep the server on
-the standard library, the grid maths (`crs`) and the model's pure parts free of the site and the app, and the command
-line on top. The pure parts
+the standard library, the pure layers (`geo`, the model's pure parts and the options' working out) free of the site
+and the app, and the command line on top. The pure parts
 are the house and its looks, the walls and their looks, the small features, the plants (`vegetation`), the ground's
 triangulation (`tin`), the wall options' working out (`scheme`), the mesh helpers and the drains: the build, a workflow,
 reads the site (`terrain`, `canopy`, `design`) and hands them what they draw from.
@@ -96,7 +96,7 @@ Site tools, a site's own tests and agents use `domus.api` and `domus.testing` ([
 read its lot, house, layers, grid, ground and options, evaluate an option, build, check and export. What they offer changes only
 after a deprecation in an earlier release and a "For site projects" note in the changelog. The rest of the package is
 internal, so common can change behind the API without breaking a site's tools. A process can hold several sites:
-Domus's modules read the current site (`domus.project.site`), and each site keeps what Domus reads of it.
+each part of Domus is handed the site it works on (`domus.project.site`), and each site keeps what Domus reads of it.
 
 ## Where it's heading
 

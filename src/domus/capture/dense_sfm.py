@@ -20,13 +20,12 @@ import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from ..geo import crs
 from .sfm_georef import apply, load
 
 
-def video_dir():
+def video_dir(site):
     """The site's video work, data/video/."""
-    return crs.ROOT / "data" / "video"
+    return site.path / "data" / "video"
 
 
 T0 = time.time()
@@ -36,9 +35,9 @@ def log(msg):
     print(f"[{time.time() - T0:6.1f}s] {msg}", flush=True)
 
 
-def frame_path(tag, name):
+def frame_path(site, tag, name):
     clip, stem = (name.split("/", 1) if "/" in name else (tag.split("-")[0], name))
-    return crs.ROOT / "sources" / "raw" / "frames6" / clip / f"{stem}.jpg"
+    return site.path / "sources" / "raw" / "frames6" / clip / f"{stem}.jpg"
 
 
 def stereo_pair(img_a, img_b, k, dist, ra, ta, rb, tb, scale, z_near, z_far):
@@ -77,14 +76,14 @@ def stereo_pair(img_a, img_b, k, dist, ra, ta, rb, tb, scale, z_near, z_far):
     return pts_a, a[v, u][:, ::-1]
 
 
-def main():
+def main(site):
     ap = argparse.ArgumentParser()
     ap.add_argument("tag")
     ap.add_argument("--every", type=int, default=2)
     ap.add_argument("--scale", type=float, default=0.5)
     args = ap.parse_args()
-    rec = load(video_dir() / f"{args.tag}-sfm.npz")
-    params = np.array(json.loads((video_dir() / f"{args.tag}-georef.json").read_text(encoding="utf-8"))["params"])
+    rec = load(video_dir(site) / f"{args.tag}-sfm.npz")
+    params = np.array(json.loads((video_dir(site) / f"{args.tag}-georef.json").read_text(encoding="utf-8"))["params"])
     s_site = float(np.exp(params[0]))
     f, k1, cx, cy = rec["intr"]
     k = np.array([[f, 0, cx], [0, f, cy], [0, 0, 1]])
@@ -124,19 +123,19 @@ def main():
         if best is None:
             continue
         j = best[1]
-        img_a = cv2.imread(str(frame_path(args.tag, names[i])))
-        img_b = cv2.imread(str(frame_path(args.tag, names[j])))
+        img_a = cv2.imread(str(frame_path(site, args.tag, names[i])))
+        img_b = cv2.imread(str(frame_path(site, args.tag, names[j])))
         pts, cols = stereo_pair(img_a, img_b, k, dist, rots[i], rec["tvecs"][i], rots[j], rec["tvecs"][j],
                                 args.scale, 0.7 * near[i], 4 * median[i])
-        site = apply(params, (pts - rec["tvecs"][i]) @ rots[i])     # camera a -> model -> site
-        keys, inv = np.unique(np.floor(site / cell).astype(np.int64), axis=0, return_inverse=True)
+        on_site = apply(params, (pts - rec["tvecs"][i]) @ rots[i])     # camera a -> model -> site
+        keys, inv = np.unique(np.floor(on_site / cell).astype(np.int64), axis=0, return_inverse=True)
         inv = inv.ravel()
         n = np.bincount(inv)
-        sums = np.column_stack([np.bincount(inv, weights=site[:, c] - site[0, c]) for c in range(3)])
+        sums = np.column_stack([np.bincount(inv, weights=on_site[:, c] - on_site[0, c]) for c in range(3)])
         csum = np.column_stack([np.bincount(inv, weights=cols[:, c].astype(float)) for c in range(3)])
-        parts.append((keys, n, sums + n[:, None] * site[0], csum))
+        parts.append((keys, n, sums + n[:, None] * on_site[0], csum))
         log(f"pair {names[i]} + {names[j]}: baseline {np.linalg.norm(centres[j] - centres[i]) * s_site:.2f} m, "
-            f"{len(site)} points in {len(keys)} cells")
+            f"{len(on_site)} points in {len(keys)} cells")
     # A cell counts when two or more pairs put points in it; its point is their mean position.
     keys = np.vstack([p[0] for p in parts])
     uniq, inv = np.unique(keys, axis=0, return_inverse=True)
@@ -148,10 +147,12 @@ def main():
     keep = n_pairs >= 2
     xyz_out = pos[keep] / n_pts[keep, None]
     rgb_out = (col[keep] / n_pts[keep, None]).clip(0, 255).astype(np.uint8)
-    np.savez_compressed(video_dir() / f"{args.tag}-dense.npz", xyz=xyz_out, rgb=rgb_out, pairs=n_pairs[keep])
+    np.savez_compressed(video_dir(site) / f"{args.tag}-dense.npz", xyz=xyz_out, rgb=rgb_out, pairs=n_pairs[keep])
     log(f"wrote {args.tag}-dense.npz: {keep.sum()} of {len(uniq)} {cell * 100:.0f} cm cells seen by 2+ "
         f"of {len(parts)} pairs")
 
 
 if __name__ == "__main__":
-    main()
+    from ..project.site import started
+
+    main(started())       # run by itself, on the site the environment names

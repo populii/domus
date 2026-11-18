@@ -34,9 +34,11 @@ def script(site, code):
 CENTRE = """
 import json, numpy as np
 from domus import design, terrain, sketch
-c = design.regrade_area().representative_point()
+from domus.project.site import started
+site = started()
+c = design.regrade_area(site).representative_point()
 e, n = c.x, c.y
-g = float(terrain.ground().sample(np.array([e]), np.array([n]))[0])
+g = float(terrain.ground(site).sample(np.array([e]), np.array([n]))[0])
 """
 
 
@@ -56,7 +58,7 @@ def test_a_retaining_wall_shapes_the_ground_and_reports_itself(site):
     r = script(site, CENTRE + """
 items = [{"id": 1, "kind": "wall", "name": "Low wall", "en": [[e - 3, n], [e + 3, n]], "material": "timber", "mode": "level",
           "tops": [g + 1.0, g + 1.0], "retains": "left", "back": 2.0}]
-a = sketch.evaluate(items)
+a = sketch.evaluate(site, items)
 print(json.dumps({"walls": a["walls"], "fill": a["volumes"]["fill_m3"], "grid": a["grid"] is not None}))
 """)
     assert r["walls"][0]["id"] == "S1" and r["walls"][0]["retained_max_m"] > 0.3
@@ -65,7 +67,7 @@ print(json.dumps({"walls": a["walls"], "fill": a["volumes"]["fill_m3"], "grid": 
 
 def test_it_says_nothing_about_cost_or_consent(site):
     r = script(site, CENTRE + """
-a = sketch.evaluate([{"id": 1, "kind": "wall", "name": "W", "en": [[e - 3, n], [e + 3, n]], "material": "block", "mode": "level", "tops": [g + 2.5, g + 2.5], "retains": "left"}])
+a = sketch.evaluate(site, [{"id": 1, "kind": "wall", "name": "W", "en": [[e - 3, n], [e + 3, n]], "material": "block", "mode": "level", "tops": [g + 2.5, g + 2.5], "retains": "left"}])
 print(json.dumps(a, default=float))
 """)
     text = json.dumps({k: v for k, v in r.items() if k != "grid"}).lower()
@@ -87,18 +89,18 @@ def test_the_file_it_writes_gives_the_same_answer(site):
 import tomllib
 items = [{"id": 1, "kind": "wall", "name": 'A "quoted" wall', "en": [[e - 3, n], [e + 3, n], [e + 3, n + 2]], "material": "stone", "mode": "level", "tops": [g + 1, g + 1, g + .8], "retains": "left"},
          {"id": 2, "kind": "wall", "name": "Height wall", "en": [[e - 3, n + 5], [e + 3, n + 5]], "material": "crib", "mode": "height", "height": 0.5}]
-opt = sketch.to_option(items, "My sketch")
+opt = sketch.to_option(site, items, "My sketch")
 text = sketch.to_toml(opt)
 back = tomllib.loads(text)
-one = design.evaluate(opt, step=0.25)
-two = design.evaluate({**back, "id": "x"}, step=0.25)
+one = design.evaluate(site, opt, step=0.25)
+two = design.evaluate(site, {**back, "id": "x"}, step=0.25)
 print(json.dumps({"same": abs(one["volumes"]["fill_m3"] - two["volumes"]["fill_m3"]) < 0.5, "name": back["name"], "wall": back["walls"][0]["name"]}))
 """)
     assert r == {"same": True, "name": "My sketch", "wall": 'A "quoted" wall'}
 
 
 def test_an_empty_sketch_is_empty(site):
-    assert script(site, CENTRE + 'print(json.dumps(sketch.evaluate([{"id": 1, "kind": "wall", "en": [[0, 0]]}])))')["empty"]
+    assert script(site, CENTRE + 'print(json.dumps(sketch.evaluate(site, [{"id": 1, "kind": "wall", "en": [[0, 0]]}])))')["empty"]
 
 
 def test_the_worker_answers_line_by_line_and_survives_a_bad_one(site):

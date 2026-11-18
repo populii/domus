@@ -51,16 +51,15 @@ from PIL import Image
 from scipy.spatial.transform import Rotation
 
 from ..errors import DomusError
-from ..geo import crs
 from . import sfm
 
 
-def frames_dir():
+def frames_dir(site):
     """The clips' frames, sources/raw/frames6/."""
-    return crs.ROOT / "sources" / "raw" / "frames6"
-def video_dir():
+    return site.path / "sources" / "raw" / "frames6"
+def video_dir(site):
     """The site's video work, data/video/."""
-    return crs.ROOT / "data" / "video"
+    return site.path / "data" / "video"
 MIN_MODEL = 8          # frames; smaller models are dropped, as in video_sfm.py
 MAX_MODELS = 5         # <tag>, <tag>-m2 ... <tag>-m5, as in video_sfm.py
 VLAD_WORDS = 64
@@ -194,20 +193,20 @@ def colmap_median_reproj(rec):
 
 # --------------------------------------------------------------------------- inputs
 
-def frame_list(clip, step, extra, extra_step):
+def frame_list(site, clip, step, extra, extra_step):
     """COLMAP image names (<clip>/<file>, under sources/raw/frames6) and our frame names, in
     our order: the main clip's frame stems, then <clip>/<stem> for each extra clip."""
     images, names = [], []
     for c, s, main in [(clip, step, True)] + [(e, extra_step, False) for e in extra]:
-        paths = sorted((frames_dir() / c).glob("*.jpg"))[::s]
+        paths = sorted((frames_dir(site) / c).glob("*.jpg"))[::s]
         if not paths:
-            raise DomusError(f"no frames in {frames_dir() / c}")
+            raise DomusError(f"no frames in {frames_dir(site) / c}")
         images += [f"{c}/{p.name}" for p in paths]
         names += [p.stem if main else f"{c}/{p.stem}" for p in paths]
     return images, names
 
 
-def prepare_workspace(work, settings, fresh):
+def prepare_workspace(site, work, settings, fresh):
     """Keep the database's features when they were made from the same frames, focal and
     feature count, and its matches too when the matching settings are also the same.
     COLMAP skips frames and pairs already in the database, so an interrupted run resumes."""
@@ -217,15 +216,15 @@ def prepare_workspace(work, settings, fresh):
     if old is None or any(old.get(k) != settings[k] for k in FEATURE_SETTINGS):
         if work.exists():
             shutil.rmtree(work)
-        log(f"new workspace {work.relative_to(crs.ROOT)}")
+        log(f"new workspace {work.relative_to(site.path)}")
     elif old != settings:
         with pycolmap.Database.open(db) as d:
             d.clear_matches()
             d.clear_two_view_geometries()
         (work / "revisit-pairs.txt").unlink(missing_ok=True)
-        log(f"reusing the features in {db.relative_to(crs.ROOT)}; matching settings changed, matches cleared")
+        log(f"reusing the features in {db.relative_to(site.path)}; matching settings changed, matches cleared")
     else:
-        log(f"reusing {db.relative_to(crs.ROOT)}: features and matches made with the same settings")
+        log(f"reusing {db.relative_to(site.path)}: features and matches made with the same settings")
     work.mkdir(parents=True, exist_ok=True)
     stamp.write_text(json.dumps(settings, indent=1) + "\n", encoding="utf-8")
     return db
@@ -334,7 +333,7 @@ def verified_pairs(db, among=None):
 
 # --------------------------------------------------------------------------- mapping
 
-def run_mapper(kind, db, sparse, threads, seed, min_matches):
+def run_mapper(site, kind, db, sparse, threads, seed, min_matches):
     """COLMAP's global (GLOMAP) or incremental mapper; pairs with fewer than `min_matches`
     verified matches are left out of the view graph."""
     if sparse.exists():
@@ -345,17 +344,17 @@ def run_mapper(kind, db, sparse, threads, seed, min_matches):
                                               min_model_size=MIN_MODEL, min_num_matches=min_matches)
         opts.mapper.num_threads = threads
         opts.mapper.random_seed = seed
-        return pycolmap.global_mapping(db, frames_dir(), sparse, opts)
+        return pycolmap.global_mapping(db, frames_dir(site), sparse, opts)
     opts = pycolmap.IncrementalPipelineOptions(num_threads=threads, random_seed=seed,
                                                min_model_size=MIN_MODEL, min_num_matches=min_matches)
     opts.mapper.num_threads = threads
     opts.mapper.random_seed = seed
-    return pycolmap.incremental_mapping(db, frames_dir(), sparse, opts)
+    return pycolmap.incremental_mapping(db, frames_dir(site), sparse, opts)
 
 
 # --------------------------------------------------------------------------- main
 
-def main():
+def main(site):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("clip")
     ap.add_argument("--step", type=int, default=1, help="use every n-th frame")
@@ -385,21 +384,21 @@ def main():
     args = ap.parse_args()
     tag = args.tag or f"{args.clip}-colmap"
     extra = [c for c in args.extra.split(",") if c]
-    images, names = frame_list(args.clip, args.step, extra, args.extra_step)
+    images, names = frame_list(site, args.clip, args.step, extra, args.extra_step)
     sizes = set()
     for im in images:
-        with Image.open(frames_dir() / im) as pic:
+        with Image.open(frames_dir(site) / im) as pic:
             sizes.add(pic.size)
     if len(sizes) > 1:
         raise SystemExit(f"frames differ in size {sizes}: one shared camera needs one size")
     w, h = sizes.pop()
     log(f"{len(images)} frames ({args.clip} every {args.step}"
         + (f", {','.join(extra)} every {args.extra_step}" if extra else "") + f"), {w} x {h}")
-    work = crs.ROOT / "data" / "video" / "cache" / "colmap" / tag
+    work = site.path / "data" / "video" / "cache" / "colmap" / tag
     settings = {"images": images, "focal": args.focal, "max_features": args.max_features,
                 "first_octave": args.first_octave, "overlap": args.overlap, "quadratic_steps": QUADRATIC_STEPS,
                 "retrieve": args.retrieve}
-    db = prepare_workspace(work, settings, args.fresh)
+    db = prepare_workspace(site, work, settings, args.fresh)
     times = {}
 
     with stage("features", times):
@@ -408,7 +407,7 @@ def main():
         ext.sift.first_octave = args.first_octave
         reader = pycolmap.ImageReaderOptions(camera_model="SIMPLE_RADIAL",
                                              camera_params=f"{args.focal},{w / 2},{h / 2},0")
-        pycolmap.extract_features(db, frames_dir(), image_names=images, camera_mode=pycolmap.CameraMode.SINGLE,
+        pycolmap.extract_features(db, frames_dir(site), image_names=images, camera_mode=pycolmap.CameraMode.SINGLE,
                                   reader_options=reader, extraction_options=ext, device=pycolmap.Device.cpu)
         with pycolmap.Database.open(db) as d:
             cams = d.read_all_cameras()
@@ -427,7 +426,7 @@ def main():
         with stage("revisit search", times):
             if pairs_file.exists():          # a re-run: the same pairs, not the next best ones
                 pairs = [tuple(line.split()) for line in pairs_file.read_text(encoding="utf-8").splitlines()]
-                log(f"reusing {len(pairs)} revisit pairs from {pairs_file.relative_to(crs.ROOT)}")
+                log(f"reusing {len(pairs)} revisit pairs from {pairs_file.relative_to(site.path)}")
             else:
                 pairs = revisit_pairs(db, args.retrieve, max(2, args.overlap // 2), np.random.default_rng(args.seed))
         with stage("revisit matching", times):
@@ -437,7 +436,7 @@ def main():
                 "revisit pairs verified)")
 
     with stage(f"mapping ({args.mapper})", times):
-        recs = run_mapper(args.mapper, db, work / f"sparse-{args.mapper}", args.threads, args.seed,
+        recs = run_mapper(site, args.mapper, db, work / f"sparse-{args.mapper}", args.threads, args.seed,
                           args.min_matches)
         models = sorted(recs.values(), key=lambda r: -r.num_reg_images())
         for r in models:
@@ -452,8 +451,8 @@ def main():
             r.update_point_3d_errors()
             ours, dup = to_ours(r, names, frame_of)
             med = median_reproj(ours)
-            summary = sfm.save(ours, video_dir(), out_tag, med)
-            saved = saved_median_reproj(video_dir() / f"{out_tag}-sfm.npz")
+            summary = sfm.save(ours, video_dir(site), out_tag, med)
+            saved = saved_median_reproj(video_dir(site) / f"{out_tag}-sfm.npz")
             own = colmap_median_reproj(r)
             log(json.dumps(summary))
             log(f"  {out_tag}: median reprojection {saved:.4f}px from the saved file with sfm.project, "
@@ -464,7 +463,7 @@ def main():
         for r in models[len(kept):]:
             log(f"  model of {r.num_reg_images()} frames not written")
         for part in range(len(kept) + 1, MAX_MODELS + 1):
-            if (video_dir() / f"{tag}-m{part}-sfm.npz").exists():
+            if (video_dir(site) / f"{tag}-m{part}-sfm.npz").exists():
                 log(f"  note: data/video/{tag}-m{part}-sfm.* is from an earlier run, not this one")
 
     log("stage times: " + ", ".join(f"{k} {v:.0f}s" for k, v in times.items())
@@ -472,4 +471,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from ..project.site import started
+
+    main(started())       # run by itself, on the site the environment names

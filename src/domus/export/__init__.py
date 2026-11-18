@@ -15,7 +15,6 @@ from pathlib import Path
 
 from .. import __version__
 from ..errors import DomusError
-from ..geo import crs
 from . import scene
 
 FORMATS = {".glb": "glb", ".ifc": "ifc"}
@@ -49,25 +48,25 @@ def format_of(path, format=None):
     return found
 
 
-def georeference(model, option):
+def georeference(site, model, option):
     """Where the model is: the site's grid and height datum, the model's origin on them, and what the file shows. It
     goes in a glTF's asset extras and an IFC's map conversion, so either can be placed on the grid again."""
     picked = scene.option_of(model, option)
     return {"title": model.get("title"), "built": model.get("built"), "domus": __version__,
-            "crs": {"epsg": crs.site_epsg(), "name": model.get("crs"), "vertical": model.get("vertical") or None},
+            "crs": {"epsg": site.grid.epsg, "name": model.get("crs"), "vertical": model.get("vertical") or None},
             "origin": [float(v) for v in model["origin"]],
             "axes": "metres: x east, y up and z south of the origin; on the grid E = E0 + x, N = N0 - z, height = H0 + y",
             "option": {k: picked[k] for k in ("id", "name", "short")} if picked else None}
 
 
-def write(path, format=None, option=None):
-    """Writes the current site's built model to `path` in `format` ("glb" or "ifc"; by default, the one its suffix
+def write(site, path, format=None, option=None):
+    """Writes the site's built model to `path` in `format` ("glb" or "ifc"; by default, the one its suffix
     says), with the wall option `option` (its id) shown, or the site as it is. Returns the file's path."""
     path = Path(path).resolve()
     kind = format_of(path, format)
-    folder = crs.OUTPUT
+    folder = site.output
     model = read_model(folder)
-    georef = georeference(model, option)
+    georef = georeference(site, model, option)
     parts = scene.parts(model, option)
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.part")
@@ -80,7 +79,7 @@ def write(path, format=None, option=None):
             from . import ifc
 
             e0, n0 = georef["origin"][:2]
-            ifc.write(parts, model, temp, georef, crs.site_to_lonlat(e0, n0), name=path.name)
+            ifc.write(parts, model, temp, georef, site.grid.to_lonlat(e0, n0), name=path.name)
         os.replace(temp, path)
     finally:
         temp.unlink(missing_ok=True)

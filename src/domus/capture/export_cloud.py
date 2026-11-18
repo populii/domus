@@ -21,15 +21,13 @@ seen from above) about `pivot` (E, N), so the viewer can show two placements of 
 import numpy as np
 from scipy.spatial import cKDTree
 
-from ..geo import crs
-
 REACH_M = 8.0      # keep points within this plan distance of one of the cloud's cameras
 
 
-def load(tag, cfg):
+def load(site, tag, cfg):
     """A cloud's points inside the model extent, its keep box and reach: (xyz, rgb, support)."""
     e0, n0, e1, n1 = cfg["model"]["extent"]
-    d = np.load(crs.ROOT / "data" / "video" / f"{tag}.npz")
+    d = np.load(site.path / "data" / "video" / f"{tag}.npz")
     xyz = d["xyz"]
     support = d["nview"] if "nview" in d else d["pairs"]
     keep = (xyz[:, 0] > e0) & (xyz[:, 0] < e1) & (xyz[:, 1] > n0) & (xyz[:, 1] < n1)
@@ -38,7 +36,7 @@ def load(tag, cfg):
         keep &= (xyz[:, 0] > box[0]) & (xyz[:, 1] > box[1]) & (xyz[:, 0] < box[2]) & (xyz[:, 1] < box[3])
     # Depth from a video gets worse with distance: keep points within reach of the cameras.
     if not tag.endswith("-scan"):   # a LiDAR scan measures depth directly and has no cameras
-        cams = np.load(crs.ROOT / "data" / "video" / f"{tag.rsplit('-', 1)[0]}-site.npz")["cameras"]
+        cams = np.load(site.path / "data" / "video" / f"{tag.rsplit('-', 1)[0]}-site.npz")["cameras"]
         near = cKDTree(cams[:, :2]).query(xyz[:, :2], distance_upper_bound=REACH_M)[0]
         keep &= np.isfinite(near)
     if "nview" in d:
@@ -68,13 +66,13 @@ def moved(xyz, entry):
     return out
 
 
-def main():
-    cfg = crs.settings()
-    tags = [*cfg.get("video", {}).get("clouds", []), *sorted(p.stem for p in (crs.ROOT / "data" / "video").glob("*-scan.npz"))]
+def main(site):
+    cfg = site.settings()
+    tags = [*cfg.get("video", {}).get("clouds", []), *sorted(p.stem for p in (site.path / "data" / "video").glob("*-scan.npz"))]
     origin = np.array([*cfg["model"]["origin"], 0.0][:3], float)   # a site may give no height: any origin does here
     pts, cols, views, src = [], [], [], []
     for k, tag in enumerate(tags):
-        xyz, rgb, support = load(tag, cfg)
+        xyz, rgb, support = load(site, tag, cfg)
         pts.append(xyz)
         cols.append(rgb)
         views.append(support)
@@ -82,7 +80,7 @@ def main():
     pts, cols, views, src = (np.concatenate(a) for a in (pts, cols, views, src))
     sel = thin(pts, views, origin)
     mm = np.round((pts[sel] - origin) * 1000).astype(np.int32)
-    np.savez_compressed(crs.ROOT / "data" / "video" / "points.npz", mm=mm, rgb=cols[sel].astype(np.uint8),
+    np.savez_compressed(site.path / "data" / "video" / "points.npz", mm=mm, rgb=cols[sel].astype(np.uint8),
                         source=src[sel], tags=np.array(tags), origin=origin)
     print(f"wrote data/video/points.npz: {len(sel)} points from {len(tags)} reconstructions")
 
@@ -91,7 +89,7 @@ def main():
         return
     mms, rgbs, sets = [], [], []
     for k, entry in enumerate(entries):
-        parts = [load(tag, cfg) for tag in entry["clouds"]]
+        parts = [load(site, tag, cfg) for tag in entry["clouds"]]
         xyz = moved(np.concatenate([p[0] for p in parts]), entry)
         rgb = np.concatenate([p[1] for p in parts])
         support = np.concatenate([p[2] for p in parts])
@@ -100,10 +98,12 @@ def main():
         rgbs.append(rgb[sel].astype(np.uint8))
         sets.append(np.full(len(sel), k, np.uint8))
         print(f"{entry['id']}: {len(sel)} points")
-    np.savez_compressed(crs.ROOT / "data" / "video" / "compare.npz", mm=np.concatenate(mms), rgb=np.concatenate(rgbs),
+    np.savez_compressed(site.path / "data" / "video" / "compare.npz", mm=np.concatenate(mms), rgb=np.concatenate(rgbs),
                         set=np.concatenate(sets), ids=np.array([e["id"] for e in entries]), origin=origin)
     print(f"wrote data/video/compare.npz: {len(entries)} sets")
 
 
 if __name__ == "__main__":
-    main()
+    from ..project.site import started
+
+    main(started())       # run by itself, on the site the environment names

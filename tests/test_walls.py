@@ -42,14 +42,14 @@ def test_open_ends_are_the_start_or_the_end():
     assert timber([[0, 0], [1, 0]], open_ends=["end", "start", "end"])["open_ends"] == ("start", "end")
 
 
-def test_the_face_at_an_open_end_shows_board_ends_not_a_post(site):
+def test_the_face_at_an_open_end_shows_board_ends_not_a_post(site, project):
     fc = json.loads((site / "data" / "site" / "walls-existing.geojson").read_text(encoding="utf-8"))
     feature = fc["features"][0]
     feature["properties"] = {**feature["properties"], "material": "timber", "open_ends": ["end"]}
     w = walls.from_feature(feature)
     from domus import terrain
 
-    m, _ = walls.mesh(w, terrain.ground())                                      # its toe is read off the site's ground
+    m, _ = walls.mesh(w, terrain.ground(project))                                      # its toe is read off the site's ground
     start, end = np.asarray(w["line"])[0], np.asarray(w["line"])[-1]
     cap = np.flatnonzero(m.cap)
     at_end = cap[np.hypot(*(m.vertices[cap, :2] - end).T) < np.hypot(*(m.vertices[cap, :2] - start).T)]

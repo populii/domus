@@ -38,17 +38,17 @@ def prep_json(site):
     path.unlink(missing_ok=True)
 
 
-def run(step, *args):
+def run(project, step, *args):
     from domus import prep
 
     argv = sys.argv
     try:
-        return prep.main([step, *args])
+        return prep.main(project, [step, *args])
     finally:
         sys.argv = argv
 
 
-def test_trace_puts_a_vector_sheet_on_the_grid(site, prep_json):
+def test_trace_puts_a_vector_sheet_on_the_grid(site, prep_json, project):
     raw = site / "sources" / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     # A red line 100 pt down the page, a black one 200 pt down and a label between them (PDF's y runs up from 400).
@@ -60,7 +60,7 @@ def test_trace_puts_a_vector_sheet_on_the_grid(site, prep_json):
         "name": "plan", "pdf": "sources/raw/plan.pdf", "out": "data/sources/plan.geojson", "window": [50, 50, 500, 350],
         "text": "words", "fill_colour": True, "colours": {"1.0,0.0,0.0": "drain", "0.0,0.0,0.0": "line"},
         "fit": {"kind": "similarity", "paper": {"A": [100, 100], "B": [300, 100]}, "boundary_corners": ["A", "B"]}}]}}), encoding="utf-8")
-    run("plan-trace")
+    run(project, "plan-trace")
     feats = json.loads((site / "data" / "sources" / "plan.geojson").read_text(encoding="utf-8"))["features"]
     drain = next(f for f in feats if f["properties"]["layer"] == "drain")
     assert np.allclose(drain["geometry"]["coordinates"], [a, b], atol=1e-6)
@@ -68,7 +68,7 @@ def test_trace_puts_a_vector_sheet_on_the_grid(site, prep_json):
     assert any(f["properties"]["layer"] == "line" for f in feats)
 
 
-def test_feature_textures_rectify_and_tile(site, prep_json):
+def test_feature_textures_rectify_and_tile(site, prep_json, project):
     raw = site / "sources" / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     a = np.zeros((200, 200, 3), np.uint8)
@@ -77,7 +77,7 @@ def test_feature_textures_rectify_and_tile(site, prep_json):
     prep_json.write_text(json.dumps({"feature_textures": {
         "textures": {"plate.jpg": {"source": "photo.png", "quad": [[60, 60], [140, 60], [140, 140], [60, 140]], "size": [64, 64], "seams": "xy"}},
         "turned": {"plate-up.jpg": "plate.jpg"}}}), encoding="utf-8")
-    run("feature-textures")
+    run(project, "feature-textures")
     out = np.asarray(Image.open(site / "data" / "features" / "plate.jpg"))
     assert out.shape == (64, 64, 3)
     assert np.abs(out.mean(axis=(0, 1)) - (200, 100, 50)).max() < 8
@@ -86,10 +86,10 @@ def test_feature_textures_rectify_and_tile(site, prep_json):
         (site / "data" / "features" / name).unlink()   # the demo draws plain; leave it so
 
 
-def test_check_finds_a_duplicate_id_on_the_demo(site, built):
+def test_check_finds_a_duplicate_id_on_the_demo(site, built, project):
     from domus.prep import check
 
-    m = check.Model()
+    m = check.Model(project)
     findings = []
     check.check_sanity(m, findings)
     assert not [f for f in findings if f[1] == "duplicate"]
@@ -100,10 +100,10 @@ def test_check_finds_a_duplicate_id_on_the_demo(site, built):
     assert [f for f in findings if f[1] == "duplicate"]
 
 
-def test_a_missing_settings_file_says_so(site, prep_json):
+def test_a_missing_settings_file_says_so(site, prep_json, project):
     prep_json.unlink(missing_ok=True)
     with pytest.raises(DomusError, match="from-documents"):
-        run("plan-pages")
+        run(project, "plan-pages")
 
 
 def test_each_command_keeps_its_own_help(capsys):
@@ -119,12 +119,12 @@ def box(x0, z0, x1, z1, y):
     return {"positions": [x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1], "indices": [0, 1, 2, 0, 2, 3]}
 
 
-def test_the_option_checks_find_nothing_wrong_on_the_demo(site, built):
+def test_the_option_checks_find_nothing_wrong_on_the_demo(site, built, project):
     from domus.prep import check
 
     for f in (check.check_through, check.check_fixes, check.check_blocks):
         findings = []
-        assert f(findings) == 0, findings
+        assert f(project, findings) == 0, findings
 
 
 def test_ground_through_a_wall_or_over_a_tread_is_found(site, tmp_path, monkeypatch, at_site):
@@ -135,16 +135,16 @@ def test_ground_through_a_wall_or_over_a_tread_is_found(site, tmp_path, monkeypa
                         {"id": "option-x-W1", "type": "mesh", "option": "x", **box(-1, -1, 1, 1, 0.5)},
                         {"id": "option-x-steps-1", "type": "mesh", "option": "x", **box(3, 3, 4, 4, 0.9)}]}
     (tmp_path / "model.json").write_text(json.dumps(model), encoding="utf-8")
-    at_site(site, output=tmp_path)
+    there = at_site(site, output=tmp_path)
     findings = []
-    assert check.check_through(findings) == 3
+    assert check.check_through(there, findings) == 3
     through = {f[2]: f[3] for f in findings if "comes through" in f[3]}
     assert set(through) == {"x/W1", "x/steps-1"} and "by up to 0.500 m" in through["x/W1"]
     assert "height 40.50" in through["x/W1"]                                # where, on the site's heights
     assert [f for f in findings if "stands over a tread's edge" in f[3] and f[2] == "x/steps-1"]
     (tmp_path / "model.json").unlink()
     findings = []
-    assert check.check_through(findings) == 0 and findings[0][1] == "info"
+    assert check.check_through(there, findings) == 0 and findings[0][1] == "info"
 
 
 def block(x0, z0, x1, z1, y0, y1):
@@ -179,9 +179,9 @@ def test_a_top_hidden_inside_another_wall_is_not_ground_through_it(site, tmp_pat
     from domus.prep import check
 
     tucked_corner(tmp_path, toe=0.0)
-    at_site(site, output=tmp_path)
+    there = at_site(site, output=tmp_path)
     findings = []
-    assert check.check_through(findings) == 0, findings
+    assert check.check_through(there, findings) == 0, findings
 
 
 def test_ground_through_a_wall_just_beside_a_thicker_one_is_still_found(site, tmp_path, at_site):
@@ -193,9 +193,9 @@ def test_ground_through_a_wall_just_beside_a_thicker_one_is_still_found(site, tm
     from domus.prep import check
 
     tucked_corner(tmp_path, toe=-0.1)
-    at_site(site, output=tmp_path)
+    there = at_site(site, output=tmp_path)
     findings = []
-    assert check.check_through(findings) == 1, findings
+    assert check.check_through(there, findings) == 1, findings
     assert findings[0][2] == "x/W2" and findings[0][3].startswith("ground comes through")
     by = float(re.search(r"by up to ([\d.]+) m", findings[0][3]).group(1))
     assert check.TOL_THROUGH < by <= 0.070, findings
@@ -209,14 +209,14 @@ def test_a_block_piece_is_whole_half_or_cut():
     assert check._cut(check._piece(3.3, 0, True)) and not check._cut(check._piece(3.004, 0, True))
 
 
-def test_a_profile_reads_the_ground_along_a_line_and_either_side(site):
+def test_a_profile_reads_the_ground_along_a_line_and_either_side(site, project):
     from domus import design, terrain
     from domus.prep import profile
 
     assert [round(s, 3) for s, _, _ in profile.stations(np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 1.5]]), 1.0)] == [0, 1, 2, 3, 3.5]
-    g, fr = terrain.ground(), design.frame()
+    g, fr = terrain.ground(project), design.frame(project)
     z = lambda en: float(np.atleast_1d(g.sample(np.array([en[0]]), np.array([en[1]])))[0])
-    rows = profile.profile([[4.0, 3.0], [8.0, 3.0]], offsets=(-1.0, 0.0, 1.0), step=2.0)
+    rows = profile.profile(project, [[4.0, 3.0], [8.0, 3.0]], offsets=(-1.0, 0.0, 1.0), step=2.0)
     assert [s for s, _, _ in rows] == [0.0, 2.0, 4.0]
     _, p, h = rows[1]
     assert np.allclose(p, [6.0, 3.0])
@@ -224,10 +224,10 @@ def test_a_profile_reads_the_ground_along_a_line_and_either_side(site):
     for off in (-1.0, 0.0, 1.0):
         assert h[off] == pytest.approx(z(fr.en(np.array([6.0, 3.0 + off]))), abs=1e-9)
     e, n = fr.en(np.array([6.0, 3.0]))
-    east = profile.profile([[e - 1, n], [e + 1, n]], offsets=(1.0,), step=0, grid=True)
+    east = profile.profile(project, [[e - 1, n], [e + 1, n]], offsets=(1.0,), step=0, grid=True)
     assert east[0][2][1.0] == pytest.approx(z([e - 1, n - 1]), abs=1e-9)                       # east's right is south
     with pytest.raises(DomusError, match="two points or more"):
-        profile.profile([[0, 0]])
+        profile.profile(project, [[0, 0]])
 
 
 def test_the_checks_skip_what_a_site_doesnt_have(tmp_path):

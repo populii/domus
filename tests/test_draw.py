@@ -30,8 +30,7 @@ def test_the_model_lists_what_to_snap_to_in_viewer_metres(tmp_path, at_site):
                                            feature("LineString", [[102.0, 202.0], [103.0, 202.0]], id="door-1", kind="door")), encoding="utf-8")
     (site / "walls-existing.geojson").write_text(fc(feature("LineString", [[101.0, 201.0, 45.0], [101.0, 205.0, 45.0]], id="W1", name="Old wall")), encoding="utf-8")
     (site / "features-survey-marks.geojson").write_text(fc(feature("Point", [105.0, 205.0], id="m", kind="mark", name="PEG 1")), encoding="utf-8")
-    at_site(tmp_path)
-    s = build.snap_targets((100.0, 200.0, 40.0))
+    s = build.snap_targets(at_site(tmp_path), (100.0, 200.0, 40.0))
     assert s["lines"][0] == {"label": "Boundary", "pts": [[0.0, -0.0], [10.0, -0.0], [10.0, -10.0], [0.0, -0.0]]}
     assert [li["label"] for li in s["lines"]] == ["Boundary", "House", "Old wall"]
     assert s["lines"][2]["pts"] == [[1.0, -1.0], [1.0, -5.0]]
@@ -42,6 +41,5 @@ def test_a_site_with_only_a_boundary_is_fine(tmp_path, at_site):
     site = tmp_path / "data" / "site"
     site.mkdir(parents=True)
     (site / "boundary.geojson").write_text(fc(feature("Polygon", [[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]], id="lot")), encoding="utf-8")
-    at_site(tmp_path)
-    s = build.snap_targets((0.0, 0.0, 0.0))
+    s = build.snap_targets(at_site(tmp_path), (0.0, 0.0, 0.0))
     assert len(s["lines"]) == 1 and s["points"] == []

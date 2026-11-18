@@ -59,11 +59,11 @@ def test_an_assumed_depth_and_no_levels_at_all():
     assert drains.levels(LINE, [], flat) is None
 
 
-def test_a_flagged_drain_says_so_on_its_pipe_and_in_every_check_of_it(site):
+def test_a_flagged_drain_says_so_on_its_pipe_and_in_every_check_of_it(site, project):
     from domus import build, design
 
     features = [drain(follow_up="the as-laid plan will show where it really is"), point(2, 9.2), point(18, 9.0)]
-    pipe = build.pipe_layers(features, build.Frame(np.zeros(3)), flat, {})[0]
+    pipe = build.pipe_layers(project, features, build.Frame(np.zeros(3)), flat, {})[0]
     assert pipe["info"]["follow_up"] == "the as-laid plan will show where it really is"
     cut = SimpleNamespace(existing=SimpleNamespace(sample=flat), sample=lambda e, n: np.full(np.shape(e), 9.6),
                           walls=[{"id": "W1", "line": [[10.0, -1.0], [10.0, 1.0]]}])
@@ -72,10 +72,10 @@ def test_a_flagged_drain_says_so_on_its_pipe_and_in_every_check_of_it(site):
     assert all("its levels are to be followed up" in c["flag"] for c in checks)
 
 
-def test_a_level_without_a_label_shows_its_invert(site):
+def test_a_level_without_a_label_shows_its_invert(site, project):
     from domus import build
 
-    b = SimpleNamespace(cfg={}, frame=build.Frame(np.zeros(3)), ground=flat, labels={}, layers=[], vertical="NZVD2016",
+    b = SimpleNamespace(site=project, cfg={}, frame=build.Frame(np.zeros(3)), ground=flat, labels={}, layers=[], vertical="NZVD2016",
                         svc_feats=[drain(), point(5, 9.25), point(15, 9.0, label="IL 9.00 (plan)")])
     build.add_marks(b)
     texts = [m["text"] for m in next(x for x in b.layers if x["id"] == "marks")["items"]]

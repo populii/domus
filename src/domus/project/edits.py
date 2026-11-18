@@ -46,16 +46,15 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from ..errors import DomusError
-from ..geo import crs
 
 
-def layers_dir():
+def layers_dir(site):
     """The site's curated layers, data/site/."""
-    return crs.ROOT / "data" / "site"
+    return site.path / "data" / "site"
 
 
-def _read(name):
-    path = layers_dir() / name
+def _read(site, name):
+    path = layers_dir(site) / name
     if not path.exists():
         raise DomusError(f"There's no {path}")
     raw = path.read_text(encoding="utf-8")
@@ -102,7 +101,7 @@ def _flat(c, out):
     return out
 
 
-def shift(spec, backup, apply=False, say=print):
+def shift(site, spec, backup, apply=False, say=print):
     de, dn = spec["shift"]
     dz = float(spec.get("dz", 0.0))
 
@@ -112,7 +111,7 @@ def shift(spec, backup, apply=False, say=print):
         return [moved(x) for x in c]
 
     for name, ids in spec["files"].items():
-        path, raw, data, compact = _read(name)
+        path, raw, data, compact = _read(site, name)
         before = json.loads(raw)
         found = set()
         for f in data["features"]:
@@ -175,10 +174,10 @@ def _vertices(geom):
     return c
 
 
-def edit(spec, backup, apply=False, say=print):
+def edit(site, spec, backup, apply=False, say=print):
     from ..options import design
 
-    fr = design.frame()
+    fr = design.frame(site)
 
     def to_en(so):
         a = np.asarray(so, float)
@@ -189,7 +188,7 @@ def edit(spec, backup, apply=False, say=print):
         return out[0] if one else out
 
     for name, edits in spec.items():
-        path, raw, data, compact = _read(name)
+        path, raw, data, compact = _read(site, name)
         before = json.loads(raw)
         by_id = {f["properties"].get("id"): f for f in data["features"]}
         touched, expect = set(), {}
@@ -259,7 +258,7 @@ def edit(spec, backup, apply=False, say=print):
 
 # --------------------------------------------------------------------------- regrade
 
-def regrade(clouds, spec, backup, apply=False, say=print):
+def regrade(site, clouds, spec, backup, apply=False, say=print):
     from ..prep.cloud import read_clouds
 
     radius, nmin, pct = spec.get("radius", 0.3), spec.get("min_points", 12), spec.get("percentile", 20)
@@ -267,11 +266,11 @@ def regrade(clouds, spec, backup, apply=False, say=print):
     parts = []
     for name in clouds:                 # several clouds of one placement count as one; a sparse cloud's well seen points
         stem = name.removesuffix(".npz")
-        parts.append(read_clouds([name], all_points=not stem.endswith("site"))[0])
+        parts.append(read_clouds(site, [name], all_points=not stem.endswith("site"))[0])
     xyz = np.vstack(parts)
     tree = cKDTree(xyz[:, :2])
     name = "ground-fixes.geojson"
-    path, raw, data, _ = _read(name)
+    path, raw, data, _ = _read(site, name)
     before = json.loads(raw)
     by_id = {f["properties"].get("id"): f for f in data["features"]}
 

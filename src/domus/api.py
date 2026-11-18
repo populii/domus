@@ -62,11 +62,6 @@ class Site:
     def __repr__(self):
         return f"Site({str(self.path)!r})"
 
-    def _use(self):
-        from .project.site import use
-
-        return use(self._project)
-
     @property
     def output(self):
         """The folder its model is built into: viewer/data in the site, or DOMUS_OUTPUT for the site DOMUS_SITE names."""
@@ -125,14 +120,14 @@ class Site:
         ground-fixes.geojson applied, and NaN where that has no ground."""
         import numpy as np
 
-        from .geo import raster
         from .model import terrain
+        from .project import rasters
 
-        with self._use():
-            if not raster.DEM.exists():
-                raise DomusError(f"{self.path} has no ground model yet: domus fetch gets one from LINZ, or put your own "
-                                 f"at {raster.DEM}")
-            model = terrain.ground()
+        dem = rasters.path(self._project, "dem")
+        if not dem.exists():
+            raise DomusError(f"{self.path} has no ground model yet: domus fetch gets one from LINZ, or put your own "
+                             f"at {dem}")
+        model = terrain.ground(self._project)
 
         def heights(e, n):
             e, n = np.broadcast_arrays(np.asarray(e, float), np.asarray(n, float))
@@ -145,16 +140,14 @@ class Site:
         with `id` (its file's name), `name`, `short`, `description`, `walls`, `terraces`, `stairs` and `path`."""
         from . import options
 
-        with self._use():
-            return options.load_all()
+        return options.load_all(self._project)
 
     def frame(self):
         """The frame the options are drawn in (options/_site.toml `[frame]`): s along a boundary, o in from it.
         frame.en(so) turns (s, o) points into the site's grid, and frame.so(en) the other way."""
         from .options import design
 
-        with self._use():
-            return design.frame()
+        return design.frame(self._project)
 
     def evaluate(self, option):
         """What an option comes to, as the viewer and its comparison table show it: its walls and their heights, cut and
@@ -166,15 +159,13 @@ class Site:
             if not found:
                 raise DomusError(f"{self.path} has no option {option!r} in options/")
             option = found[0]
-        with self._use():
-            return design.evaluate(option)
+        return design.evaluate(self._project, option)
 
     def build(self):
         """Builds the model into `output`, as domus build does, and returns that folder."""
         from . import build
 
-        with self._use():
-            build.main()
+        build.main(self._project)
         return self.output
 
     def export(self, path, format=None, option=None):
@@ -185,8 +176,7 @@ class Site:
         is. It reads the model as last built into `output`, so build the site after changing it."""
         from . import export
 
-        with self._use():
-            return export.write(path, format, option)
+        return export.write(self._project, path, format, option)
 
     def check(self, checks=None, tags=None, plots=False):
         """Runs the adversarial checks, as domus prep check does: `checks` names some of sanity, roof, plumb, clouds,
@@ -194,10 +184,9 @@ class Site:
         JPEGs. Returns the report it writes to .domus/checks/check_model.json in the site: `failures`, how many each
         check failed, `findings`, each a dict of check, level, object and detail, and `skipped`, why each check the
         site has nothing for was skipped."""
-        from .prep import check
+        from .checks import model as check
 
-        with self._use():
-            return check.run(checks or check.CHECKS, tags, plots)
+        return check.run(self._project, checks or check.CHECKS, tags, plots)
 
 
 def resample_line(line, spacing):

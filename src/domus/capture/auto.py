@@ -19,14 +19,13 @@ import numpy as np
 from PIL import Image
 from scipy.spatial.transform import Rotation
 
-from ..geo import crs
 from ..model import terrain
 from .sfm_georef import apply, fit_similarity, load
 
 
-def video_dir():
+def video_dir(site):
     """The site's video work, data/video/."""
-    return crs.ROOT / "data" / "video"
+    return site.path / "data" / "video"
 MIN_MATCHED = 8
 MIN_SPREAD_M = 3.0
 EYE_HEIGHT_M = 1.4
@@ -35,12 +34,12 @@ MAX_GROUND_SHIFT_M = 4.0
 MAIN_LENS = 0.76     # a phone's main camera: focal length in pixels over the image's width
 
 
-def step(module, *args):
-    """A step's own main, as if run by itself."""
+def step(site, module, *args):
+    """A step's own main on the site, as if run by itself."""
     argv = sys.argv
     try:
         sys.argv = [module.__name__, *map(str, args)]
-        module.main()
+        module.main(site)
     finally:
         sys.argv = argv
 
@@ -97,12 +96,12 @@ def ground_shift(xyz, ground, cell=0.5):
     return float(np.median(d)) if len(d) >= 10 else 0.0
 
 
-def missing_clouds(cfg):
+def missing_clouds(site, cfg):
     """Clouds the site lists that aren't here, which `export` would need to rebuild the point cloud."""
-    return [t for t in cfg.get("video", {}).get("clouds", []) if not (video_dir() / f"{t}.npz").exists()]
+    return [t for t in cfg.get("video", {}).get("clouds", []) if not (video_dir(site) / f"{t}.npz").exists()]
 
 
-def main():
+def main(site):
     from . import colmap_sfm, export_cloud, extract_frames
 
     ap = argparse.ArgumentParser(prog="domus video auto", description="From a scan to the model, with no hand work.")
@@ -110,7 +109,7 @@ def main():
     args = ap.parse_args()
     video = Path(args.video)
     if not video.is_absolute():
-        video = crs.ROOT / video
+        video = site.path / video
     if not video.exists():
         raise SystemExit(f"No such video: {video}")
     clip = video.stem
@@ -118,26 +117,26 @@ def main():
     poses = json.loads(poses_file.read_text(encoding="utf-8")) if poses_file.exists() else None
 
     print("Pulling out the frames", flush=True)
-    step(extract_frames, video)
-    first = next(iter(sorted((crs.ROOT / "sources" / "raw" / "frames6" / clip).glob("*.jpg"))), None)
+    step(site, extract_frames, video)
+    first = next(iter(sorted((site.path / "sources" / "raw" / "frames6" / clip).glob("*.jpg"))), None)
     if first is None:
         raise SystemExit("No frames came out of that video.")
     width = Image.open(first).size[0]
     focal = (poses or {}).get("focal_px") or MAIN_LENS * width
     print(f"Reconstructing, from a focal length of {focal:.0f} px. This is the slow part.", flush=True)
-    step(colmap_sfm, clip, "--focal", f"{focal:.1f}", "--tag", clip)
+    step(site, colmap_sfm, clip, "--focal", f"{focal:.1f}", "--tag", clip)
     if not poses or not poses.get("frames"):
         print("Reconstructed. This scan has no AR positions, so nothing says where it is: place it with `domus video place`, "
               "as docs/video.md explains.")
         return
 
-    cfg = crs.settings()
-    g = terrain.ground()
+    cfg = site.settings()
+    g = terrain.ground(site)
     ground = lambda e, n: g.sample(np.atleast_1d(e), np.atleast_1d(n))
     from ..build import site_origin
 
     t, pos = pose_track(poses, site_origin(cfg, g), ground)
-    rec = load(video_dir() / f"{clip}-sfm.npz")
+    rec = load(video_dir(site) / f"{clip}-sfm.npz")
     params, res = fit_to_track(camera_centres(rec), t, pos)
     if params is None:
         print("The walk was too short, or too few frames were reconstructed, to fix its place. Place it with `domus video place`.")
@@ -152,19 +151,19 @@ def main():
         dz = 0.0
     xyz[:, 2] += dz
     print(f"Moved {dz:+.2f} m to sit on the ground")
-    np.savez_compressed(video_dir() / f"{clip}-scan.npz", xyz=xyz, rgb=rec["rgb"], nview=rec["nview"])
-    (video_dir() / f"{clip}-scan.json").write_text(json.dumps({"params": params.tolist(), "dz_m": dz, "camera_residual_median_m": float(np.median(res)),
+    np.savez_compressed(video_dir(site) / f"{clip}-scan.npz", xyz=xyz, rgb=rec["rgb"], nview=rec["nview"])
+    (video_dir(site) / f"{clip}-scan.json").write_text(json.dumps({"params": params.tolist(), "dz_m": dz, "camera_residual_median_m": float(np.median(res)),
                                                        "source": "AR track, rough"}, indent=1), encoding="utf-8")
 
-    gone = missing_clouds(cfg)
+    gone = missing_clouds(site, cfg)
     if gone:
         print(f"Saved {clip}-scan.npz, but this site lists clouds that aren't here ({gone[0]} and others), so the model's point cloud wasn't "
               "rebuilt. Run `domus video export` and `domus build` where they are.")
         return
     print("Adding it to the model", flush=True)
-    step(export_cloud)
+    step(site, export_cloud)
     from .. import build
 
-    crs.settings.cache_clear()
-    build.main()
+    site.forget_settings()
+    build.main(site)
     print("Done. The scan is in the model's point cloud layer.")

@@ -68,9 +68,9 @@ def area_terrace(it):
             "polygon": [[float(a), float(b), float(c)] for (a, b), c in zip(en, z)]}
 
 
-def to_option(items, name="Sketch"):
-    """The option a sketch makes. Existing walls stay, since a sketch doesn't say otherwise."""
-    upstand = design.settings()["defaults"]["upstand_m"]
+def to_option(site, items, name="Sketch"):
+    """The option a sketch on the site makes. Existing walls stay, since a sketch doesn't say otherwise."""
+    upstand = design.settings(site)["defaults"]["upstand_m"]
     walls, terraces = [], []
     for it in items:
         if it.get("kind") == "wall" and len(it.get("en", [])) >= 2:
@@ -81,7 +81,7 @@ def to_option(items, name="Sketch"):
         elif it.get("kind") == "area" and len(it.get("en", [])) >= 3:
             terraces.append(area_terrace(it))
     return {"id": "sketch", "name": name, "short": name, "description": "From a sketch in the viewer.", "steps": 0,
-            "walls": walls, "terraces": terraces, "keep_existing": [w["id"] for w in design.existing_walls()]}
+            "walls": walls, "terraces": terraces, "keep_existing": [w["id"] for w in design.existing_walls(site)]}
 
 
 def _toml_value(v):
@@ -121,12 +121,12 @@ def ground_grid(res):
     return {"e0": float(e[0]), "n0": float(n[0]), "step": GRID_STEP_M, "nx": len(e), "ny": len(n), "z": keep(z), "dz": keep(dz)}
 
 
-def evaluate(items):
-    """What the sketch comes to: JSON for the viewer."""
-    opt = to_option(items)
+def evaluate(site, items):
+    """What the sketch comes to on the site: JSON for the viewer."""
+    opt = to_option(site, items)
     if not opt["walls"] and not opt["terraces"]:
         return {"walls": [], "empty": True}
-    res = design.evaluate(opt, step=0.25)
+    res = design.evaluate(site, opt, step=0.25)
     return {
         "walls": [{k: w[k] for k in ("id", "name", "length_m", "height_min_m", "height_max_m", "retained_max_m", "flags")} for w in res["walls"]],
         "volumes": res["volumes"],
@@ -136,11 +136,11 @@ def evaluate(items):
     }
 
 
-def main(argv=None):
-    """The worker: a request per line, an answer per line."""
+def main(site, argv=None):
+    """The worker for the site: a request per line, an answer per line."""
     for line in sys.stdin:
         try:
-            answer = evaluate(json.loads(line)["items"])
+            answer = evaluate(site, json.loads(line)["items"])
         except DomusError as e:     # the site's settings or data need putting right: the message says what
             answer = {"error": str(e)}
         except Exception as e:      # noqa: BLE001 - a sketch that can't be worked out is an answer, not the end of the worker

@@ -1,7 +1,12 @@
-"""Read a site's rasters and sample them at site coordinates.
+"""Rasters sampled at a site's coordinates.
 
 Each raster is sampled on its own grid, the one its file names, so the LiDAR and photos can come on any grid: a file
-that names none is taken to be on the site's. A height raster whose band says it's in feet is read in metres.
+that names none is taken to be on the site's, whose EPSG code it's given. A height raster whose band says it's in feet
+is read in metres. This module reads no site: domus.project.rasters finds a site's rasters and reads each once.
+
+The names it had when it read the current site as well (DEM, DSM, AERIAL, NIR, shift(), dem(), dsm(), aerial() and
+nir()) still give the current site's, for site code written before. They're deprecated: domus.project.rasters gives
+the same for the site it's handed.
 """
 
 from functools import lru_cache
@@ -11,30 +16,8 @@ import rasterio
 from pyproj import CRS, Transformer
 from scipy.ndimage import map_coordinates
 
-from ..project.site import cached
-from . import crs
-from .crs import settings, site_epsg
-
 FEET = {"ft": 0.3048, "foot": 0.3048, "feet": 0.3048, "international foot": 0.3048,
         "us survey foot": 1200 / 3937, "us-ft": 1200 / 3937, "ftus": 1200 / 3937, "us_survey_foot": 1200 / 3937}
-
-DEFAULTS = {"DEM": ("dem", "data/lidar/dem.tif"), "DSM": ("dsm", "data/lidar/dsm.tif"),
-            "AERIAL": ("aerial", "data/aerial/aerial.tif"), "NIR": ("nir", "data/aerial/nir.tif")}
-
-
-def __getattr__(name):
-    # raster.DEM and so on: read when used, since a site's settings can name its own files.
-    if name in DEFAULTS:
-        key, default = DEFAULTS[name]
-        return crs.ROOT / settings().get("rasters", {}).get(key, default)
-    raise AttributeError(name)
-
-
-def shift(key):
-    """How far the site moves a raster from where its file puts it, (east, north) in metres:
-    [rasters.shift_m] <key> in data/site.toml. For a photo that sits off the ground model and the house."""
-    east, north = settings().get("rasters", {}).get("shift_m", {}).get(key, (0.0, 0.0))
-    return float(east), float(north)
 
 
 @lru_cache
@@ -51,7 +34,10 @@ def metres_per_unit(units):
 
 
 class Raster:
-    def __init__(self, path, shift=(0.0, 0.0), heights=False):
+    """The raster in the file at `path`, sampled at points on the site's grid (`epsg`, its EPSG code), moved by `shift`
+    (east, north) from where its file puts it. `heights` reads a height band in feet in metres."""
+
+    def __init__(self, path, epsg, shift=(0.0, 0.0), heights=False):
         with rasterio.open(path) as src:
             self.data = src.read().astype(np.float32)
             self.transform = src.transform
@@ -66,7 +52,7 @@ class Raster:
                     self.data[band] *= np.float32(metres_per_unit(unit))
         self.inverse = ~self.transform
         self.shift = shift
-        self.to_own, self.to_site = _grids(site_epsg(), self.crs)
+        self.to_own, self.to_site = _grids(epsg, self.crs)
 
     def sample(self, e, n, band=0, order=1):
         """Values at site coordinates (bilinear by default); NaN outside the clip."""
@@ -91,25 +77,53 @@ class Raster:
         return np.asarray(x) + self.shift[0], np.asarray(y) + self.shift[1], self.data[band]
 
 
-@cached
+# The names from before rasters were read through the site they're handed, deprecated: each gives the current
+# site's, as it did.
+
+OLD_PATHS = {"DEM": "dem", "DSM": "dsm", "AERIAL": "aerial", "NIR": "nir"}
+
+
+def _old():
+    # The one way from here to a site, for these names alone (see pyproject.toml's import rules).
+    from ..project import rasters
+    from ..project.site import current
+
+    return rasters, current()
+
+
+def __getattr__(name):
+    """DEM, DSM, AERIAL and NIR, deprecated: domus.project.rasters.path(site, "dem") and so on, on the current site."""
+    if name in OLD_PATHS:
+        rasters, site = _old()
+        return rasters.path(site, OLD_PATHS[name])
+    raise AttributeError(name)
+
+
+def shift(key):
+    """Deprecated, domus.project.rasters.shift(site, key), on the current site."""
+    rasters, site = _old()
+    return rasters.shift(site, key)
+
+
 def dem():
-    """Bare-ground model, LiDAR 1 m DEM."""
-    return Raster(__getattr__("DEM"), shift("dem"), heights=True)
+    """Deprecated, domus.project.rasters.dem(site), on the current site."""
+    rasters, site = _old()
+    return rasters.dem(site)
 
 
-@cached
 def dsm():
-    """First-return surface model (roofs, trees), same survey."""
-    return Raster(__getattr__("DSM"), shift("dsm"), heights=True)
+    """Deprecated, domus.project.rasters.dsm(site), on the current site."""
+    rasters, site = _old()
+    return rasters.dsm(site)
 
 
-@cached
 def aerial():
-    """Aerial photo, RGB."""
-    return Raster(__getattr__("AERIAL"), shift("aerial"))
+    """Deprecated, domus.project.rasters.aerial(site), on the current site."""
+    rasters, site = _old()
+    return rasters.aerial(site)
 
 
-@cached
 def nir():
-    """Near-infrared aerial photo: band 0 red, band 1 near-infrared. Optional."""
-    return Raster(__getattr__("NIR"), shift("nir"))
+    """Deprecated, domus.project.rasters.nir(site), on the current site."""
+    rasters, site = _old()
+    return rasters.nir(site)

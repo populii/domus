@@ -104,7 +104,8 @@ def test_two_sites_in_one_process_are_read_apart(site, tmp_path):
     assert top_b == pytest.approx(top_a + 0.2, abs=0.02)
     assert a.evaluate(option)["walls"][0]["top_max"] == top_a
     here = json.loads((b.build() / "model.json").read_text(encoding="utf-8"))
-    r = run("from domus import build; build.main(['--fresh'])", DOMUS_SITE=str(other), DOMUS_OUTPUT=str(tmp_path / "apart"))
+    r = run("from domus import build; from domus.project.site import started; build.main(started(), ['--fresh'])",
+            DOMUS_SITE=str(other), DOMUS_OUTPUT=str(tmp_path / "apart"))
     assert r.returncode == 0, r.stderr
     apart = json.loads((tmp_path / "apart" / "model.json").read_text(encoding="utf-8"))
     assert _plain(here) == _plain(apart)

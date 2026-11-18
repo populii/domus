@@ -16,14 +16,13 @@ import time
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from ..geo import crs
 from . import safe_npz, sfm
 from .sfm_georef import apply, horn_initial
 
 
-def video_dir():
+def video_dir(site):
     """The site's video work, data/video/."""
-    return crs.ROOT / "data" / "video"
+    return site.path / "data" / "video"
 
 
 T0 = time.time()
@@ -63,11 +62,11 @@ def similarity(a, b):
     return p
 
 
-def main():
+def main(site):
     clip, a_tag, b_tag = sys.argv[1:4]
     out_tag = sys.argv[4] if len(sys.argv) > 4 else f"{clip}-joined"
-    a, b = np.load(video_dir() / f"{a_tag}-sfm.npz"), np.load(video_dir() / f"{b_tag}-sfm.npz")
-    c = safe_npz.load(video_dir() / "cache" / f"{clip}-step1-w6.npz")
+    a, b = np.load(video_dir(site) / f"{a_tag}-sfm.npz"), np.load(video_dir(site) / f"{b_tag}-sfm.npz")
+    c = safe_npz.load(video_dir(site) / "cache" / f"{clip}-step1-w6.npz")
     frames = [sfm.Frame(n, k, d, col) for n, k, d, col in zip(c["names"], c["kps"], c["des"], c["cols"])]
     matches = c["matches"].item()
     f, k1, cx, cy = a["intrinsics"]
@@ -118,8 +117,10 @@ def main():
         new = triangulate_all(3.0) if it < 2 else 0
         log(f"pass {it + 1}: median err {rms:.2f}px, f={rec.f:.1f}, k1={rec.k1:.4f}, dropped {dropped}, "
             f"new {new}, {len(rec.points)} points")
-    log(json.dumps(sfm.save(rec, video_dir(), out_tag, rms)))
+    log(json.dumps(sfm.save(rec, video_dir(site), out_tag, rms)))
 
 
 if __name__ == "__main__":
-    main()
+    from ..project.site import started
+
+    main(started())       # run by itself, on the site the environment names

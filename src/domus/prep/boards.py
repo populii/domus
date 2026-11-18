@@ -36,34 +36,33 @@ from PIL import Image
 from scipy.ndimage import uniform_filter1d
 
 from ..errors import DomusError
-from ..geo import crs
 
 PHASES = 12             # the most phases a spacing is averaged at: each then about as wide as a lap's shadow
 SHARE = 0.85            # a spacing whose contrast is this share of the best's is taken over a longer one
 MIN_SPACINGS = 4        # a band reads the boards from rows over at least this many of the longest spacing tried
 
 
-def house_dir():
+def house_dir(site):
     """The site's rectified wall photos, data/house/."""
-    return crs.ROOT / "data" / "house"
+    return site.path / "data" / "house"
 
 
-def faces():
+def faces(site):
     """data/house/faces.json: each rectified wall photo's record, by face."""
-    path = house_dir() / "faces.json"
+    path = house_dir(site) / "faces.json"
     if not path.exists():
         raise DomusError(f"There's no {path}: domus prep house-textures writes it, with each wall's rectified photo")
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def read_face(name, index=None):
+def read_face(site, name, index=None):
     """A face's photo in grey (rows down from its top), where the photo covers the face (True), and its record."""
-    index = faces() if index is None else index
+    index = faces(site) if index is None else index
     if name not in index:
         raise DomusError(f"data/house/faces.json has no face {name!r}: it has {', '.join(sorted(index)) or 'none'}")
     rec = index[name]
-    grey = np.asarray(Image.open(house_dir() / rec["file"]).convert("L"), float)
-    covered = np.asarray(Image.open(house_dir() / rec["mask"]).convert("L")) > 127 if rec.get("mask") else \
+    grey = np.asarray(Image.open(house_dir(site) / rec["file"]).convert("L"), float)
+    covered = np.asarray(Image.open(house_dir(site) / rec["mask"]).convert("L")) > 127 if rec.get("mask") else \
         np.ones(grey.shape, bool)
     return grey, covered, rec
 
@@ -177,9 +176,9 @@ def measure_photo(grey, covered, rec, along=None, band=0.5, heights=None, spacin
     return out
 
 
-def measure(name, along=None, band=0.5, heights=None, spacing=(0.08, 0.25), step=0.0002, index=None):
+def measure(site, name, along=None, band=0.5, heights=None, spacing=(0.08, 0.25), step=0.0002, index=None):
     """measure_photo for the face `name` in data/house/faces.json."""
-    return measure_photo(*read_face(name, index), along, band, heights, spacing, step)
+    return measure_photo(*read_face(site, name, index), along, band, heights, spacing, step)
 
 
 def band_line(row, above=None):
@@ -196,7 +195,7 @@ def band_line(row, above=None):
     return line
 
 
-def main():
+def main(site):
     """`domus prep boards`."""
     ap = argparse.ArgumentParser(prog="domus prep boards", description=__doc__.split("\n\n")[0])
     ap.add_argument("faces", nargs="*", help="faces in data/house/faces.json (all of them unless named)")
@@ -211,9 +210,9 @@ def main():
     ap.add_argument("--step", type=float, default=0.0002, help="metres between the spacings tried")
     ap.add_argument("--above", type=float, metavar="HEIGHT", help="also give the first lap line at or above this height")
     args = ap.parse_args()
-    index = faces()
+    index = faces(site)
     for name in args.faces or sorted(index):
-        rows = measure(name, args.along, args.band, args.heights, args.spacing, args.step, index)
+        rows = measure(site, name, args.along, args.band, args.heights, args.spacing, args.step, index)
         print(f"{name}: {len(rows)} band{'s' if len(rows) != 1 else ''} from {rows[0]['u'][0]:.2f} to "
               f"{rows[-1]['u'][1]:.2f} m along it")
         for row in rows:

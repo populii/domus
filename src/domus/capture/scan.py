@@ -25,7 +25,6 @@ import numpy as np
 from pyproj import Transformer
 
 from ..errors import DomusError
-from ..geo import crs
 
 UP_TO_Z = {"z": np.eye(3), "y": np.array([[1.0, 0, 0], [0, 0, -1.0], [0, 1.0, 0]])}
 PLY_TYPES = {"char": "i1", "int8": "i1", "uchar": "u1", "uint8": "u1", "short": "i2", "int16": "i2", "ushort": "u2",
@@ -215,7 +214,7 @@ def place(xyz, control, up=None):
     return xyz @ R.T + t, np.linalg.norm(src @ R.T + t - dst, axis=1)
 
 
-def main(argv=None):
+def main(site, argv=None):
     ap = argparse.ArgumentParser(prog="domus scan", description="Bring in a phone LiDAR scan as a point cloud.")
     ap.add_argument("file")
     ap.add_argument("--tag", required=True, help="a short name for this scan")
@@ -231,23 +230,25 @@ def main(argv=None):
     xyz, rgb = xyz[ok], rgb[ok]
     print(f"{args.file}: {len(xyz):,} points")
     if args.control:
-        site, res = place(xyz, read_control(args.control), args.up)
+        placed, res = place(xyz, read_control(args.control), args.up)
         print(f"control: {len(res)} points, residuals median {np.median(res):.3f} m, largest {res.max():.3f} m")
         if res.max() > WARN_RESIDUAL_M:
             print(f"warning: a control point is over {WARN_RESIDUAL_M} m off. Check it was picked at the same place in both.")
     else:
-        e, n = Transformer.from_crs(args.epsg, crs.site_epsg(), always_xy=True).transform(xyz[:, 0], xyz[:, 1])
-        site = np.column_stack([e, n, xyz[:, 2]])
-    x0, y0, x1, y1 = crs.settings()["model"]["extent"]
-    inside = (site[:, 0] > x0) & (site[:, 0] < x1) & (site[:, 1] > y0) & (site[:, 1] < y1)
+        e, n = Transformer.from_crs(args.epsg, site.grid.epsg, always_xy=True).transform(xyz[:, 0], xyz[:, 1])
+        placed = np.column_stack([e, n, xyz[:, 2]])
+    x0, y0, x1, y1 = site.settings()["model"]["extent"]
+    inside = (placed[:, 0] > x0) & (placed[:, 0] < x1) & (placed[:, 1] > y0) & (placed[:, 1] < y1)
     print(f"{inside.sum():,} points fall inside the model's extent")
     if not inside.any():
-        print("warning: none of the scan lands on the site. Check the control points' coordinates.")
-    out = crs.ROOT / "data" / "video" / f"{args.tag}-scan.npz"
+        print("warning: none of the scan lands on the placed. Check the control points' coordinates.")
+    out = site.path / "data" / "video" / f"{args.tag}-scan.npz"
     out.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(out, xyz=site, rgb=rgb, nview=np.full(len(site), 3, np.uint8))
+    np.savez_compressed(out, xyz=placed, rgb=rgb, nview=np.full(len(placed), 3, np.uint8))
     print(f"wrote {out}. Next: domus video export, then domus build")
 
 
 if __name__ == "__main__":
-    main()
+    from ..project.site import started
+
+    main(started())       # run by itself, on the site the environment names

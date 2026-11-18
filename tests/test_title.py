@@ -5,7 +5,7 @@ import json
 import pytest
 from shapely.geometry import Polygon
 
-from domus import crs, design, publicdata, title
+from domus import design, publicdata, title
 
 LOT = [[1000.0, 2000.0], [1020.0, 2000.0], [1020.0, 2020.0], [1000.0, 2020.0], [1000.0, 2000.0]]
 STRIP = [[1016.0, 2000.0], [1020.0, 2000.0], [1020.0, 2020.0], [1016.0, 2020.0], [1016.0, 2000.0]]
@@ -18,16 +18,13 @@ def parcel(pid, ring, appellation, intent="Easement"):
 
 
 @pytest.fixture
-def site(monkeypatch, tmp_path, at_site):
-    monkeypatch.setattr(crs, "site_to_nztm", lambda e, n: (e, n))
-    monkeypatch.setattr(crs, "nztm_to_site", lambda x, y: (x, y))
-    monkeypatch.setattr(crs, "site_epsg", lambda: 2193)
+def site(tmp_path, at_site):
+    """A site on NZTM, where LINZ's coordinates are the site's own."""
     (tmp_path / "data" / "site").mkdir(parents=True)
     (tmp_path / "data" / "site" / "boundary.geojson").write_text(json.dumps(
         {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {"type": "Polygon", "coordinates": [LOT]}}]}), encoding="utf-8")
     (tmp_path / "data" / "site.toml").write_text("[domus]\nformat = 3\n\n[crs]\nepsg = 2193\n", encoding="utf-8")
-    at_site(tmp_path)
-    return tmp_path
+    return at_site(tmp_path)
 
 
 def test_the_title_and_the_easements_near_the_lot(site, monkeypatch, capsys):
@@ -45,8 +42,8 @@ def test_the_title_and_the_easements_near_the_lot(site, monkeypatch, capsys):
         return []
 
     monkeypatch.setattr(publicdata, "_wfs", fake)
-    title.main([])
-    feats = json.loads(title.title_path().read_text(encoding="utf-8"))["features"]
+    title.main(site, [])
+    feats = json.loads(title.title_path(site).read_text(encoding="utf-8"))["features"]
     assert [f["properties"]["name"] for f in feats] == ["Title 123456", "Area A DP 9", "Area C DP 9"]
     t, e, c = (f["properties"] for f in feats)
     assert not c["on_lot"]

@@ -76,16 +76,16 @@ def test_an_area_with_no_paving_in_sun_says_so():
 def test_the_areas_and_the_paving_picture_come_from_the_site(tmp_path, at_site):
     from domus import build
 
-    at_site(tmp_path)
-    assert build.paved_under_canopy() is None and build.paving_grain() is None
+    place = at_site(tmp_path)
+    assert build.paved_under_canopy(place) is None and build.paving_grain(place) is None
     (tmp_path / "data" / "site").mkdir(parents=True)
     feats = [{"type": "Feature", "properties": {"id": f"a{k}"}, "geometry": {"type": "Polygon", "coordinates": [list(
         b.exterior.coords)]}} for k, b in enumerate((box(0, 0, 2, 2), box(5, 0, 7, 2)))]
     (tmp_path / "data" / "site" / "paved-under-canopy.geojson").write_text(
         json.dumps({"type": "FeatureCollection", "features": feats}), encoding="utf-8")
-    area = build.paved_under_canopy()
+    area = build.paved_under_canopy(place)
     assert area.area == pytest.approx(8.0) and area.contains(Point(1, 1)) and area.contains(Point(6, 1))   # both count
     (tmp_path / "data" / "features").mkdir()
     Image.new("RGB", (48, 32), (120, 120, 120)).save(tmp_path / "data" / "features" / "paving.jpg")
-    tex, size = build.paving_grain()
+    tex, size = build.paving_grain(place)
     assert tex.shape == (32, 48) and size == (2.4, 1.6)

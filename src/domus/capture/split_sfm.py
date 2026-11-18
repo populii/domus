@@ -10,11 +10,13 @@ walk, so that each piece can be placed on the site grid by itself (tools/georef_
 
 import json
 import sys
-from pathlib import Path
 
 import numpy as np
 
-VID = Path(__import__("os").environ.get("DOMUS_SITE", ".")).resolve() / "data" / "video"
+
+def video_dir(site):
+    """The site's video work, data/video/."""
+    return site.path / "data" / "video"
 
 
 def seconds(name):
@@ -22,9 +24,10 @@ def seconds(name):
     return float(str(name).rsplit("/", 1)[-1][1:])
 
 
-def main():
+def main(site):
     src, new, t0, t1 = sys.argv[1], sys.argv[2], float(sys.argv[3]), float(sys.argv[4])
-    d = np.load(VID / f"{src}-sfm.npz")
+    vid = video_dir(site)
+    d = np.load(vid / f"{src}-sfm.npz")
     t = np.array([seconds(n) for n in d["frame_names"]])
     rv, tv = d["rvecs"].copy(), d["tvecs"].copy()
     keepf = np.all(np.isfinite(rv), axis=1) & (t >= t0) & (t <= t1)
@@ -37,17 +40,19 @@ def main():
     newidx[keepp] = np.arange(keepp.sum())
     obs = obs[keepp[obs[:, 0].astype(int)]]
     obs[:, 0] = newidx[obs[:, 0].astype(int)]
-    np.savez_compressed(VID / f"{new}-sfm.npz", xyz=d["xyz"][keepp], rgb=d["rgb"][keepp], nview=cnt[keepp],
+    np.savez_compressed(vid / f"{new}-sfm.npz", xyz=d["xyz"][keepp], rgb=d["rgb"][keepp], nview=cnt[keepp],
                         frame_names=d["frame_names"], rvecs=rv, tvecs=tv, intrinsics=d["intrinsics"], obs=obs)
-    src_json = json.loads((VID / f"{src}-sfm.json").read_text(encoding="utf-8"))
+    src_json = json.loads((vid / f"{src}-sfm.json").read_text(encoding="utf-8"))
     summary = {"clip": new, "frames": len(t), "registered": int(keepf.sum()), "points": int(keepp.sum()),
                "focal_px": src_json["focal_px"], "k1": src_json["k1"],
                "median_reproj_px": src_json["median_reproj_px"], "cut_from": src, "span_s": [t0, t1],
                "note": f"Frames {t0:.1f}-{t1:.1f} s of {src} with the points seen in two or more of them; "
                        "poses and points unchanged (not re-adjusted)."}
-    (VID / f"{new}-sfm.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    (vid / f"{new}-sfm.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary))
 
 
 if __name__ == "__main__":
-    main()
+    from ..project.site import started
+
+    main(started())       # run by itself, on the site the environment names

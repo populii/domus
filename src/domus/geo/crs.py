@@ -8,9 +8,8 @@ Rasters are read on their own grids (domus.geo.raster).
 
 The names this module had when it read the current site as well (ROOT, OUTPUT, settings(), site_format(),
 site_epsg(), label(), site_to_nztm(), nztm_to_site(), site_to_lonlat(), datums(), to_model_height() and
-from_model_height()) still give the current site's (domus.project.site.current()), for site code written before and
-for the modules not yet handed their site. They're deprecated: a Site's path, output, settings(), format() and grid
-give the same.
+from_model_height()) still give the current site's (domus.project.site.current()), for site code written before.
+They're deprecated: a Site's path, output, settings(), format() and grid give the same.
 """
 
 from dataclasses import dataclass

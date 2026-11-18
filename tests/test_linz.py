@@ -44,25 +44,26 @@ def test_newest_year_from_title():
 
 
 def test_fetch_skips_a_survey_with_no_data_here(site, monkeypatch, tmp_path, at_site):
-    monkeypatch.setattr(linz, "site_bounds", lambda: (0, 0, 10, 10))
+    monkeypatch.setattr(linz, "site_bounds", lambda site: (0, 0, 10, 10))
     (tmp_path / "data").mkdir()
     (tmp_path / "data" / "site.toml").write_bytes((site / "data" / "site.toml").read_bytes())     # the demo, moved
-    at_site(tmp_path)
+    moved = at_site(tmp_path)
     surveys = {"ground model": [("Empty (2025)", ["e"]), ("Full (2025)", ["f"])]}
     monkeypatch.setattr(linz, "find_surveys", lambda catalog, match, bounds, recent: iter(surveys.get(next(
         s[0] for s in linz.SOURCES if s[2] is match), [])))
     monkeypatch.setattr(linz, "clip", lambda name, urls, bounds, path, bands=None: 0.0 if urls == ["e"] else 1.0)
-    linz.main()
+    linz.main(moved)
     import json
     used = json.loads((tmp_path / "data" / "linz-sources.json").read_text(encoding="utf-8"))
     assert used == {"ground model": {"title": "Full (2025)", "tiles": ["f"]}}
 
 
-def test_fetch_says_linz_covers_new_zealand_only(site, monkeypatch):
-    from domus import crs, linz
+def test_fetch_says_linz_covers_new_zealand_only(site, monkeypatch, project):
+    from domus import linz
     from domus.errors import DomusError
+    from domus.geo.crs import Grid
 
-    monkeypatch.setattr(crs, "site_to_lonlat", lambda e, n: (-5.5, 50.1))       # a site in Cornwall
+    monkeypatch.setattr(Grid, "to_lonlat", lambda self, e, n: (-5.5, 50.1))       # a site in Cornwall
     monkeypatch.setattr(linz, "find_surveys", lambda *a: pytest.fail("asked LINZ"))
     with pytest.raises(DomusError, match="New Zealand only"):
-        linz.main()
+        linz.main(project)

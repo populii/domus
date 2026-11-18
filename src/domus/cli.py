@@ -20,8 +20,8 @@
     domus site regrade CLOUD SPEC BACKUP [--apply]            give ground fixes the levels a placed cloud shows
 
 Every command but `new` and `demo` works on the site project in the current folder, or the one
-named by --site or the DOMUS_SITE environment variable, which Domus reads the first time it needs
-the site (domus.project.site).
+named by --site or the DOMUS_SITE environment variable. The command line reads which, once, and hands
+that Site (domus.project.site) to the command.
 """
 
 import argparse
@@ -52,18 +52,25 @@ def main(argv=None):
     # Everything after the command is the command's own, --help included.
     k = next((i for i, a in enumerate(argv) if a in COMMANDS), len(argv))
     args, rest = ap.parse_args(argv[:k + 1]), argv[k + 1:]
+    from .project import site as sites
+
     if args.site:
-        choose_site(args.site)
+        choose_site(args.site)          # for the processes a command starts, which read the environment
+        site = sites.start(args.site)
+    else:
+        site = sites.started()
+    named = site if args.site or os.environ.get("DOMUS_SITE") else None
     from .errors import as_command
 
-    return as_command(lambda: run(args.command, rest))
+    return as_command(lambda: run(args.command, rest, site, named))
 
 
-def run(command, rest):
-    """One command, on the site already chosen. Modules are imported here, once the site is known."""
+def run(command, rest, site, named=None):
+    """One command, on `site`, the site the command line was given (`named`, if it was named at all). Modules are
+    imported here, once the site is known."""
     if command == "create":
         from . import create
-        return create.main(rest)
+        return create.main(rest, named)
     if command == "new":
         from .project import newsite
         return newsite.main(rest)
@@ -75,44 +82,44 @@ def run(command, rest):
         return serve.main(rest)
     if command == "shots":
         from . import shots
-        return shots.main(rest)
+        return shots.main(site, rest)
     if command == "fetch":
         from . import importers
-        return importers.fetch()
+        return importers.fetch(site)
     if command == "canopy":
         from .model import canopy
-        return canopy.map_site()
+        return canopy.map_site(site)
     if command == "sketch-worker":
         from .options import sketch
-        return sketch.main()
+        return sketch.main(site)
     if command == "marks":
         from .importers.nz import marks
-        return marks.main(rest)
+        return marks.main(site, rest)
     if command == "title":
         from .importers.nz import title
-        return title.main(rest)
+        return title.main(site, rest)
     if command == "points":
         from .importers.nz import points
-        return points.main(rest)
+        return points.main(site, rest)
     if command == "video":
         from . import capture as video
-        return video.main(rest)
+        return video.main(site, rest)
     if command == "prep":
         from . import prep
-        return prep.main(rest)
+        return prep.main(site, rest)
     if command == "scan":
         from .capture import scan
-        return scan.main(rest)
+        return scan.main(site, rest)
     if command == "site":
         from .project import upgrade
-        return upgrade.main(rest)
+        return upgrade.main(site, rest)
     if command == "export":
-        return export(rest)
+        return export(site, rest)
     from . import build
-    return build.main(rest)
+    return build.main(site, rest)
 
 
-def export(rest):
+def export(site, rest):
     """`domus export PATH [--option ID] [--format glb|ifc]`: the site's built model for other software, through the
     public API (site.export). See docs/export.md."""
     ap = argparse.ArgumentParser(prog="domus export", description="Write the built model for other software: glTF (.glb) "
@@ -124,7 +131,7 @@ def export(rest):
     args = ap.parse_args(rest)
     from . import api
 
-    path = api.open_site().export(args.path, format=args.format, option=args.option)
+    path = api.Site(site).export(args.path, format=args.format, option=args.option)
     print(f"wrote {path} ({path.stat().st_size / 1e6:.1f} MB)")
 
 

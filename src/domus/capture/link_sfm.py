@@ -17,30 +17,29 @@ from collections import Counter
 import cv2
 import numpy as np
 
-from ..geo import crs
 from . import safe_npz, sfm
 from .sfm_georef import apply, fit_similarity, horn_initial
 
 
-def video_dir():
+def video_dir(site):
     """The site's video work, data/video/."""
-    return crs.ROOT / "data" / "video"
+    return site.path / "data" / "video"
 
 
 def pixel_key(uv):
     return round(float(uv[0]), 2), round(float(uv[1]), 2)
 
 
-def load_model(tag):
+def load_model(site, tag):
     """Model arrays, plus each registered frame's features and a pixel -> point lookup."""
-    d = np.load(video_dir() / f"{tag}-sfm.npz")
+    d = np.load(video_dir(site) / f"{tag}-sfm.npz")
     clip = tag.split("-")[0]
     caches = {}
 
     def cache(name):
         key = name.split("/")[0] if "/" in name else clip
         if key not in caches:
-            path = video_dir() / "cache" / (f"{key}-extra-step1.npz" if "/" in name else f"{key}-step1-w6.npz")
+            path = video_dir(site) / "cache" / (f"{key}-extra-step1.npz" if "/" in name else f"{key}-step1-w6.npz")
             c = safe_npz.load(path)
             caches[key] = {str(n): (k, des) for n, k, des in zip(c["names"], c["kps"], c["des"])}
         return caches[key][name]
@@ -57,10 +56,10 @@ def load_model(tag):
     return d, frames
 
 
-def main():
+def main(site):
     a_tag, b_tag = sys.argv[1], sys.argv[2]
-    a, fa = load_model(a_tag)
-    b, fb = load_model(b_tag)
+    a, fa = load_model(site, a_tag)
+    b, fb = load_model(site, b_tag)
     print(f"{a_tag}: {len(fa)} registered frames; {b_tag}: {len(fb)}", flush=True)
     flann = cv2.FlannBasedMatcher({"algorithm": 1, "trees": 4}, {"checks": 32})
     votes = Counter()
@@ -112,9 +111,11 @@ def main():
     out = {"from": b_tag, "to": a_tag, "params": p.tolist(), "scale": float(np.exp(p[0])),
            "correspondences": len(pairs), "inliers": int(inl.sum()), "tolerance": float(tol),
            "median_error": float(np.median(err[inl])), "frame_pairs": pair_count}
-    (video_dir() / f"{b_tag}-to-{a_tag}.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+    (video_dir(site) / f"{b_tag}-to-{a_tag}.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(out))
 
 
 if __name__ == "__main__":
-    main()
+    from ..project.site import started
+
+    main(started())       # run by itself, on the site the environment names

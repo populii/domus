@@ -88,8 +88,9 @@ Import rules, in `[tool.importlinter]` in `pyproject.toml` and checked by `uv ru
 - **The model's pure parts read no site and know nothing of the app.** The house, the walls and their looks, the small
   features, the plants, the drains, the ground's triangulation, the mesh helpers and the working out of a wall option
   are functions of what they're handed. The build is the workflow that reads the site and hands it to them.
-- **The grid maths read no site.** A site's grid is made from its settings, and turning points and heights between
-  grids and datums needs nothing else.
+- **The pure layers read no site.** `geo` (the grid maths, rasters, GeoJSON, meshes and fits), the model's pure
+  parts and the working out of a wall option are handed what they need: a site's grid is made from its settings, and a
+  raster is read from the file and grid it's given. Only the names kept for site code reach a site, and only those.
 - **The command line sits on top.** Nothing imports it, and only it imports the server.
 
 A few more rules the code keeps:
@@ -99,9 +100,10 @@ A few more rules the code keeps:
 - **Every text file is read and written as UTF-8, by name.** A test finds any read or write that doesn't say so, since
   Windows' default isn't UTF-8.
 - **Every layer but the ground and the boundary is optional.** Code copes with a site that has none of the others.
-- **A site is read through its Site:** its folder, output, settings, format and grid, read when it's first needed,
-  not when a module is imported, and kept with that site, so one process can hold several. The older module-level
-  names for the current site's folder and settings are deprecated, and new code doesn't use them.
+- **Every part that reads a site is handed its Site:** its folder, output, settings, format and grid, as the
+  function's first argument. What a part reads of a site is kept with that site, so one process can hold several. The
+  command line and the server read `DOMUS_SITE` once and hand the site down, and a job in a process of its own gets the
+  site's folder. Nothing reads the current site: the older names that do, kept for site code, are deprecated.
 - **The viewer is one page and loads nothing from other hosts.** New libraries go in its `vendor` folder. Its
   `index.html` is a page body with no doctype or head: the server adds the skeleton. Scripts drive it through
   `window.siteViewer` (`setCamera` and `drawn`).
@@ -111,10 +113,11 @@ A few more rules the code keeps:
 ## Tests
 
 The tests run on the made-up demo site, written into a temporary folder and built once for the whole run. They set
-`DOMUS_SITE` to it before anything reads the site, and `DOMUS_STRICT_SETTINGS=1`, which makes reading a setting the
-schema doesn't declare, or reading one with another default than the schema's, an error. Fixtures in
-`tests/conftest.py` give a test the demo's folder (`site`), its built model (`built`) and a way to make another folder
-the current site for a while (`at_site`).
+`DOMUS_SITE` to it, `DOMUS_STRICT_SETTINGS=1`, which makes reading a setting the schema doesn't declare, or reading one
+with another default than the schema's, an error, and `DOMUS_STRICT_SITE=1`, which makes a part of Domus called
+without its site an error. Fixtures in `tests/conftest.py` give a test the demo's folder (`site`), the demo as a Site to
+hand to what's tested (`project`), its built model (`built`), and another folder's Site (`at_site`), made current for
+the test as site code would see it.
 
 Some tests guard the repository itself, so expect them to speak up:
 

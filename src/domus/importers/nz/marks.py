@@ -13,7 +13,7 @@ import os
 
 from shapely.geometry import Point, Polygon
 
-from ...geo import crs, geojson
+from ...geo import geojson
 from . import publicdata
 
 BOUNDARY_MARKS, VERTICAL_MARKS = "layer-50774", "layer-50784"
@@ -23,10 +23,10 @@ HEIGHT_SEARCH_M = 1000
 HEIGHT_MARKS_SHOWN = 5
 
 
-def lot_on_nztm():
-    """The lot, [boundary] main, on NZTM. Its neighbours and rights of way in boundary.geojson aren't searched."""
-    lot = geojson.main_lot(geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"], crs.settings())
-    return Polygon([crs.site_to_nztm(*p[:2]) for p in lot["geometry"]["coordinates"][0]])
+def lot_on_nztm(site):
+    """The site's lot, [boundary] main, on NZTM. Its neighbours and rights of way in boundary.geojson aren't searched."""
+    lot = geojson.main_lot(geojson.read(site.path / "data" / "site" / "boundary.geojson")["features"], site.settings())
+    return Polygon([site.grid.to_nztm(*p[:2]) for p in lot["geometry"]["coordinates"][0]])
 
 
 def around(lot, margin):
@@ -34,8 +34,9 @@ def around(lot, margin):
     return publicdata._bbox_cql(x0 - margin, y0 - margin, x1 + margin, y1 + margin)
 
 
-def boundary_features(rows, lot):
-    """The named marks on the lot's line. An unnamed or UNMK mark has nothing on the ground to find."""
+def boundary_features(rows, lot, grid):
+    """The named marks on the lot's line, on the site's grid. An unnamed or UNMK mark has nothing on the ground to
+    find."""
     out = []
     for f in rows:
         p, c = f["properties"], f["geometry"]["coordinates"][:2]
@@ -43,7 +44,7 @@ def boundary_features(rows, lot):
         if not name or name.startswith("UNMK") or off > ON_LINE_M:
             continue
         accuracy = p.get("nominal_accuracy")
-        out.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(v, 3) for v in crs.nztm_to_site(*c)]},
+        out.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(v, 3) for v in grid.from_nztm(*c)]},
                     "properties": {"id": f"linz-mark-{p['id']}", "kind": "mark", "name": name, "source": "LINZ NZ Survey Boundary Marks",
                                    "basis": "LINZ's adjusted coordinate", "confidence": f"LINZ, +-{accuracy} m", "accuracy_m": accuracy,
                                    "note": f"{off:.2f} m from the model's boundary; a position to go and find, not a surveyor's check"}})
@@ -55,25 +56,25 @@ def nearest_height_marks(rows, lot):
     return sorted(((lot.distance(Point(f["geometry"]["coordinates"][:2])), f) for f in rows), key=lambda r: r[0])
 
 
-def height_feature(row):
+def height_feature(row, grid):
     p, c = row["properties"], row["geometry"]["coordinates"][:2]
     name = p.get("current_mark_name")
-    return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(v, 3) for v in crs.nztm_to_site(*c)]},
+    return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(v, 3) for v in grid.from_nztm(*c)]},
             "properties": {"id": "linz-height-mark", "kind": "mark", "name": f"{name} ({p.get('normal_orthometric_height')} m)",
                            "source": "LINZ NZ Geodetic Vertical Marks", "basis": "LINZ's height; its position is approximate",
                            "confidence": f"height order {p.get('order')}", "height_datum": p.get("coordinate_system"),
                            "condition": p.get("mark_condition"), "order": p.get("order")}}
 
 
-def main(argv=None):
+def main(site, argv=None):
     ap = argparse.ArgumentParser(prog="domus marks", description="LINZ's survey marks around the lot, as a site layer.")
     ap.add_argument("--height-mark", help="add this height mark to the layer, by its name as printed")
     args = ap.parse_args(argv)
     key = os.environ.get("DOMUS_LINZ_KEY")
     if not key:
         raise SystemExit("This needs DOMUS_LINZ_KEY: a free key from data.linz.govt.nz.")
-    lot = lot_on_nztm()
-    feats = boundary_features(publicdata._wfs(key, BOUNDARY_MARKS, around(lot, BOUNDARY_SEARCH_M), 200), lot)
+    lot = lot_on_nztm(site)
+    feats = boundary_features(publicdata._wfs(key, BOUNDARY_MARKS, around(lot, BOUNDARY_SEARCH_M), 200), lot, site.grid)
     for f in feats:
         print(f"{f['properties']['name']}: {f['properties']['note'].split(' from')[0]} from the boundary")
     heights = nearest_height_marks(publicdata._wfs(key, VERTICAL_MARKS, around(lot, HEIGHT_SEARCH_M), 200), lot)
@@ -87,9 +88,9 @@ def main(argv=None):
         match = [f for _, f in heights if f["properties"].get("current_mark_name") == args.height_mark]
         if not match:
             raise SystemExit(f"No height mark called {args.height_mark!r} within {HEIGHT_SEARCH_M} m.")
-        feats.append(height_feature(match[0]))
-    out = crs.ROOT / "data" / "site" / "features-survey-marks.geojson"
+        feats.append(height_feature(match[0], site.grid))
+    out = site.path / "data" / "site" / "features-survey-marks.geojson"
     out.write_text(json.dumps({"type": "FeatureCollection", "name": "features-survey-marks",
-                               "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{crs.site_epsg()}"}},
+                               "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{site.grid.epsg}"}},
                                "features": feats}, indent=1) + "\n", encoding="utf-8", newline="\n")
     print(f"{len(feats)} marks -> {out}. Run domus build, then turn on the Survey layer.")

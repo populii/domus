@@ -1,15 +1,16 @@
 """A site project as a workflow holds it: its folder, where its model is built, its settings, the format its files are
 in and its grid, and what Domus has read of it so far.
 
-Domus's modules read the site that is current. That's the one the process was started for (DOMUS_SITE, else the
-current folder, with its model built into DOMUS_OUTPUT if that's set), found the first time something asks for it, or
-one a workflow makes current for a while:
+Every part of Domus that reads a site is handed it: the command line and the server make the Site once, from the
+environment or --site, and pass it down, so one process can hold several sites, one after another or in turn, and each
+is read as itself. Whatever a part keeps of what it read (the settings, the rasters, the ground) it keeps on the site
+(`cached`), never in a module's own globals.
 
-    with use(Site("sites/other")):
-        build.main([])
-
-Whatever a module keeps of what it read (the settings, the rasters, the ground) it keeps on the site (`cached`), so
-one process can hold several sites, one after another or in turn, and each is read as itself.
+Site code written before Domus handed its parts their site calls a few of them without one, such as design.frame()
+and terrain.ground(). They then read the current site, deprecated: the one the process was started for (DOMUS_SITE,
+else the current folder, with its model built into DOMUS_OUTPUT if that's set), found the first time something asks
+for it, or one site code makes current for a while with use(). In Domus's tests (DOMUS_STRICT_SITE=1) a part called
+without its site is an error, so Domus can't lean on the current site unseen.
 """
 
 import contextvars
@@ -78,6 +79,11 @@ class Site:
 
 _current = contextvars.ContextVar("domus_site", default=None)
 _started = None
+STRICT = os.environ.get("DOMUS_STRICT_SITE") == "1"
+
+
+class SiteNotHanded(LookupError):
+    """A part of Domus was called without its site (only in strict mode, as in the tests)."""
 
 
 def started():
@@ -90,15 +96,23 @@ def started():
     return _started
 
 
+def start(path):
+    """Makes the site in `path` the one the process was started for, as the command line's --site does: its model is
+    built into its own viewer/data. Gives that Site."""
+    global _started
+    _started = Site(path)
+    return _started
+
+
 def current():
-    """The site Domus's modules read now: the one a workflow made current with use(), else the one the process was
-    started for."""
+    """The current site, for site code written before Domus handed its parts their site (deprecated): the one use()
+    made current, else the one the process was started for."""
     return _current.get() or started()
 
 
 @contextmanager
 def use(site):
-    """Make `site` the current one while the block runs."""
+    """Make `site` the current one while the block runs, for site code that calls Domus without a site."""
     token = _current.set(site)
     try:
         yield site
@@ -106,23 +120,33 @@ def use(site):
         _current.reset(token)
 
 
+def given(site):
+    """`site`, the site a part was handed; for a call without one, from site code written before, the current site
+    (deprecated). In strict mode (DOMUS_STRICT_SITE=1, as in the tests) a call without a site is an error."""
+    if site is not None:
+        return site
+    if STRICT:
+        raise SiteNotHanded("A part of Domus was called without its site: hand it the Site (domus.project.site)")
+    return current()
+
+
 def cached(fn):
-    """functools.lru_cache, kept on the current site: each site has its own of fn's results. cache_clear() forgets the
-    current site's."""
+    """functools.lru_cache for fn(site), kept on the site: each site keeps its own result. fn.cache_clear(site)
+    forgets that site's. Called without a site, as site code written before does, it reads the current one."""
     name = f"{fn.__module__}.{fn.__qualname__}"
 
     @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        store = current().cache
-        key = (name, args, tuple(sorted(kwargs.items())))
-        if key not in store:
-            store[key] = fn(*args, **kwargs)
-        return store[key]
+    def wrapper(site=None):
+        site = given(site)
+        key = (name, (), ())
+        if key not in site.cache:
+            site.cache[key] = fn(site)
+        return site.cache[key]
 
-    def cache_clear():
-        store = current().cache
-        for key in [k for k in store if k[0] == name]:
-            del store[key]
+    def cache_clear(site=None):
+        site = given(site)
+        for key in [k for k in site.cache if k[0] == name]:
+            del site.cache[key]
 
     wrapper.cache_clear = cache_clear
     return wrapper

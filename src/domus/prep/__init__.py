@@ -8,7 +8,6 @@ import json
 import sys
 
 from ..errors import DomusError
-from ..geo import crs
 
 STEPS = {
     "plan-pages": ("plans", "pages", "Pull the page scans out of a PDF"),
@@ -31,8 +30,9 @@ STEPS = {
 }
 
 
-def config(section):
-    path = crs.ROOT / "data" / "prep.json"
+def config(site, section):
+    """The `section` of the site's data/prep.json, which says what a step does."""
+    path = site.path / "data" / "prep.json"
     if not path.exists():
         raise DomusError(f"This step reads its settings from {path}. See docs/from-documents.md.")
     cfg = json.loads(path.read_text(encoding="utf-8"))
@@ -41,7 +41,8 @@ def config(section):
     return cfg[section]
 
 
-def main(argv):
+def main(site, argv):
+    """`domus prep <step> [args]` on the site: the step, handed the site."""
     if not argv or argv[0] not in STEPS:
         print("usage: domus prep <step> [args]\n\nSteps:")
         for name, (_, _, what) in STEPS.items():
@@ -49,4 +50,4 @@ def main(argv):
         return 0 if not argv else 2
     module, func, _ = STEPS[argv[0]]
     sys.argv = [f"domus prep {argv[0]}", *argv[1:]]
-    return getattr(importlib.import_module(module if module.startswith("domus.") else f".{module}", __name__), func)()
+    return getattr(importlib.import_module(module if module.startswith("domus.") else f".{module}", __name__), func)(site)

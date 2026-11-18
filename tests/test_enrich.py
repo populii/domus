@@ -19,14 +19,14 @@ def test_the_model_carries_a_checklist_in_order_with_what_the_site_has(built):
     assert all(s["why"] and s["where"] and s["how"] for s in e["sources"])
 
 
-def test_a_document_in_sources_counts_as_found(built, site, monkeypatch):
-    from domus import crs, enrich
+def test_a_document_in_sources_counts_as_found(built, site, monkeypatch, project):
+    from domus import enrich
 
     raw = site / "sources" / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     (raw / "LIM-2024.pdf").write_bytes(b"x")
     try:
-        assert next(s for s in enrich.checklist(crs.settings()) if s["id"] == "lim")["found"]
+        assert next(s for s in enrich.checklist(project) if s["id"] == "lim")["found"]
     finally:
         (raw / "LIM-2024.pdf").unlink()
 
@@ -61,7 +61,7 @@ def test_no_stop_is_on_the_house(site, built):
     assert LineString(r["path"]).distance(Polygon(HOUSE)) > 0.9
 
 
-def test_it_can_be_left_out(built, site):
+def test_it_can_be_left_out(built, site, project):
     from domus import build, crs
 
     toml = site / "data" / "site.toml"
@@ -69,10 +69,10 @@ def test_it_can_be_left_out(built, site):
     toml.write_text(was + "\n[enrich]\nenabled = false\n", encoding="utf-8")
     crs.settings.cache_clear()
     try:
-        build.main()
+        build.main(project)
         m = json.loads((built / "model.json").read_text(encoding="utf-8"))
         assert "enrich" not in m and not [x for x in m["layers"] if x.get("id") == "walk-route"]
     finally:
         toml.write_text(was, encoding="utf-8")
         crs.settings.cache_clear()
-        build.main()
+        build.main(project)

@@ -7,7 +7,7 @@ Pages:
                               publish and this server each add the document skeleton). A model another Domus built
                               is built again when it's opened, one build at a time, and shown as it was meanwhile
     /vendor/...               its bundled libraries
-    /data/...                 the built model (crs.OUTPUT), or the bundled demo if nothing is built
+    /data/...                 the built model (the site's output folder), or the bundled demo if nothing is built
     /demo                     the viewer on whatever model there is
     /scan                     the guided scan page for a phone
     /api/scan/<name>          POST: a scan's video or tracked positions, saved to sources/raw/
@@ -314,10 +314,12 @@ class Job:
 
 
 class Creator(Job):
-    """One `domus create` at a time, for the address box, and only into an empty site."""
+    """One `domus create` at a time, for the address box, and only into an empty site. `output` is where the site's
+    model is built (DOMUS_OUTPUT, as the server read it), unless the site builds into its own viewer/data."""
 
-    def __init__(self, root, own_output=False):
+    def __init__(self, root, own_output=False, output=None):
         super().__init__(root, "create", own_output, tail=12)
+        self.output = output
 
     def allowed(self):
         """An empty site, or one whose build from an address stopped short (running it again carries on)."""
@@ -326,7 +328,7 @@ class Creator(Job):
         return (self.root / "data" / "public-lookup.json").exists() and not self.built()
 
     def built(self):
-        out = "viewer/data" if self.own_output else os.environ.get("DOMUS_OUTPUT", "viewer/data")
+        out = "viewer/data" if self.own_output else self.output if self.output is not None else "viewer/data"
         return (self.root / out / "model.json").exists()
 
     def start(self, address):
@@ -431,10 +433,10 @@ def option_file(root, name):
 
 
 def save_option(root, name, items, own_output):
-    """Write the option through the site's own process, which reads its settings."""
+    """Write the option through the site's own process, which reads its settings: the site its environment names."""
     path = option_file(root, name)
-    code = ("import json,sys;from domus import sketch;d=json.load(sys.stdin);"
-            "sys.stdout.write(sketch.to_toml(sketch.to_option(d['items'],d['name'])))")
+    code = ("import json,sys;from domus import sketch;from domus.project.site import started;d=json.load(sys.stdin);"
+            "sys.stdout.write(sketch.to_toml(sketch.to_option(started(),d['items'],d['name'])))")
     out = subprocess.run([sys.executable, "-c", code], input=json.dumps({"name": name, "items": items}), capture_output=True, text=True, encoding="utf-8",
                          env=job_env(root, own_output), check=False, timeout=WORKER_TIMEOUT_S)
     if out.returncode:
@@ -912,9 +914,11 @@ def make_sites_server(host, port, root, demo=None, trust_proxy=False):
     return http.server.ThreadingHTTPServer((host, port), functools.partial(cls, directory=str(VIEWER)))
 
 
-def make_server(host, port, data_dirs, db_path, trust_proxy=False, root=None):
+def make_server(host, port, data_dirs, db_path, trust_proxy=False, root=None, output=None):
+    """The server of one site, in `root`, its model built into `output` (DOMUS_OUTPUT as main read it, if set)."""
     cls = type("BoundHandler", (Handler,), {"store": Store(db_path), "data_dirs": tuple(Path(d) for d in data_dirs),
-                                            "trust_proxy": trust_proxy, "creator": Creator(root or Path(db_path).parent / "site"),
+                                            "trust_proxy": trust_proxy, "creator": Creator(root or Path(db_path).parent / "site",
+                                                                                           output=output),
                                             "scan_job": ScanJob(root or Path(db_path).parent / "site"),
                                             "sketch_worker": SketchWorker(root or Path(db_path).parent / "site"),
                                             "build_job": BuildJob(root or Path(db_path).parent / "site")})
@@ -934,12 +938,14 @@ def main(argv=None):
             print(f"Sites on http://{args.host}:{args.port}/  (Ctrl+C to stop)", flush=True)
             httpd.serve_forever()
         return
+    # The site, read from the environment once, here, and handed down; its jobs get its folder.
     root = Path(os.environ.get("DOMUS_SITE", ".")).resolve()
-    dirs = [Path(os.environ.get("DOMUS_OUTPUT", root / "viewer" / "data")).resolve()]
+    output = os.environ.get("DOMUS_OUTPUT")
+    dirs = [Path(output if output is not None else root / "viewer" / "data").resolve()]
     if os.environ.get("DOMUS_DEMO_DATA"):
         dirs.append(Path(os.environ["DOMUS_DEMO_DATA"]))
     db = os.environ.get("DOMUS_DB", str(root / ".domus" / "viewer.db"))
-    with make_server(args.host, args.port, dirs, db, trust, root) as httpd:
+    with make_server(args.host, args.port, dirs, db, trust, root, output) as httpd:
         print(f"Viewer on http://{args.host}:{args.port}/  (Ctrl+C to stop)", flush=True)
         httpd.serve_forever()
 

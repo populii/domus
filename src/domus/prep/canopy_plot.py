@@ -9,23 +9,24 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from ..geo import crs, geojson, raster
+from ..geo import geojson
 from ..model import canopy, vegetation
+from ..project import rasters
 
 
-def main():
-    extent = crs.settings()["model"]["extent"]
-    cands, _ = canopy.map_canopy(extent, vegetation.removed_areas(canopy.read()))
+def main(site):
+    extent = site.settings()["model"]["extent"]
+    cands, _ = canopy.map_canopy(site, extent, vegetation.removed_areas(canopy.read(site)))
     out = sys.argv[1] if len(sys.argv) > 1 else "data/sources/canopy.jpg"
-    plot(extent, cands, crs.ROOT / out)
-    print(f"wrote {crs.ROOT / out}")
+    plot(site, extent, cands, site.path / out)
+    print(f"wrote {site.path / out}")
 
 
-def plot(extent, cands, path, px=0.075):
+def plot(site, extent, cands, path, px=0.075):
     e0, n0, e1, n1 = extent
     w, h = int(round((e1 - e0) / px)), int(round((n1 - n0) / px))
     E, N = np.meshgrid(e0 + (np.arange(w) + 0.5) * px, n1 - (np.arange(h) + 0.5) * px)
-    a = raster.aerial()
+    a = rasters.aerial(site)
     img = Image.fromarray(np.nan_to_num(np.stack([a.sample(E, N, band=b) for b in range(3)], -1), nan=200)
                           .clip(0, 255).astype(np.uint8))
     d = ImageDraw.Draw(img)
@@ -37,7 +38,7 @@ def plot(extent, cands, path, px=0.075):
     def P(e, n):
         return (e - e0) / px, (n1 - n) / px
 
-    lot = geojson.read(crs.ROOT / "data" / "site" / "boundary.geojson")["features"][0]
+    lot = geojson.read(site.path / "data" / "site" / "boundary.geojson")["features"][0]
     d.line([P(*p[:2]) for p in lot["geometry"]["coordinates"][0]], fill=(255, 220, 0), width=2)
     colours = {"tree": (255, 80, 200), "shrub": (120, 255, 120), "hedge": (90, 200, 255), "removed": (255, 60, 40)}
     for c in cands:

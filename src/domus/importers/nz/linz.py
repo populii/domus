@@ -20,7 +20,8 @@ from pyproj import Transformer
 from rasterio.windows import Window, from_bounds
 
 from ...errors import DomusError
-from ...geo import crs, raster
+from ...geo import crs
+from ...project import rasters
 
 ELEVATION = "https://nz-elevation.s3.ap-southeast-2.amazonaws.com/catalog.json"
 IMAGERY = "https://nz-imagery.s3.ap-southeast-2.amazonaws.com/catalog.json"
@@ -173,14 +174,14 @@ def clip(name, urls, bounds, out_path, bands=None):
     return float(has_data.mean())
 
 
-def site_bounds(margin=12.0):
-    """The model's extent in NZTM with a margin, so the build can sample just past its edge. LINZ covers New Zealand
-    only: a site elsewhere is told to bring its own rasters."""
+def site_bounds(site, margin=12.0):
+    """The site's model's extent in NZTM with a margin, so the build can sample just past its edge. LINZ covers New
+    Zealand only: a site elsewhere is told to bring its own rasters."""
     from ...project.newsite import in_new_zealand
 
-    to_nztm = Transformer.from_crs(crs.site_epsg(), crs.NZTM_EPSG, always_xy=True)
-    e0, n0, e1, n1 = crs.settings()["model"]["extent"]
-    if not in_new_zealand(*crs.site_to_lonlat((e0 + e1) / 2, (n0 + n1) / 2)):
+    to_nztm = Transformer.from_crs(site.grid.epsg, crs.NZTM_EPSG, always_xy=True)
+    e0, n0, e1, n1 = site.settings()["model"]["extent"]
+    if not in_new_zealand(*site.grid.to_lonlat((e0 + e1) / 2, (n0 + n1) / 2)):
         raise DomusError("domus fetch gets the ground model and photos from LINZ, which covers New Zealand only. A site "
                          "elsewhere brings its own, on any grid: its ground model in data/lidar/dem.tif, and its surface "
                          "model and photo if it has them (see docs/new-site.md).")
@@ -192,26 +193,28 @@ MIN_DATA_SHARE = 0.9    # of the clip that has to hold data: less, and the surve
 
 SHARP = re.compile(r"_0\.(0\d+|1\d*|2\d*|3)m/")
 
-# name, catalog, which collections, raster, required, years to look back for a sharper one, bands kept (None: as the photo).
-# The near-infrared photo keeps red and near-infrared, for the vegetation's NDVI.
+# name, catalog, which collections, the site's raster (domus.project.rasters), required, years to look back for a
+# sharper one, bands kept (None: as the photo). The near-infrared photo keeps red and near-infrared, for the
+# vegetation's NDVI.
 SOURCES = (
-    ("ground model", ELEVATION, lambda h: "/dem_1m/" in h, "DEM", True, 0, None),
-    ("surface model", ELEVATION, lambda h: "/dsm_1m/" in h, "DSM", False, 0, None),
-    ("aerial photo", IMAGERY, lambda h: "/rgb/2193/" in h and SHARP.search(h), "AERIAL", False, 2, None),
-    ("near-infrared photo", IMAGERY, lambda h: "/rgbnir/2193/" in h and SHARP.search(h), "NIR", False, 2, (0, 3)),
+    ("ground model", ELEVATION, lambda h: "/dem_1m/" in h, "dem", True, 0, None),
+    ("surface model", ELEVATION, lambda h: "/dsm_1m/" in h, "dsm", False, 0, None),
+    ("aerial photo", IMAGERY, lambda h: "/rgb/2193/" in h and SHARP.search(h), "aerial", False, 2, None),
+    ("near-infrared photo", IMAGERY, lambda h: "/rgbnir/2193/" in h and SHARP.search(h), "nir", False, 2, (0, 3)),
 )
 
 
-def main():
-    bounds = site_bounds()
+def main(site):
+    """`domus fetch` for a site in New Zealand: its rasters from LINZ."""
+    bounds = site_bounds(site)
     print("NZTM2000 bounds:", [round(v, 2) for v in bounds])
     used = {}
-    for name, catalog, match, raster_name, required, recent, bands in SOURCES:
+    for name, catalog, match, raster_key, required, recent, bands in SOURCES:
         tried = False
         for title, urls in find_surveys(catalog, match, bounds, recent):
             tried = True
             print(f"  {name}: {title}, {len(urls)} tile(s)")
-            if clip(name, urls, bounds, getattr(raster, raster_name), bands) >= MIN_DATA_SHARE:
+            if clip(name, urls, bounds, rasters.path(site, raster_key), bands) >= MIN_DATA_SHARE:
                 used[name] = {"title": title, "tiles": urls}
                 break
             print(f"  {name}: {title} has no data over most of the site, trying the next")
@@ -220,11 +223,13 @@ def main():
                 raise SystemExit(f"LINZ has no {name} covering this site. A site can bring its own: see docs/new-site.md.")
             print(f"  {name}: LINZ has none covering this site, carrying on without it")
             if tried:      # the last clip tried is empty: don't leave it for the build
-                getattr(raster, raster_name).unlink(missing_ok=True)
-    record = crs.ROOT / "data" / "linz-sources.json"
+                rasters.path(site, raster_key).unlink(missing_ok=True)
+    record = site.path / "data" / "linz-sources.json"
     record.write_text(json.dumps(used, indent=2) + "\n", encoding="utf-8")
     print(f"recorded the surveys used in {record}")
 
 
 if __name__ == "__main__":
-    main()
+    from ...project.site import started
+
+    main(started())       # run by itself, on the site the environment names

@@ -136,7 +136,7 @@ def test_place_in_3d_needs_points_off_a_line(site):
         scan.place(src, (src[:2], dst[:2]))
 
 
-def test_a_scan_reaches_the_build(built, site, tmp_path):
+def test_a_scan_reaches_the_build(built, site, tmp_path, project):
     """Through the command, the export and the build, with no [video] section in the site."""
     import json
 
@@ -152,8 +152,8 @@ def test_a_scan_reaches_the_build(built, site, tmp_path):
     c = tmp_path / "control.csv"
     c.write_text("x,y,z,E,N,H\n" + "\n".join(",".join(map(str, [*a, *b])) for a, b in zip(local, grid)), encoding="utf-8")
     cli.main(["scan", str(f), "--tag", "walk", "--control", str(c), "--up", "z"])
-    export_cloud.main()
-    build.main()
+    export_cloud.main(project)
+    build.main(project)
     layers = json.loads((built / "model.json").read_text(encoding="utf-8"))["layers"]
     assert next(x for x in layers if x["id"] == "video-points")["count"] == 4
     (site / "data" / "video" / "points.npz").unlink()

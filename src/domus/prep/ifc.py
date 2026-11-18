@@ -25,8 +25,7 @@ from scipy.spatial import cKDTree
 from shapely.geometry import LineString, MultiPolygon, Polygon
 from shapely.ops import unary_union
 
-from ..geo import crs, geojson
-from ..geo.crs import site_epsg
+from ..geo import geojson
 from . import config
 
 
@@ -119,15 +118,15 @@ def selected(g, p):
             and ("type" not in g or p["type"] == g["type"]) and p["type"] != g.get("not_type"))
 
 
-def main():
-    cfg = config("ifc")
-    src, dz = crs.ROOT / cfg["source"], cfg.get("datum_dz", 0.0)
-    out = crs.ROOT / cfg["out"]
+def main(site):
+    cfg = config(site, "ifc")
+    src, dz = site.path / cfg["source"], cfg.get("datum_dz", 0.0)
+    out = site.path / cfg["out"]
     out.parent.mkdir(parents=True, exist_ok=True)
     sha = hashlib.sha256(src.read_bytes()).hexdigest()
     f = ifcopenshell.open(str(src))
     prods = products(f)
-    house = {g["properties"]["id"]: g for g in geojson.read(crs.ROOT / "data" / "site" / "house.geojson")["features"]}
+    house = {g["properties"]["id"]: g for g in geojson.read(site.path / "data" / "site" / "house.geojson")["features"]}
     ring = np.asarray(house["house-walls"]["geometry"]["coordinates"][0], float)[:, :2]
     R, t, med, p90 = fit_to_outline(prods, ring, cfg.get("walls_layer", "Walls"))
     rot = float(np.degrees(np.arctan2(R[1, 0], R[0, 0])))
@@ -176,7 +175,7 @@ def main():
                 "LineString", [[round(float(x), 3), round(float(y), 3), round(top, 3)] for x, y, _ in axis],
                 id=f"ifc-retaining-wall-{p['id']}", kind="retaining-wall", status=p["status"].lower(),
                 base_m=round(base, 3), top_m=round(top, 3), thickness_m=None if thick is None else round(thick, 3)))
-    fc = geojson.collection(feats, cfg.get("name", out.name), cfg.get("description", ""), epsg=site_epsg())
+    fc = geojson.collection(feats, cfg.get("name", out.name), cfg.get("description", ""), epsg=site.grid.epsg)
     fc["fit"] = {"source_sha256": sha, "rotation_deg": round(rot, 5), "shift": [round(float(x), 4) for x in t],
                  "datum_dz": dz, "outline_misfit_median_m": round(med, 3), "outline_misfit_p90_m": round(p90, 3)}
     fc["layers"] = layers

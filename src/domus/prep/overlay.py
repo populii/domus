@@ -30,8 +30,7 @@ import shapely
 from PIL import Image, ImageDraw
 
 from ..errors import DomusError
-from ..geo import crs, geojson
-from ..geo.crs import settings
+from ..geo import geojson
 from ..model import terrain
 from .fitting import Placed
 
@@ -93,22 +92,23 @@ class Canvas:
 class Scene:
     """What the site's layers put where, for drawing: the ground under it and each group's lines."""
 
-    def __init__(self, option=None):
-        self.g = terrain.ground()
-        site = crs.ROOT / "data" / "site"
-        self.layer = lambda name: geojson.read_optional(site / name)
+    def __init__(self, site, option=None):
+        self.site = site
+        self.g = terrain.ground(site)
+        layers = site.path / "data" / "site"
+        self.layer = lambda name: geojson.read_optional(layers / name)
         self.house = {f["properties"].get("id"): f for f in self.layer("house.geojson")}
-        self.fl = settings().get("house", {}).get("fl_upper")
+        self.fl = site.settings().get("house", {}).get("fl_upper")
         self.option_walls = []
         if option:
             from .. import options
             from ..options import design
 
-            path = crs.ROOT / "options" / (option if option.endswith(".toml") else f"{option}.toml")
+            path = site.path / "options" / (option if option.endswith(".toml") else f"{option}.toml")
             if not path.exists():
                 raise DomusError(f"There's no wall option {path}")
-            for w in design.Design(options.load(path)).wall_levels():
-                pts, _, _, _, top = terrain.wall_levels(w)
+            for w in design.Design(options.load(path, site), site=site).wall_levels():
+                pts, _, _, _, top = terrain.wall_levels(w, site=site)
                 self.option_walls.append((w["id"], np.column_stack([pts, top])))
 
     def z(self, e, n):
@@ -192,7 +192,7 @@ class Scene:
             c.line(top, (255, 255, 255), 2, wid, dash=True)
 
     def features(self):
-        return [f for path in sorted((crs.ROOT / "data" / "site").glob("features-*.geojson")) for f in geojson.read_optional(path)]
+        return [f for path in sorted((self.site.path / "data" / "site").glob("features-*.geojson")) for f in geojson.read_optional(path)]
 
     def heights(self, p, ground):
         """A feature's base and top: its `base_m` or the ground, and its `top_m` or `height_m` over the base."""
@@ -268,7 +268,7 @@ class Scene:
                 c.hide = None
 
 
-def main():
+def main(site):
     ap = argparse.ArgumentParser(prog="domus prep overlay", description=__doc__.split("\n\n")[0])
     ap.add_argument("tag", help="the placed reconstruction, data/video/<TAG>-sfm.npz")
     ap.add_argument("out", help="the folder to write the frames to")
@@ -284,9 +284,9 @@ def main():
     groups = set(GROUPS) if not args.only else set(args.only.split(","))
     if groups - set(GROUPS):
         raise DomusError(f"--only takes {', '.join(GROUPS)}")
-    placed = Placed(args.tag, args.georef)
-    frames_dir = Path(args.frames_dir) if args.frames_dir else crs.ROOT / "sources" / "raw" / "frames6" / args.tag.split("-")[0]
-    scene = Scene(args.option)
+    placed = Placed(site, args.tag, args.georef)
+    frames_dir = Path(args.frames_dir) if args.frames_dir else site.path / "sources" / "raw" / "frames6" / args.tag.split("-")[0]
+    scene = Scene(site, args.option)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     for frame in args.frames:

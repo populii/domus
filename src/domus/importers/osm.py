@@ -16,7 +16,7 @@ from rasterio.errors import RasterioIOError
 from rasterio.merge import merge
 
 from ..errors import DomusError
-from ..geo import crs, raster
+from ..project import rasters
 
 BASE = "https://copernicus-dem-30m.s3.amazonaws.com"
 VERTICAL = "EGM2008"
@@ -32,16 +32,16 @@ def tile(lat, lon):
     return f"{BASE}/{name}/{name}.tif"
 
 
-def site_box():
-    """The model's extent in longitude and latitude, and a margin: (west, south, east, north)."""
-    e0, n0, e1, n1 = crs.settings()["model"]["extent"]
-    lon, lat = crs.site_to_lonlat([e0, e1, e0, e1], [n0, n0, n1, n1])
+def site_box(site):
+    """The site's model's extent in longitude and latitude, and a margin: (west, south, east, north)."""
+    e0, n0, e1, n1 = site.settings()["model"]["extent"]
+    lon, lat = site.grid.to_lonlat([e0, e1, e0, e1], [n0, n0, n1, n1])
     return min(lon) - MARGIN_DEG, min(lat) - MARGIN_DEG, max(lon) + MARGIN_DEG, max(lat) + MARGIN_DEG
 
 
-def fetch():
+def fetch(site):
     """data/lidar/dem.tif: the site's patch of the Copernicus ground model, from the tiles it falls on."""
-    west, south, east, north = site_box()
+    west, south, east, north = site_box(site)
     urls = sorted({tile(lat, lon) for lat in (south, north) for lon in (west, east)})
     sources, used = [], []
     try:
@@ -62,12 +62,12 @@ def fetch():
             src.close()
     if not np.isfinite(data[0]).any() or (data[0] == -9999.0).all():
         raise DomusError("The Copernicus ground model has no heights over this site.")
-    out = raster.DEM
+    out = rasters.path(site, "dem")
     out.parent.mkdir(parents=True, exist_ok=True)
     with rasterio.open(out, "w", **profile) as dst:
         dst.write(data[:1].astype(np.float32))
         dst.units = ("metre",)
-    record = crs.ROOT / "data" / "copernicus-sources.json"
+    record = site.path / "data" / "copernicus-sources.json"
     record.write_text(json.dumps({"tiles": used, "credit": CREDIT}, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(f"  ground model: Copernicus DEM GLO-30, {data.shape[2]}x{data.shape[1]} cells -> {out}")
     print(f"recorded the tiles used in {record}")
