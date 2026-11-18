@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.43
 
 - **For site projects:** the command line, the server and the viewer are Domus's app, in `domus.app`:
   `domus.app.cli`, `domus.app.serve` and `domus/app/viewer/`, which nothing else in Domus imports. The `domus`

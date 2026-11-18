@@ -18,7 +18,7 @@ import os
 import sys
 import warnings
 
-__version__ = "2026.11.42"
+__version__ = "2026.11.43"
 
 MOVED = {
     "buildcache": "build.cache",
