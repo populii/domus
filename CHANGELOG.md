@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.67
 
 - **For site projects:** an option's wall whose top steps between level bays, holding ground that stands over a lower
   bay's top, no longer leaves a gap one sees through at each step. Over the lower bay the ground's edge shows from the
