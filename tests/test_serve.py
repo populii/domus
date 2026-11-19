@@ -51,6 +51,20 @@ def test_paths_stay_inside(server, path):
     assert call(server, "GET", path)[0] == 404
 
 
+def test_inside_keeps_to_its_folder(tmp_path):
+    base, outside = tmp_path / "base", tmp_path / "base2"
+    (base / "sub").mkdir(parents=True)
+    outside.mkdir()
+    (base / "sub" / "a.txt").write_text("a")
+    (base / "out").symlink_to(outside)
+    missing = str(base.resolve() / "__missing__")
+    assert serve._inside(base, "") == str(base.resolve())
+    assert serve._inside(base, "sub/a.txt") == str((base / "sub" / "a.txt").resolve())
+    assert serve._inside(base, "sub%2fa.txt") == str((base / "sub" / "a.txt").resolve())
+    for rel in ("..", "../base2/x", "%2e%2e/base2", str(outside), "out/x"):
+        assert serve._inside(base, rel) == missing
+
+
 def test_store_round_trip(server):
     head = {"Content-Type": "application/json"}
     assert call(server, "GET", "/api/db/sketches/current")[0] == 404

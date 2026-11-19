@@ -262,10 +262,14 @@ def host_allowed(header):
 
 
 def _inside(base, rel):
-    """`rel` under `base`, or a path that doesn't exist if it would leave it."""
-    base = base.resolve()
-    target = (base / unquote(rel)).resolve()
-    return str(target) if target.is_relative_to(base) else str(base / "__missing__")
+    """`rel` under `base`, or a path that doesn't exist if it would leave it (by `..`, an absolute path or a link)."""
+    base = os.path.realpath(base)
+    if not rel:
+        return base
+    target = os.path.realpath(os.path.join(base, unquote(rel)))
+    if not target.startswith(base + os.sep):
+        return os.path.join(base, "__missing__")
+    return target
 
 
 def accepts_gzip(header):
@@ -939,7 +943,8 @@ class SitesHandler(Handler):
             setattr(self, k, v)
         self.in_site = True
         if m[2] is None:
-            self.add_slash = parts.path + "/"
+            # The site's own name, as the server lists it, not the request's text, goes into the Location header.
+            self.add_slash = next((f"/s/{n}/" for n in self.sites.names() if n == m[1]), "/")
         self.path = (m[2] or "/") + (f"?{parts.query}" if parts.query else "")
         return True
 

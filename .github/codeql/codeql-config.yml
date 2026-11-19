@@ -1,0 +1,6 @@
+name: Domus CodeQL config
+
+# Third-party libraries copied into the viewer as they're published (three.js and friends). They're
+# updated from upstream, not edited here, so their findings belong to their own projects.
+paths-ignore:
+  - src/domus/app/viewer/vendor
