@@ -55,7 +55,7 @@ def test_inside_keeps_to_its_folder(tmp_path):
     base, outside = tmp_path / "base", tmp_path / "base2"
     (base / "sub").mkdir(parents=True)
     outside.mkdir()
-    (base / "sub" / "a.txt").write_text("a")
+    (base / "sub" / "a.txt").write_text("a", encoding="utf-8")
     (base / "out").symlink_to(outside)
     missing = str(base.resolve() / "__missing__")
     assert serve._inside(base, "") == str(base.resolve())
