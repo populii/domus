@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.66
 
 - **For site projects:** `domus marks`, `domus title` and the viewer's **Make it an option** change a site's data
   through the one route for changes: each is an edit recorded in `.domus/edits/` with who, when and why, and
