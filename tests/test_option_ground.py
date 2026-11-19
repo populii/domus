@@ -227,20 +227,29 @@ def ground_at(project, s, o):
 
 def through(s, opt):
     """The layers the build draws for a made-up option on site `s` (build.option_layers), written as its model to the
-    site's output, and what the through check finds in them: (layers, the build's frame, findings)."""
+    site's output with what the build left out of them (its summary's `left_out`), and what the through check finds in
+    them: (layers, the build's frame, findings)."""
     from domus import build
     from domus.checks import model as check
 
     cfg = s.settings()
     frame = build.Frame(build.site_origin(cfg, terrain.ground(s)))
-    layers, _, _ = build.option_layers(s, opt, design.evaluate(s, opt, keep_solids=True), frame, cfg["model"]["extent"], cfg, [],
-                                       existing_tin=terrain.drawn(s))
-    model = {"origin": [frame.e0, frame.n0, frame.h0], "summary": {"options": [{"id": opt["id"], "keep_existing": []}]},
+    layers, summary, _ = build.option_layers(s, opt, design.evaluate(s, opt, keep_solids=True), frame, cfg["model"]["extent"], cfg,
+                                             [], existing_tin=terrain.drawn(s))
+    model = {"origin": [frame.e0, frame.n0, frame.h0],
+             "summary": {"options": [{"id": opt["id"], "keep_existing": [], **{k: summary[k] for k in ("left_out",) if k in summary}}]},
              "layers": layers}
     (s.output / "model.json").write_text(json.dumps(model), encoding="utf-8")
     findings = []
     check.check_through(s, findings)
     return layers, frame, findings
+
+
+def failures(findings):
+    """The through check's failures: ground through a wall or a flight, or over a tread's edge. Its warnings, of a sheet
+    standing up out of an option's ground that the build left out (solids.sheets), are the sheets tests' below: these
+    made-up options keep a few slivers of that kind, a few centimetres tall, where their parts of the plan meet."""
+    return [x for x in findings if x[1] == "fail"]
 
 
 def drawn_ground(layers, oid, frame):
@@ -264,7 +273,7 @@ def test_a_bed_drawn_past_a_capped_walls_face_stops_at_the_wall(site, project, t
                             {"id": "bed", "kind": "planting", "level": bed, "at_so": [12.0, 10.0],
                              "polygon_so": [[9.997, 4], [14, 4], [14, 18], [9.997, 18]]}])
     layers, frame, findings = through(s, opt)
-    assert findings == []
+    assert failures(findings) == []
     ground = Surface(*drawn_ground(layers, "bedcap", frame))
     along = np.linspace(7.0, 17.0, 41)
     for at, level in ((9.99, low), (10.27, bed)):          # under the cap's overhang; behind the cap, over the body
@@ -288,7 +297,7 @@ def test_a_walls_end_in_a_bed_over_its_top_is_drawn_in_the_bed(site, project, tm
                             {"id": "upper", "kind": "lawn", "level": bed, "at_so": [12.0, 10.0],
                              "polygon_so": [[10, 4], [14, 4], [14, 18], [10, 18]]}])
     layers, frame, findings = through(s, opt)
-    assert findings == []
+    assert failures(findings) == []
     v, f = drawn_ground(layers, "raised", frame)
     corners = v[f]
     n = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
@@ -322,7 +331,7 @@ def test_steps_from_outside_the_regrade_area_stand_clear_of_the_ground_there(sit
     d = design.evaluate(s, opt, keep_solids=True)["design"]
     assert not d.garden.covers(shapely.Point(*d.stairs[0].a))      # its foot is outside the regrade area
     _, _, findings = through(s, opt)
-    assert findings == []
+    assert failures(findings) == []
 
 
 def ring_defects(ring):
@@ -399,7 +408,7 @@ def test_a_walls_bottom_under_a_steep_stretch_of_its_top_isnt_its_top(material, 
                   terraces=[{"id": "lower", "kind": "lawn", "level": low, "at_so": [8.0, 10.0], "polygon_so": [[6, 4], [10, 4], [10, 18], [6, 18]]},
                             {"id": "upper", "kind": "lawn", "level": low + 0.68, "at_so": [12.0, 10.0], "polygon_so": [[10, 4], [14, 4], [14, 18], [10, 18]]}])
     _, _, findings = through(s, opt)
-    assert findings == []
+    assert failures(findings) == []
 
 
 @pytest.mark.parametrize("kind", [{"material": "stone", "thickness_m": 0.4}, {"material": "gabion", "thickness_m": 0.5},
@@ -419,7 +428,7 @@ def test_a_thick_wall_in_bays_bending_at_its_step_shows_no_bottom_for_its_top(ki
                   terraces=[{"id": "lower", "kind": "lawn", "level": low, "at_so": [8.0, 10.0], "polygon_so": [[4, 2], [10, 2], [10, 18], [4, 18]]},
                             {"id": "upper", "kind": "lawn", "level": low + 0.6, "at_so": [12.0, 10.0], "polygon_so": [[10, 2], [14, 2], [14, 18], [10, 18]]}])
     _, _, findings = through(s, opt)
-    assert findings == []
+    assert failures(findings) == []
 
 
 @pytest.mark.parametrize("gap", [0.005, 0.02])
@@ -448,7 +457,7 @@ def test_a_flight_a_hair_short_of_a_walls_face_runs_out_to_it(gap, site, project
     layers, frame, findings = through(s, opt)
     if not meets:
         return
-    assert findings == []
+    assert failures(findings) == []
     steps = next(x for x in layers if x["id"] == "option-cheek-steps-S")
     q = np.asarray(steps["positions"], float).reshape(-1, 3)
     assert fr.so(np.column_stack([q[:, 0] + frame.e0, frame.n0 - q[:, 2]]))[:, 1].max() == pytest.approx(5.5 + gap, abs=0.001)
@@ -456,3 +465,128 @@ def test_a_flight_a_hair_short_of_a_walls_face_runs_out_to_it(gap, site, project
     en = fr.en(np.column_stack([np.linspace(10.05, 10.95, 10), np.full(10, 5.5 + gap / 2)]))     # mid-way across the gap
     h = ground.z(en[:, 0], en[:, 1])
     assert np.abs(h - st.under(en[:, 0], en[:, 1])).max() < 0.002 and (h < up - 0.03).all()
+
+
+# Sheets: an upright face of the drawn ground that stands up out of it on both sides, which no ground can be.
+
+# An option whose terraces fall, after the format-1 made-up site's falling lawns (tools/made_up_sites.py): a lawn falling
+# 1:40 to the east, held by a timber wall along one side, and a strip beyond the wall falling 1:50, each with a batter of
+# 1:2.5 where no wall holds it.
+FALLS = made_up("falls", walls=[{"id": "F1", "name": "Lawn wall", "material": "timber", "line_so": [[12.0, 18.0], [12.0, 4.0]]}],
+                terraces=[{"id": "lawn", "kind": "lawn", "level": 41.77, "at_so": [8.0, 11.0], "fall": "1:40", "fall_to": "east",
+                           "batter": 2.5, "polygon_so": [[12.0, 18.0], [12.0, 4.0], [3.0, 4.0], [3.0, 18.0]]},
+                          {"id": "strip", "kind": "lawn", "level": 42.16, "at_so": [13.5, 11.0], "fall": "1:50", "batter": 2.5,
+                           "polygon_so": [[14.5, 18.0], [14.5, 4.0], [12.1, 4.0], [12.1, 18.0]]}])
+
+
+def standing_out(v, f, beside=2e-4, by=0.01, upright=1e-6):
+    """The faces of a surface (vertices on the site's grid, faces) that stand up out of it: upright ones (a normal
+    rising less than `upright` of its length) with a point, a corner or an edge's middle a hundredth of the way in, more
+    than `by` over the surface's top `beside` to each side of it, where it has a top on both sides."""
+    c = np.asarray(v, float)[np.asarray(f, np.int64)]
+    n = np.cross(c[:, 1] - c[:, 0], c[:, 2] - c[:, 0])
+    size = np.linalg.norm(n, axis=1)
+    up = (size > 1e-12) & (np.abs(n[:, 2]) <= upright * size)
+    top = Surface(np.asarray(v, float), np.asarray(f, np.int64)[~up & (n[:, 2] > 0)])
+    k = np.flatnonzero(up)
+    u = c[k]
+    side = n[k, :2] / np.linalg.norm(n[k, :2], axis=1)[:, None] * beside
+    pts = np.concatenate([u, (u + np.roll(u, -1, axis=1)) / 2], axis=1)
+    pts = pts + 0.01 * (u.mean(axis=1)[:, None, :] - pts)
+    x, y, z = pts[:, :, 0].ravel(), pts[:, :, 1].ravel(), pts[:, :, 2].ravel()
+    dx, dy = np.repeat(side[:, 0], 6), np.repeat(side[:, 1], 6)
+    one, other = top.z(x + dx, y + dy), top.z(x - dx, y - dy)
+    over = np.where(np.isfinite(one) & np.isfinite(other), z - np.fmax(one, other), 0.0).reshape(-1, 6).max(axis=1)
+    return k[over > by]
+
+
+def test_falling_terraces_cut_batters_stand_no_sheet_out_of_the_ground(project):
+    """Where a terrace falls, its batters are worked out the second way (solids._batter): each straight piece of its
+    free edge gives a wedge along it and a cone round its nearest end, each in the piece's own part of the plan. Cut to
+    those parts exactly, a wedge and the cone beside it shared a face, and what's left under the cut kept a sheet of no
+    thickness there, which stood out of FALLS's ground up to 0.8 m. Each reaches EDGE_M past its part now: the piece of
+    the designed ground the batters cut (Solids' "batters cut") has no face standing up out of it."""
+    s = design.evaluate(project, FALLS, keep_solids=True)["solids"]
+    piece = next(p for what, part, p in s.named if what == "designed" and part == "batters cut")
+    m = piece.to_mesh64()
+    v = np.asarray(m.vert_properties, float)[:, :3] + [s.origin[0], s.origin[1], 0.0]
+    assert len(standing_out(v, np.asarray(m.tri_verts, np.int64).reshape(-1, 3))) == 0
+
+
+def test_sheets_finds_a_sheet_standing_out_of_the_ground_and_never_a_step_a_batter_or_a_holes_edge():
+    """solids.sheets on made-up surfaces: a sheet of no thickness standing 0.6 m out of level ground stands that far
+    over it; a step's face, a batter and the face down into a hole (a wall's cut, where there's no ground on one side)
+    stand over nothing."""
+    def square(x0, z0, z1=None):
+        z1 = z0 if z1 is None else z1
+        return [[x0, 0.0, z0], [x0 + 1.0, 0.0, z1], [x0 + 1.0, 1.0, z1], [x0, 1.0, z0]], [[0, 1, 2], [0, 2, 3]]
+
+    def upright(x, z0, z1, facing):
+        quad = [[x, 0.0, z0], [x, 1.0, z0], [x, 1.0, z1], [x, 0.0, z1]]
+        return quad, ([[0, 2, 1], [0, 3, 2]] if facing > 0 else [[0, 1, 2], [0, 2, 3]])
+
+    def surface(*parts):
+        v, f = [], []
+        for pv, pf in parts:
+            f += [[i + len(v) for i in t] for t in pf]
+            v += pv
+        return np.asarray(v, float), np.asarray(f, np.int64)
+
+    v, f = surface(square(0.0, 0.0), square(1.0, 0.0), upright(1.0, 0.0, 0.6, 1), upright(1.0, 0.0, 0.6, -1))
+    over = solids.sheets(v, f)
+    assert over[4:] == pytest.approx([0.594] * 4, abs=0.01) and (over[:4] == 0).all()      # its points a hundredth in
+    for parts in ((square(0.0, 0.0), square(1.0, 0.5), upright(1.0, 0.0, 0.5, -1)),          # a step
+                  (square(0.0, 0.0), square(1.0, 0.0, 0.4)),                                # a batter
+                  (square(0.0, 0.5), upright(1.0, 0.0, 0.5, 1))):                           # into a hole
+        assert (solids.sheets(*surface(*parts)) == 0).all()
+
+
+def test_a_sheet_the_solids_leave_at_a_step_in_the_ground_is_left_out_and_reported(site, project, tmp_path, at_site):
+    """A lawn falling 1:40 to the south, cut into the demo's slope just north of its old wall, which the option takes
+    away: the ground the option starts from (Design.base) steps up at the wall's back, and the batter's cut begins at
+    that step. option_solids takes the part of the plan the batters cut (its `lowered`) from the outline of that ground
+    under the cut, so the part's edge runs along the step's face, and the ground beside, cut to its own part, keeps a
+    sheet of no thickness on it, half a metre over the ground on both sides. The build leaves it out of the drawing
+    (solids.sheets), says where in the option's summary and in a warning, and the through check reports it."""
+    from domus import build
+
+    s = at_site(site, output=tmp_path)
+    level = round(ground_at(project, 5.0, 11.0), 2)
+    opt = made_up("cutback", terraces=[{"id": "lawn", "kind": "lawn", "level": level, "at_so": [5.0, 11.0], "fall": "1:40",
+                                        "fall_to": "south", "batter": 2.5, "polygon_so": [[2.0, 6.0], [8.0, 6.0], [8.0, 16.0], [2.0, 16.0]]}])
+    layers, frame, findings = through(s, opt)
+    v, f = drawn_ground(layers, "cutback", frame)
+    assert len(standing_out(v, f, beside=0.05, by=0.05, upright=1e-3)) == 0      # the drawn ground, to the millimetre
+    summary = json.loads((s.output / "model.json").read_text(encoding="utf-8"))["summary"]["options"][0]
+    [left] = summary["left_out"]
+    assert left["layer"] == "ground" and left["faces"] > 0 and 0.3 < left["most_m"] < 1.0
+    assert left["at_so"][0] == pytest.approx(8.2, abs=0.05) and 4.0 < left["at_so"][1] < 7.0      # at the old wall's back
+    [warning] = build.left_out_warnings(opt, summary)
+    assert warning.startswith(f"Warning: {opt['path']}: {left['faces']} faces of its drawn ground stood up out of the ground on both sides")
+    assert [(c, lv, where) for c, lv, where, _ in findings] == [("through", "warn", "cutback/ground")]
+
+
+def test_the_demos_options_leave_nothing_out(built):
+    """The demo's two options, built: their walls, terraces and batters stand nothing out of their ground, so the
+    build leaves nothing out of it (solids.sheets)."""
+    summary = json.loads((built / "summary.json").read_text(encoding="utf-8"))
+    assert [o["id"] for o in summary["options"]] == ["a-one-wall", "b-two-tiers"]
+    assert not any("left_out" in o for o in summary["options"])
+
+
+def test_a_cut_batter_ending_under_the_ground_leaves_a_sheet_the_build_leaves_out(site, project, tmp_path, at_site):
+    """A lawn on the demo's low north side set 3 m and more under the ground: its batters cut the slope all the way
+    out to their reach (scheme.BATTER_REACH_M) and end there still under the ground, so the designed ground steps up
+    to the ground there. option_solids cuts what's under the cut (under_cut) to the part of the plan the batters cut,
+    whose edge at the reach runs along the cut's own face there, and beyond it what's under the cut is everything up
+    to the solids' top: a sheet of no thickness is left on that face, metres over the ground on both sides. The build
+    leaves it out of the drawing and says so."""
+    s = at_site(site, output=tmp_path)
+    opt = made_up("deep", terraces=[{"id": "lawn", "kind": "lawn", "level": 37.0, "at_so": [3.0, 11.0], "batter": 2.5,
+                                     "polygon_so": [[2.0, 8.0], [4.0, 8.0], [4.0, 14.0], [2.0, 14.0]]}])
+    layers, frame, findings = through(s, opt)
+    v, f = drawn_ground(layers, "deep", frame)
+    assert len(standing_out(v, f, beside=0.05, by=0.05, upright=1e-3)) == 0
+    [left] = json.loads((s.output / "model.json").read_text(encoding="utf-8"))["summary"]["options"][0]["left_out"]
+    assert left["layer"] == "ground" and left["most_m"] > 5.0
+    assert [(c, lv, where) for c, lv, where, _ in findings] == [("through", "warn", "deep/ground")]

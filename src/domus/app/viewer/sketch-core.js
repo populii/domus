@@ -881,7 +881,8 @@ export function makePreview(wasm, model) {
 
   // solids._batter's second way: where the level changes along the free edge, each straight piece gives the batter
   // only in its own part of the plan (where it's the nearest piece), and there it's a wedge along the piece, or a cone
-  // round whichever end is nearest. A piece of a plane's edge needs no cutting where the level bends, as it doesn't.
+  // round whichever end is nearest, each reaching EDGE_M past its part of the plan so no two share a face. A piece of a
+  // plane's edge needs no cutting where the level bends, as it doesn't.
   function sloping(t, given, low, high, segments, fills, cuts) {
     const pieces = t.tris ? bent(t, given) : given;
     const R = rules.reach_m, ends = pieces.map(([a, b]) => [[a[0] - ox, a[1] - oy], [b[0] - ox, b[1] - oy]]);
@@ -905,10 +906,12 @@ export function makePreview(wasm, model) {
           pts.push([q[0], q[1], zp], [...plus(q, across, -1), zp + drop], [...plus(q, across), zp + drop],
             [...plus(q, across, -1), end], [...plus(q, across), end]);
         }
-        out.push(K(K(Manifold.hull(pts)).intersect(prism(K(slab.intersect(cell)), bottom, roof))));
+        out.push(K(K(Manifold.hull(pts)).intersect(prism(K(K(slab.intersect(cell)).offset(EDGE_M, "Miter")), bottom, roof))));
         for (const [p, zp, side] of beyond) {
           const part = K(side.intersect(cell));
-          if (!part.isEmpty()) out.push(K(coneHull(p, zp, p, zp, t.batter, end, segments, up).intersect(prism(part, bottom, roof))));
+          if (!part.isEmpty()) {
+            out.push(K(coneHull(p, zp, p, zp, t.batter, end, segments, up).intersect(prism(K(part.offset(EDGE_M, "Miter")), bottom, roof))));
+          }
         }
       }
     });

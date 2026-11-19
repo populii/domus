@@ -426,7 +426,25 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
     # The cut's floor inside each wall's body (over the plan its mesh stands on) doesn't show, and isn't drawn.
     bodies = [(solids.footing(m.vertices, m.faces, pts, chain, toe), head)
               for (m, _), (pts, _, chain, toe, _), (_, head, _) in zip(meshes, levels, standing, strict=True)]
-    tin = welded(mesh.Mesh(*solids.surface(whole, s.origin, patch, cut, standing, bodies)), frame)
+    # A face of the ground, or of a lawn or a bed laid on it, standing up out of it on both sides (solids.sheets) is a
+    # sheet no ground can be, which something in Domus made: it's left out of the drawing, and the summary says where
+    # (`left_out`), so the build warns of it and the through check reports it.
+    left_out = []
+    site_frame = design.frame(site)
+
+    def without_sheets(v, f, layer):
+        over = solids.sheets(v, f)
+        sheet = over > solids.SHEET_M
+        if sheet.any():
+            k = int(np.argmax(over))
+            mid = np.asarray(v, float)[np.asarray(f)[k]].mean(axis=0)
+            so = site_frame.so(mid[None, :2])[0]
+            left_out.append({"layer": layer, "faces": int(sheet.sum()), "most_m": round(float(over[k]), 3),
+                             "at_so": [round(float(so[0]), 2), round(float(so[1]), 2)], "height": round(float(mid[2]), 2)})
+        return np.asarray(f)[~sheet]
+
+    v, f = solids.surface(whole, s.origin, patch, cut, standing, bodies)
+    tin = welded(mesh.Mesh(v, without_sheets(v, f, "ground")), frame)
     uv = np.column_stack([(tin.vertices[:, 0] - e0) / (e1 - e0), (tin.vertices[:, 1] - n0) / (n1 - n0)])
     out = [{**mesh_json(tin, frame, "#9fb58a", f"{opt['short']}: designed ground"), "id": f"option-{oid}-ground",
             "role": "ground", "uv": r(uv, 5), **tag,
@@ -473,7 +491,7 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
             if q.geom_type != "Polygon" or q.area < 1e-3:
                 continue
             v, f = solids.top(whole, s.origin, q if host else skin_area(q, walled, beside))
-            m.add(v + [0, 0, 0 if host else 0.012], f)
+            m.add(v + [0, 0, 0 if host else 0.012], without_sheets(v, f, f"terrace {t.id}"))
         if not len(m):
             continue
         m = welded(m, frame)
@@ -514,7 +532,11 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
             for q in getattr(part, "geoms", [part]):
                 if existing_tin is None or q.geom_type != "Polygon" or q.area < 1e-3:
                     continue
-                v, f = solids.top(whole, s.origin, q) if with_option else drape(existing_tin, q)
+                if with_option:
+                    v, f = solids.top(whole, s.origin, q)
+                    f = without_sheets(v, f, f"lawn {lawn['id']}")
+                else:
+                    v, f = drape(existing_tin, q)
                 F.append(f + sum(len(x) for x in V))
                 V.append(v)
         if not V:
@@ -602,8 +624,23 @@ def option_layers(site, opt, res, frame, extent, cfg, existing_walls, lawns=(), 
             "removed_existing_m": res["removed_existing_m"],
             "stairs": [{k: st[k] for k in (*stair_keys, "line_so", "flags", "foot_rise_m") if k in st}
                        for st in res["stairs"]],
-            "steps": len(res["stairs"]) or int(opt.get("steps", 0)), "lawns_kept": kept, "lawn_pictures": pictures}
+            "steps": len(res["stairs"]) or int(opt.get("steps", 0)), "lawns_kept": kept, "lawn_pictures": pictures,
+            **({"left_out": left_out} if left_out else {})}
     return out, summ, tex
+
+
+def left_out_warnings(opt, summary):
+    """A warning for each layer of an option's drawn ground that had faces standing up out of the ground on both sides
+    of them, a sheet no ground can be, which option_layers left out (its summary's `left_out`)."""
+    return [f"Warning: {opt['path']}: {_faces(x['faces'])} of its drawn {x['layer']} stood up out of the ground on both "
+            f"sides, by up to {x['most_m']:.2f} m (at s {x['at_so'][0]:.2f}, o {x['at_so'][1]:.2f}, height {x['height']:.2f}): "
+            "a sheet no ground can be, which something in Domus made. It's left out of the drawing; domus prep check's "
+            "through reports it too."
+            for x in summary.get("left_out", [])]
+
+
+def _faces(n):
+    return f"{n} face" if n == 1 else f"{n} faces"
 
 
 def fix_warnings(site):
@@ -977,6 +1014,8 @@ def add_options(b):
                 b.cache.put(f"option-{opt['id']}", k, [opt_layers, opt_summary, opt_textures], buildcache.written(b.site.output, before))
         else:
             opt_layers, opt_summary, opt_textures = cached
+        for line in left_out_warnings(opt, opt_summary):
+            b.say(line)
         layers.extend(opt_layers)
         textures.update(opt_textures)
         summary["options"].append(opt_summary)

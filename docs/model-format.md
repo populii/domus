@@ -20,7 +20,7 @@ Positions are in viewer metres: x east of the site's origin, y up from its heigh
 | `extent` | `[E min, N min, E max, N max]`: the area modelled, on the site's grid |
 | `textures` | The ground's drapes: `{key: {label, file, width, height}}`; the first is shown first |
 | `layers` | What's drawn, in order (below) |
-| `summary` | The walls (`walls`), the wall options and how each comes out (`options`, each with its materials list, `materials`: [docs/options.md](options.md#what-an-option-takes-its-materials-list); `options_site`), the observations, each read against the model (`observations`: [docs/observations.md](observations.md)), and what each layer kind found |
+| `summary` | The walls (`walls`), the wall options and how each comes out (`options`, each with its materials list, `materials`: [docs/options.md](options.md#what-an-option-takes-its-materials-list), and what the build left out of its drawn ground as sheets standing up out of it, `left_out`: [docs/options.md](options.md#what-the-build-works-out); `options_site`), the observations, each read against the model (`observations`: [docs/observations.md](observations.md)), and what each layer kind found |
 | `lot` | `{area_m2}` of the main lot |
 | `views` | The site's own view buttons: `{name: {pos, target}}` in viewer metres |
 | `snap` | Lines and points the drawing tools snap to |

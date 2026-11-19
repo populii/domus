@@ -112,8 +112,9 @@ wall option's walls).
 `check` looks for things floating above or buried in the ground, spikes and holes in the ground, a roof that doesn't fit
 the LiDAR, placed clouds that are tilted or off the ground, duplicate ids, two ground-fix points at one place whose
 heights disagree, and each observation's reading against the model (`observations`, [observations.md](observations.md)).
-For the wall options it looks for ground that comes through a wall or a flight of steps, or stands over a tread's edge
-(`through`, in the built model), ground-fix points inside an option's wall at or over its top (`fixes`), and block walls
+For the wall options it looks for ground that comes through a wall or a flight of steps, or stands over a tread's edge,
+and warns of a sheet standing up out of an option's ground that the build left out of it (`through`, in the built
+model), ground-fix points inside an option's wall at or over its top (`fixes`), and block walls
 that aren't set out in whole units: cut pieces at a stretch's ends or a step, and cut caps (`blocks`, with each wall's
 own block size). It exits 1 if a check fails its tolerance, and writes its report to `.domus/checks/check_model.json`. A
 check the site has nothing for is skipped with a note saying why: the roof without a house or a surface model, plumb and

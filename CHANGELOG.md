@@ -30,6 +30,18 @@
   ([docs/options.md](docs/options.md#what-the-build-works-out)).
 - **For site projects:** on Windows, the GeoJSON files `domus canopy`, `domus prep ifc` and `domus prep plan-trace`
   write end their lines with LF, as the other files Domus writes do, where they had CRLF. Elsewhere nothing changes.
+- **For site projects:** an option whose terraces fall no longer draws sheets standing up out of its ground where
+  their batters cut it, which it has since 2026.11.60, some metres tall. Where a terrace's level changes along its
+  free edge, each straight piece of the edge gives the batter only in its own part of the plan, as a wedge along it or
+  a cone round its end. Each was cut to that part exactly, so a wedge and the cone beside it shared a face, and what's
+  left under the cut kept a sheet of no thickness between them. Each now reaches a micrometre past its part, as the
+  option's other solids do. Cut, fill and the materials move by under a millionth of a cubic metre.
+- **For site projects:** the build leaves out of an option's drawn ground, and of the lawns and beds laid on it, any
+  upright face that stands more than 1 cm over the ground on both sides of it: real ground only steps from one height
+  to another, so such a face is a sheet no ground can be, whatever in Domus made it. It's never a step's face, a
+  batter or a wall's face. The build warns which option, how many faces and where (in the options' frame), the
+  option's summary says so (`left_out`), and `domus prep check`'s `through` reports it as a warning, so what made it
+  shows ([docs/options.md](docs/options.md#what-the-build-works-out)).
 - `domus new --boundary` refuses a GeoJSON with no `crs` member whose numbers can't be longitude and latitude, and says
   to add its `crs` or give its grid with `--epsg`, which then names the grid the boundary is on. Before, such a
   boundary was taken as longitude and latitude: `domus new` said there was no UTM zone there, and with `--epsg` it

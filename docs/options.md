@@ -291,7 +291,11 @@ build paints.
   lawns, beds or paving that lies against it, and stops at the walls, as they're drawn, and the steps that stand in
   it. Round the regrade area, beside the house too, the ground is drawn as the site draws it without the option, and
   where a batter meets the area's edge above or below that ground, an upright face joins the two. Nothing of the
-  ground should show through a wall or a tread.
+  ground should show through a wall or a tread. Real ground only steps from one height to another, so an upright
+  face of the drawn ground, or of a lawn or a bed laid on it, that stands more than 1 cm over the ground on both sides
+  of it is a sheet no ground can be, which something in Domus made: the build leaves it out of the drawing, warns
+  which option, how many faces and where, records it in the option's summary (`left_out`), and `domus prep check`'s
+  `through` reports it as a warning.
 - The lawns that are there (`kind` lawn in `data/site/trees.geojson`): where an option leaves a lawn alone it
   stays drawn, on the option's ground, less the option's own lawns and beds, its walls and steps, and
   any sliver under 0.3 m wide that a wall cuts off. It is drawn as its grass without the bare patches it has

@@ -576,11 +576,14 @@ def _where(model, point):
 
 
 def check_through(site, findings, tol=TOL_THROUGH):
-    """Ground that comes through an option's walls and flights, or stands over a tread's edge, in the built model. A
-    wall's or a flight's top is a face of it that looks up with nothing of it over it, never its bottom or an underside.
-    A top inside another of the option's walls and flights, under that one's top, is hidden, so it isn't checked. Over a
-    wall's faces the soil covers as it's built (a layer's `soil_over`: the body's top behind a shallower capping
-    course), the ground may come up `soil_over_m`, to the cap's top."""
+    """Ground that comes through an option's walls and flights, or stands over a tread's edge, in the built model; and,
+    as a warning, what the build left out of an option's drawn ground as a sheet standing up out of it on both sides,
+    which no ground can be (the option's `left_out` in the model's summary, solids.sheets): the drawing is right without
+    it, but something in Domus made it. A wall's or a flight's top is a face of it that looks up with nothing of it
+    over it, never its bottom or an underside. A top inside another of the option's walls and flights, under that
+    one's top, is hidden, so it isn't checked. Over a wall's faces the soil covers as it's built (a layer's
+    `soil_over`: the body's top behind a shallower capping course), the ground may come up `soil_over_m`, to the cap's
+    top."""
     path = site.output / "model.json"
     if not path.exists():
         findings.append(("through", "info", "model", "no model built yet: run domus build first"))
@@ -591,6 +594,11 @@ def check_through(site, findings, tol=TOL_THROUGH):
     fails = 0
     for o in model.get("summary", {}).get("options", []):
         oid = o["id"]
+        for x in o.get("left_out", []):
+            faces = f"{x['faces']} face" if x["faces"] == 1 else f"{x['faces']} faces"
+            findings.append(("through", "warn", f"{oid}/{x['layer']}", (f"{faces} stood up out of the ground on both sides, by "
+                             f"up to {x['most_m']:.3f} m (s {x['at_so'][0]:.2f}, o {x['at_so'][1]:.2f}, height {x['height']:.2f}): "
+                             "a sheet no ground can be, which the build left out of the drawing")))
         mine = [x for x in layers if x.get("option") == oid and x.get("type") in ("mesh", "vegetation")
                 and ("positions" in x or "drape" in x)]
         ground = [(x["id"].replace(f"option-{oid}-", ""), _triangles(x)) for x in mine if x.get("role") in ("ground", "skin")]

@@ -587,6 +587,47 @@ def surface(ground, origin, patch, cut=None, walls=(), inside=()):
     return _faces(ground, origin, keep)
 
 
+SHEET_M = 0.01      # an upright face standing this far over the ground on both sides of it is a sheet (sheets)
+SHEET_BESIDE_M = 2e-4   # how far to each side of an upright face the ground beside it is read (sheets)
+SHEET_UPRIGHT = 0.01    # a face whose normal rises less than this, steeper than any ground, is upright here (sheets)
+
+
+def sheets(vertices, faces):
+    """How far each face of the ground with an option, as surface draws it or as top lays a lawn or a bed on it
+    (vertices on the site's grid, faces), stands up out of it: for an upright face, one whose normal rises less than
+    SHEET_UPRIGHT of its length (steeper than any ground, as a step's face is, or the sliver a boolean leaves a hair off
+    upright), the most any of its points (its corners and the middles of its edges, a hundredth of the way in towards
+    its middle) stands over the ground's top SHEET_BESIDE_M to each side of it, the higher of the two, where there's
+    ground on both sides; 0 for any other face. Real ground only steps from one height to another, so it's as high as
+    the top of each of its upright faces on one side of it or the other: a face standing more than SHEET_M over it on
+    both sides is a sheet standing out of the ground, which can't be ground, as where two of an option's solids shared
+    a face and the boolean kept a sheet of no thickness between them. A step's face, a batter's or a wall's never stands
+    over the higher side."""
+    v = np.asarray(vertices, float)
+    f = np.asarray(faces, np.int64).reshape(-1, 3)
+    out = np.zeros(len(f))
+    if not len(f):
+        return out
+    c = v[f]
+    n = np.cross(c[:, 1] - c[:, 0], c[:, 2] - c[:, 0])
+    size = np.linalg.norm(n, axis=1)
+    upright = (size > 1e-12) & (np.abs(n[:, 2]) <= SHEET_UPRIGHT * size)
+    k = np.flatnonzero(upright)
+    if not len(k):
+        return out
+    top = Surface(v, f[~upright & (n[:, 2] > 0)])
+    u = c[k]
+    side = n[k, :2] / np.linalg.norm(n[k, :2], axis=1)[:, None] * SHEET_BESIDE_M
+    pts = np.concatenate([u, (u + np.roll(u, -1, axis=1)) / 2], axis=1)
+    pts = pts + 0.01 * (u.mean(axis=1)[:, None, :] - pts)
+    x, y, z = pts[:, :, 0].ravel(), pts[:, :, 1].ravel(), pts[:, :, 2].ravel()
+    dx, dy = np.repeat(side[:, 0], 6), np.repeat(side[:, 1], 6)
+    one, other = top.z(x + dx, y + dy), top.z(x - dx, y - dy)
+    over = np.where(np.isfinite(one) & np.isfinite(other), z - np.fmax(one, other), 0.0)
+    out[k] = np.maximum(over.reshape(-1, 6).max(axis=1), 0.0)
+    return out
+
+
 def footing(vertices, faces, line, chain, toe):
     """The plan a wall's drawn mesh stands on (shapely, on the site's grid): its faces looking down at or under its toe
     (`toe` at each distance `chain` along its `line`, as walls.wall_levels gives them), its bottom in the ground, and
@@ -1011,7 +1052,9 @@ def _batter(t, free, origin, low, high, segments):
     point is also the one that gives the most, so the hulls of cones along the edge are the batters exactly. Where it
     isn't, each straight piece of the edge gives the batter only where it's the nearest piece (its part of the plan,
     from the lower envelope of the distances to the pieces), and there it's a wedge along the piece, or a cone round
-    whichever end is nearest."""
+    whichever end is nearest. The wedge and each cone reach EDGE_M past their part of the plan, as the module's other
+    solids do, so no two of them share a face: where two did, what's left under the cut (option_solids' under_cut)
+    would keep a sheet of no thickness between them, standing up out of the ground."""
     pieces = _straight(t, free)
     ends = np.array([[p, q] for p, q in pieces]) - origin
     if _is_level(t):                                            # level: the nearest point gives the most
@@ -1037,11 +1080,12 @@ def _batter(t, free, origin, low, high, segments):
                 [[*p, zp + k * drop] if k < 2 else [*p, end]
                  for q, zp in ((a, za), (b, zb)) for p, k in ((q, 0), (q - across, 1), (q + across, 1), (q - across, 2), (q + across, 2))],
                 dtype=np.float64))
-            out.append(wedge ^ prism(slab ^ cell, bottom, roof))
+            out.append(wedge ^ prism((slab ^ cell).offset(EDGE_M, mf.JoinType.Miter), bottom, roof))
             for p, zp, side in beyond:
                 region = side ^ cell
                 if not region.is_empty():
-                    out.append(cone_hull(p, zp, p, zp, t.batter, end, segments, up) ^ prism(region, bottom, roof))
+                    out.append(cone_hull(p, zp, p, zp, t.batter, end, segments, up)
+                               ^ prism(region.offset(EDGE_M, mf.JoinType.Miter), bottom, roof))
     return union(raised), union(cut)
 
 
