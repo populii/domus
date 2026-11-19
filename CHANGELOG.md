@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.11.69
 
 - The server's guard on file paths is written so CodeQL can follow it, and a site's address without its trailing slash
   is now redirected using the site's name as the server lists it, not the request's own text. Behaviour is unchanged:
