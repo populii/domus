@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.68
+
+- The image is published afresh as `ghcr.io/populii/domus`, from this repository. Domus itself is unchanged since 2026.11.67.
+
 ## 2026.11.67
 
 - **For site projects:** an option's wall whose top steps between level bays, holding ground that stands over a lower
