@@ -65,6 +65,14 @@ def test_inside_keeps_to_its_folder(tmp_path):
         assert serve._inside(base, rel) == missing
 
 
+def test_three_makes_its_ids_from_the_browsers_secure_random_numbers():
+    """The vendored three.js is patched (vendor/three/PATCHES.md): an update that drops the patch fails here."""
+    lib = (serve.VIEWER / "vendor" / "three" / "three.core.js").read_text(encoding="utf-8")
+    body = lib[lib.index("function generateUUID()"):]
+    body = body[:body.index("\n}\n")]
+    assert "crypto.getRandomValues(" in body and "Math.random" not in body
+
+
 def test_store_round_trip(server):
     head = {"Content-Type": "application/json"}
     assert call(server, "GET", "/api/db/sketches/current")[0] == 404
