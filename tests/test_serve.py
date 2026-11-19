@@ -51,6 +51,28 @@ def test_paths_stay_inside(server, path):
     assert call(server, "GET", path)[0] == 404
 
 
+def test_inside_keeps_to_its_folder(tmp_path):
+    base, outside = tmp_path / "base", tmp_path / "base2"
+    (base / "sub").mkdir(parents=True)
+    outside.mkdir()
+    (base / "sub" / "a.txt").write_text("a", encoding="utf-8")
+    (base / "out").symlink_to(outside)
+    missing = str(base.resolve() / "__missing__")
+    assert serve._inside(base, "") == str(base.resolve())
+    assert serve._inside(base, "sub/a.txt") == str((base / "sub" / "a.txt").resolve())
+    assert serve._inside(base, "sub%2fa.txt") == str((base / "sub" / "a.txt").resolve())
+    for rel in ("..", "../base2/x", "%2e%2e/base2", str(outside), "out/x"):
+        assert serve._inside(base, rel) == missing
+
+
+def test_three_makes_its_ids_from_the_browsers_secure_random_numbers():
+    """The vendored three.js is patched (vendor/three/PATCHES.md): an update that drops the patch fails here."""
+    lib = (serve.VIEWER / "vendor" / "three" / "three.core.js").read_text(encoding="utf-8")
+    body = lib[lib.index("function generateUUID()"):]
+    body = body[:body.index("\n}\n")]
+    assert "crypto.getRandomValues(" in body and "Math.random" not in body
+
+
 def test_store_round_trip(server):
     head = {"Content-Type": "application/json"}
     assert call(server, "GET", "/api/db/sketches/current")[0] == 404

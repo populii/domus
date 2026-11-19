@@ -42,7 +42,7 @@ def trust_file():
     return Path(base or Path.home() / ".config") / "domus" / "trust.json"
 
 
-def trusted():
+def known_digests():
     """{absolute path: SHA-256} of the files trusted on this machine."""
     try:
         return json.loads(trust_file().read_text(encoding="utf-8"))
@@ -60,7 +60,7 @@ def check(root, settings):
         raise DomusError(f"This site declares extensions ({', '.join(files)}), and this Domus runs no site's code (the "
                          "container image trusts none). Build it where its extensions are trusted, with domus build, "
                          "or take them out of [domus] extensions.")
-    known, out, untrusted = trusted(), [], []
+    known, out, untrusted = known_digests(), [], []
     for rel in files:
         path = (Path(root) / rel).resolve()
         if not path.is_file():
@@ -78,7 +78,7 @@ def check(root, settings):
 def trust(root, settings, revoke=False):
     """Records the site's declared extensions as they are now in this user's trust file (or drops them, with
     `revoke`), and returns [(relative path, SHA-256)]."""
-    known, out = trusted(), []
+    known, out = known_digests(), []
     for rel in declared(settings):
         path = (Path(root) / rel).resolve()
         if revoke:

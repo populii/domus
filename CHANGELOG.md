@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- The server's guard on file paths is written so CodeQL can follow it, and a site's address without its trailing slash
+  is now redirected using the site's name as the server lists it, not the request's own text. Behaviour is unchanged:
+  requests that would leave the viewer's folder or the model's data still get a 404.
+- The viewer's three.js makes the IDs of what it draws from the browser's cryptographic random numbers instead of
+  `Math.random()` (a one-line patch, recorded in its `PATCHES.md`). Nothing in Domus depended on those IDs being
+  unguessable, but code scanning rightly flags them.
+- Code scanning is GitHub's CodeQL default setup, which also checks the Actions workflows; the repository's own CodeQL
+  workflow, which could not run beside it, is gone.
+
 ## 2026.11.68
 
 - The image is published afresh as `ghcr.io/populii/domus`, from this repository. Domus itself is unchanged since 2026.11.67.
