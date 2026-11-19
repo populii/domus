@@ -1,4 +1,4 @@
-FROM python:3.14-slim AS build
+FROM python:3.15-slim AS build
 RUN pip install --no-cache-dir "uv>=0.8,<1"
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md LICENSE ./
@@ -6,7 +6,7 @@ COPY src ./src
 # Not the shots extra: Playwright drives a browser the image doesn't have.
 RUN uv sync --frozen --no-dev --no-editable --all-extras --no-extra shots --python /usr/local/bin/python
 
-FROM python:3.14-slim
+FROM python:3.15-slim
 LABEL org.opencontainers.image.title="domus" \
       org.opencontainers.image.source="https://github.com/populii/domus" \
       net.unraid.docker.icon="https://cdn.jsdelivr.net/gh/populii/domus@main/src/domus/app/viewer/icon.png" \
