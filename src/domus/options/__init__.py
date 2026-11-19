@@ -10,6 +10,8 @@ for the format.
 import tomllib
 from pathlib import Path
 
+from ..errors import DomusError
+
 # How a wall is built, below and behind its face (docs/options.md), which goes with its block when a restyle gives it
 # another material.
 CONSTRUCTION = ("depth_m", "cap_depth_m", "cap_overhang_m", "embed_m", "embed_per_m", "embed_courses", "bedding_m",
@@ -36,9 +38,12 @@ def restyled(cfg, path):
     """`cfg` as the option it is based on (a file beside it), with its own name, description and anything else
     it sets, and that option's walls changed as each `restyle` entry says: every wall, or those in its `walls`.
     Its steps change the same way with `restyle_stairs`: every flight, or those in an entry's `stairs`."""
-    base = tomllib.loads(Path(path).with_name(f"{cfg['based_on']}.toml").read_text(encoding="utf-8"))
+    found = Path(path).with_name(f"{cfg['based_on']}.toml")
+    if not found.exists():
+        raise DomusError(f"{Path(path).name} is based on {cfg['based_on']}, but there's no {found.name} beside it")
+    base = tomllib.loads(found.read_text(encoding="utf-8"))
     if "based_on" in base:
-        raise ValueError(f"{Path(path).name}: {cfg['based_on']} is itself based on another option; base it on that one")
+        raise DomusError(f"{Path(path).name}: {cfg['based_on']} is itself based on another option; base it on that one")
     walls = [dict(w) for w in base.get("walls", [])]
     for rule in cfg.get("restyle", []):
         for w in walls:

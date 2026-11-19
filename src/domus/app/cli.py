@@ -80,7 +80,8 @@ def parser():
     sub.add_argument("--centre", help="latitude,longitude of the lot, when you have no boundary yet")
     sub.add_argument("--size", type=float, default=30.0, help="side of the stand-in square, metres")
     sub.add_argument("--epsg", type=int, help="the site's grid, in metres (default: the boundary's own, else one for where "
-                     "it is); a boundary with no crs whose numbers aren't longitude and latitude is on it")
+                     "it is); a boundary with no crs whose numbers aren't longitude and latitude, or whose crs is "
+                     "null, is on it")
 
     sub = command(commands, "demo", _demo, "Write the made-up demo site.", "write the made-up demo site")
     sub.add_argument("path")

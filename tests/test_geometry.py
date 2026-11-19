@@ -191,6 +191,36 @@ def test_a_boundary_on_a_grid_with_no_crs_is_refused_and_nothing_is_written(tmp_
     assert said[0] == f"Started {root} on NZGD2000 / New Zealand Transverse Mercator (EPSG:2193)."
 
 
+def test_a_boundary_whose_crs_is_null_is_refused_unless_its_grid_is_given(tmp_path, domus):
+    """GeoJSON's 2008 spec, which defined the crs member, says a crs of null means no CRS can be assumed (its section
+    3), where no crs member at all means longitude and latitude. So a boundary whose crs is null is refused as one on
+    a grid nothing names, whatever its numbers, with the message a grid boundary with no crs gets, and nothing is
+    written. Given --epsg, it's taken to be on that grid."""
+    from domus.project import newsite
+
+    f = tmp_path / "lot.geojson"
+
+    def lot(ring):
+        f.write_text(json.dumps({"type": "FeatureCollection", "crs": None, "features": [
+            {"type": "Feature", "properties": {}, "geometry": {"type": "Polygon", "coordinates": [ring]}}]}), encoding="utf-8")
+
+    on_grid = [[1500000.0, 5500000.0], [1500022.0, 5500000.0], [1500022.0, 5500030.0], [1500000.0, 5500030.0],
+               [1500000.0, 5500000.0]]
+    lot(on_grid)
+    with pytest.raises(DomusError, match=r"crs member is null, so no grid can be assumed for it: add the GeoJSON's crs, "
+                                         r"naming its grid, such as .*, or give its grid with --epsg$"):
+        newsite.start(tmp_path / "site", "A place", boundary=f, say=lambda line: None)
+    assert not (tmp_path / "site").exists()
+    lot([[172.63, -43.53], [172.6302, -43.53], [172.6302, -43.5302], [172.63, -43.5302], [172.63, -43.53]])
+    with pytest.raises(SystemExit, match="crs member is null"):          # numbers that could be longitude and latitude too
+        domus("new", tmp_path / "site", "--name", "A place", "--boundary", f)
+    assert not (tmp_path / "site").exists()
+    lot(on_grid)
+    root = newsite.start(tmp_path / "site", "A place", boundary=f, epsg=2193, say=lambda line: None)
+    written = json.loads((root / "data" / "site" / "boundary.geojson").read_text(encoding="utf-8"))
+    assert written["features"][0]["geometry"]["coordinates"] == [on_grid]
+
+
 def test_a_new_site_says_its_grid_by_its_label(tmp_path):
     """domus new names the grid as the site's settings do ([crs] label), not as pyproj names it."""
     from domus.project import newsite

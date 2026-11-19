@@ -38,7 +38,7 @@ Three functions start one, as the commands of the same names do, and give it ope
 | | What it does |
 |---|---|
 | `api.create(address, path=None)` | A site project for an address, from public data: its lot, buildings, ground and photo fetched, its house and trees drafted, and its model built, in `path` (a folder named from the address unless given). A folder already holding this address carries on with its build. An address that matches more than one place raises a `DomusError` whose message is `WHICH: ` and then JSON with the `places` to choose from |
-| `api.new(path, name, boundary=None, centre=None, size=30.0, epsg=None)` | A site project called `name` on the lot in `boundary`, a GeoJSON polygon's file, or while there's no boundary yet, on a stand-in square `size` metres across at `centre`, (latitude, longitude). `epsg` names its grid, in metres: by default the boundary's own, else NZTM2000 in New Zealand and the UTM zone elsewhere. A boundary with no `crs` member whose numbers can't be longitude and latitude is on `epsg`, and refused without it |
+| `api.new(path, name, boundary=None, centre=None, size=30.0, epsg=None)` | A site project called `name` on the lot in `boundary`, a GeoJSON polygon's file, or while there's no boundary yet, on a stand-in square `size` metres across at `centre`, (latitude, longitude). `epsg` names its grid, in metres: by default the boundary's own, else NZTM2000 in New Zealand and the UTM zone elsewhere. A boundary with no `crs` member whose numbers can't be longitude and latitude, or whose `crs` is `null`, is on `epsg`, and refused without it |
 | `api.demo(path)` | The made-up demo site |
 
 A process can open several sites. Each `Site` reads its own folder, and what Domus reads of one (its settings, its

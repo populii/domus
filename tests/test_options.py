@@ -10,6 +10,8 @@ import re
 import numpy as np
 import pytest
 
+from domus.errors import DomusError
+
 
 def demo():
     """The demo site, as the `project` fixture has it: the one the tests' process was started for (tests/conftest.py)."""
@@ -112,8 +114,24 @@ polygon_so = [[0, 0], [1, 0], [1, 1]]
     assert "based_on" not in out and "restyle" not in out
     (tmp_path / "third.toml").write_text('based_on = "variant"\n', encoding="utf-8")
     (tmp_path / "variant.toml").write_text('based_on = "base"\n', encoding="utf-8")
-    with pytest.raises(ValueError, match="itself based on"):
+    with pytest.raises(DomusError, match="^third.toml: variant is itself based on another option; base it on that one$"):
         options.restyled({"based_on": "variant"}, tmp_path / "third.toml")
+
+
+def test_an_option_based_on_one_that_isnt_there_is_refused_naming_both(site, tmp_path, domus):
+    """An option based on a file that isn't in options/ (a typo, or one taken away) can't be drawn: the build stops with
+    a message naming the option and the file it's missing, not a traceback."""
+    import shutil
+
+    from domus import options
+
+    with pytest.raises(DomusError, match="^variant.toml is based on nowhere, but there's no nowhere.toml beside it$"):
+        options.restyled({"based_on": "nowhere"}, tmp_path / "variant.toml")
+    root = tmp_path / "demo"
+    shutil.copytree(site, root, ignore=shutil.ignore_patterns("viewer", ".domus"))
+    (root / "options" / "b-gabion.toml").write_text('name = "B. In gabion"\nbased_on = "b-two-teirs"\n', encoding="utf-8")
+    with pytest.raises(SystemExit, match="^b-gabion.toml is based on b-two-teirs, but there's no b-two-teirs.toml beside it$"):
+        domus("--site", root, "build")
 
 
 def test_every_wall_material_has_a_painted_picture(site, tmp_path):
@@ -191,6 +209,29 @@ def test_a_restyle_naming_a_wall_its_base_lacks_is_built_with_a_warning(site, at
     built = json.loads((tmp_path / "out" / "model.json").read_text(encoding="utf-8"))
     gabion = next(o for o in built["summary"]["options"] if o["id"] == "b-gabion")
     assert [(w["id"], w["material"]) for w in gabion["walls"]] == [("B1", "block"), ("B2", "gabion")]
+
+
+def test_keeping_a_wall_the_site_lacks_is_built_with_a_warning(site, at_site, tmp_path):
+    """An option's keep_existing that names a wall the site doesn't have keeps nothing there, as a mistyped id leaves
+    it. The option is drawn all the same, so the build warns of it, naming the site's existing walls, as it does of a
+    restyle naming a wall its base lacks."""
+    import shutil
+
+    from domus import build
+
+    root = tmp_path / "demo"
+    shutil.copytree(site, root, ignore=shutil.ignore_patterns("viewer", ".domus"))
+    a = root / "options" / "a-one-wall.toml"
+    a.write_text(a.read_text(encoding="utf-8").replace("keep_existing = []", 'keep_existing = ["W1", "W9"]', 1),
+                 encoding="utf-8")
+    said = []
+    build.main(at_site(root, tmp_path / "out"), say=said.append)
+    assert [line for line in said if line.startswith("Warning: options/a-one-wall.toml")] == [
+        ("Warning: options/a-one-wall.toml: keep_existing names wall W9, which the site doesn't have, so it keeps "
+         "nothing there. The site's existing walls (data/site/walls-existing.geojson) are W1.")]
+    built = json.loads((tmp_path / "out" / "model.json").read_text(encoding="utf-8"))
+    kept = next(o for o in built["summary"]["options"] if o["id"] == "a-one-wall")
+    assert kept["keep_existing"] == ["W1", "W9"]
 
 
 def stepped_wall(low):

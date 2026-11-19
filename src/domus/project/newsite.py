@@ -5,7 +5,8 @@
 
 The boundary is a GeoJSON polygon in longitude and latitude (what LINZ Data Service and geojson.io
 give you), or on another grid if its `crs` member says so. One with no `crs` whose numbers can't be
-longitude and latitude is on a grid nothing names: it's refused, unless --epsg names that grid.
+longitude and latitude, or whose `crs` is null, is on a grid nothing names: it's refused, unless --epsg
+names that grid.
 Without a boundary, a square of --size metres stands in until you have the real line.
 
 A site is on a grid in metres. A boundary on one stays on it; one in longitude and latitude goes on
@@ -31,6 +32,9 @@ TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
 NZTM = 2193
 MARGIN_M = 15.0
 LABELS = {NZTM: "NZGD2000 / New Zealand Transverse Mercator (EPSG:2193)"}     # as sites have always named it
+# What to do about a boundary on a grid its GeoJSON doesn't name.
+NAME_ITS_GRID = ('add the GeoJSON\'s crs, naming its grid, such as {"type": "name", "properties": {"name": '
+                 '"urn:ogc:def:crs:EPSG::2193"}}, or give its grid with --epsg')
 
 
 def in_metres(crs):
@@ -71,7 +75,8 @@ def read_boundary(path, epsg=None):
     """A boundary GeoJSON's outer ring, closed, on the site's grid, and that grid's EPSG code: `epsg`, else the
     boundary's own if it's in metres, else the grid for where it is (grid_for). GeoJSON with no crs member is in
     longitude and latitude, so a boundary with none whose numbers can't be is refused, unless `epsg` names the grid
-    they're on."""
+    they're on; and one whose crs is null says no grid can be assumed (GeoJSON's 2008 spec, section 3, which defined
+    the member), so it's refused the same way, whatever its numbers."""
     try:
         gj = json.loads(Path(path).read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -86,17 +91,18 @@ def read_boundary(path, epsg=None):
         ring = geom["coordinates"][0]
     else:
         raise DomusError(f"{path}: the boundary must be a Polygon, not a {geom['type']}")
-    name = gj.get("crs", {}).get("properties", {}).get("name", "")
+    null = "crs" in gj and gj["crs"] is None
+    name = str(((gj.get("crs") or {}).get("properties") or {}).get("name") or "")
     m = re.search(r"EPSG:+(\d+)", name)
     src = int(m.group(1)) if m else 4326
     xy = [p[:2] for p in ring]
     off = next(([x, y] for x, y in xy if not (-180 <= x <= 180 and -90 <= y <= 90)), None)
-    if "crs" not in gj and off:
+    if null or ("crs" not in gj and off):
+        if epsg is None and null:
+            raise DomusError(f"{path}'s crs member is null, so no grid can be assumed for it: {NAME_ITS_GRID}")
         if epsg is None:
             raise DomusError(f"{path} has no crs member, so it's in longitude and latitude, and {float(off[0])}, "
-                             f"{float(off[1])} can't be: add the GeoJSON's crs, naming its grid, such as "
-                             '{"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::2193"}}, or give its '
-                             "grid with --epsg")
+                             f"{float(off[1])} can't be: {NAME_ITS_GRID}")
         src = epsg      # the numbers are on the grid --epsg names
     if epsg is None:
         if in_metres(CRS.from_epsg(src)):

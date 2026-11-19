@@ -933,6 +933,16 @@ def crossing_warnings(found):
             for opt, res in found for t in res["design"].terraces if t.crossing]
 
 
+def keep_warnings(found, existing):
+    """A warning for each wall an option's `keep_existing` names that the site doesn't have (`existing`, its existing
+    walls' ids, from walls-existing.geojson). It keeps nothing there, as a mistyped id leaves it, and the option is
+    drawn all the same, so the build warns of it rather than refusing it."""
+    have = (f"The site's existing walls (data/site/walls-existing.geojson) are {', '.join(existing)}." if existing else
+            "The site has no existing walls (data/site/walls-existing.geojson).")
+    return [f"Warning: {opt['path']}: keep_existing names wall {w}, which the site doesn't have, so it keeps nothing "
+            f"there. {have}" for opt, _ in found for w in opt.get("keep_existing", []) if w not in existing]
+
+
 def add_options(b):
     """Wall options (options/*.toml, domus.options.design): each one's designed ground over the regrade area, its walls, lawns and beds, contours and a cut-and-fill drape, hidden until picked in the viewer's options panel."""
     cfg, extent, frame, layers, summary, textures, wall_defs = b.cfg, b.extent, b.frame, b.layers, b.summary, b.textures, b.wall_defs
@@ -943,7 +953,8 @@ def add_options(b):
     # Each option worked out on the grid first: its terraces reach the lawns, and an option taken from the last build
     # needs no more. One drawn afresh is worked out again with its soil measured as solids.
     found = [(opt, design.evaluate(b.site, opt, segments=0)) for opt in options.load_all(b.site)]
-    for line in [*crossing_warnings(found), *options.restyle_warnings(b.site)]:
+    for line in [*crossing_warnings(found), *options.restyle_warnings(b.site),
+                 *keep_warnings(found, [w["id"] for w in b.wall_defs])]:
         b.say(line)
     # Each lawn that is there has a plain picture, its grass without its bare patches: the options draw the lawn
     # with it where they keep it, and the new lawns beside it, which it reaches.

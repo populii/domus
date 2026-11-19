@@ -255,7 +255,8 @@ built (`depth_m`, `cap_depth_m`, `cap_overhang_m`, `embed_m`, `embed_per_m`, `em
 `outlet_spacing_m`, `geotextile`, `post_spacing_m`). A
 `restyle_stairs` entry does the same for the steps. One that names a wall or steps the base doesn't have restyles
 nothing there, and the build warns of it, naming the ones the base has. Change the scheme itself in the file it is
-based on, and every style of it follows.
+based on, and every style of it follows. An option based on a file that isn't in `options/`, or on one that is itself
+based on another, can't be drawn: the build stops and says which.
 
 Each material is drawn with a picture of it: the site's own in `data/walls/` where
 `domus prep wall-textures` has cut one from its photos (timber, block and stone), and otherwise one the
@@ -270,7 +271,8 @@ build paints.
   its face's foot with any batter to its back, joins that option's regrade area as far as the lot and the part
   `[regrade]` names go (into the house's margin too, but never the house), and there the option starts from the
   soil under the wall, at its toe, not from its old face. The terraces and their batters reach across the footprint
-  as anywhere else, and where none of them reaches, the ground is left at the toe.
+  as anywhere else, and where none of them reaches, the ground is left at the toe. A wall `keep_existing` names that
+  the site doesn't have keeps nothing, and the build warns of it, naming the site's existing walls.
 - The existing ground is today's best: the ground as the build draws it, with the ground fixes from measurements
   and placed walks where there are some, the existing walls' faces and tops, and the LiDAR only where nothing
   better is known. Options are designed on it (where batters meet the ground, the flat lawn before, the cover over

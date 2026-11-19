@@ -72,8 +72,8 @@ def new(path, name, boundary=None, centre=None, size=30.0, epsg=None, say=print)
     """Starts a site project, as `domus new` does: in the folder `path`, called `name`, on the lot in `boundary`, a
     GeoJSON polygon's file, or while there's no boundary yet, on a stand-in square `size` metres across at `centre`,
     (latitude, longitude). `epsg` names its grid, in metres: by default the boundary's own, else NZTM2000 in New
-    Zealand and the UTM zone elsewhere. A boundary with no crs member whose numbers can't be longitude and latitude
-    is on `epsg`, and refused without it. Gives the site, opened; what to do next goes to `say`."""
+    Zealand and the UTM zone elsewhere. A boundary with no crs member whose numbers can't be longitude and latitude,
+    or whose crs is null, is on `epsg`, and refused without it. Gives the site, opened; what to do next goes to `say`."""
     from .project import newsite
 
     return open_site(newsite.start(path, name, boundary, centre, size, epsg, say))

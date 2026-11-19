@@ -41,7 +41,7 @@ def write(path, fc):
     path.parent.mkdir(parents=True, exist_ok=True)
     for f in fc["features"]:
         f["geometry"]["coordinates"] = round_coords(f["geometry"]["coordinates"])
-    path.write_text(json.dumps(fc, indent=1) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(fc, indent=1) + "\n", encoding="utf-8", newline="\n")       # LF on every platform
 
 
 def read(path):

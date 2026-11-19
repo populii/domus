@@ -18,6 +18,18 @@
   `[rasters] dem` names) stops before any work and says how to get one: `domus fetch` (LINZ's LiDAR in New Zealand,
   the Copernicus ground model elsewhere), or your own, as [docs/new-site.md](docs/new-site.md) says. `site.ground()`
   says the same. Before, the build stopped on the raster library's error, after starting its output folder.
+- **For site projects:** an option based on a file that isn't in `options/` stops the build with a message naming the
+  option and the file it's missing ("b-gabion.toml is based on b-two-teirs, but there's no b-two-teirs.toml beside
+  it"), and one based on an option that is itself based on another stops it with the message it gave before, both
+  without a traceback. Through `domus.api` both are `api.DomusError`s, where they were a `FileNotFoundError` and a
+  `ValueError`, so a site's tool that caught either catches `DomusError` now
+  ([docs/options.md](docs/options.md#the-same-scheme-in-another-style)).
+- **For site projects:** a wall an option's `keep_existing` names that the site doesn't have, not in
+  `data/site/walls-existing.geojson`, still keeps nothing, and now the build warns of it, naming the site's existing
+  walls, as it does of a restyle naming a wall its base lacks
+  ([docs/options.md](docs/options.md#what-the-build-works-out)).
+- **For site projects:** on Windows, the GeoJSON files `domus canopy`, `domus prep ifc` and `domus prep plan-trace`
+  write end their lines with LF, as the other files Domus writes do, where they had CRLF. Elsewhere nothing changes.
 - `domus new --boundary` refuses a GeoJSON with no `crs` member whose numbers can't be longitude and latitude, and says
   to add its `crs` or give its grid with `--epsg`, which then names the grid the boundary is on. Before, such a
   boundary was taken as longitude and latitude: `domus new` said there was no UTM zone there, and with `--epsg` it
@@ -27,6 +39,10 @@
 - `domus --help` says what `domus fetch` gets and where from: LINZ's LiDAR and photo in New Zealand, the Copernicus
   ground model elsewhere.
 - `domus video export` counts in the singular too: "from 1 cloud" and "1 set", not "1 reconstructions" and "1 sets".
+- `domus new --boundary` refuses a GeoJSON whose `crs` is `null`, unless `--epsg` names its grid, with the message a
+  grid boundary with no `crs` gets. GeoJSON's 2008 spec, which defined the `crs` member, says a `null` one means no
+  grid can be assumed, where no `crs` at all means longitude and latitude, so its numbers aren't read as either.
+  Before, `domus new` stopped on a Python error.
 
 ## 2026.11.65
 
