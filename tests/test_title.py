@@ -5,6 +5,7 @@ import json
 import pytest
 from shapely.geometry import Polygon
 
+from domus import api
 from domus.importers.nz import publicdata, title
 from domus.options import design
 
@@ -51,6 +52,11 @@ def test_the_title_and_the_easements_near_the_lot(site, monkeypatch, capsys, dom
     assert t["kind"] == "title" and t["estate"].startswith("Fee Simple")
     assert e["kind"] == "easement" and e["on_lot"] and e["intent"] == "Easement"
     assert "Area A DP 9 (Easement), on the lot" in capsys.readouterr().out
+    # It's an edit on the change route, recorded and undone like any other.
+    (record,) = api.open_site(site.path).edits()
+    assert record["kind"] == "layer" and record["why"] == title.WHY and record["files"][0]["path"] == "data/site/title.geojson"
+    domus("--site", site.path, "site", "undo", "1")
+    assert not title.title_path(site).exists()
 
 
 def test_a_wall_into_an_easement_is_flagged():

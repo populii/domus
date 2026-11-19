@@ -240,9 +240,10 @@ the others need none.
 | `domus canopy` | Candidate tree crowns, to `data/sources/canopy.geojson` | Curating `data/site/trees.geojson`. `domus prep canopy-plot` draws them over the photo |
 | `domus fetch` | Also the near-infrared photo, `data/aerial/nir.tif`, where LINZ has one | Telling plants from paving: the canopy map uses it |
 
-Height marks are often hundreds of metres away, so `--height-mark` adds one only when you name it. Check a mark's
-condition, and note that height marks' positions are approximate. LINZ says where an easement is and what it's called,
-not what it allows: read that in the instrument on the title.
+`marks` and `title` write their layers as edits ([8.6](#86-change-layers-safely)), so `domus site undo` puts back what
+was there. Height marks are often hundreds of metres away, so `--height-mark` adds one only when you name it. Check a
+mark's condition, and note that height marks' positions are approximate. LINZ says where an easement is and what it's
+called, not what it allows: read that in the instrument on the title.
 
 `domus.api.linz_query(layer, cql=None, bbox=None, count=20)` asks for any LINZ Data Service layer, by its number or
 name, within a box on NZTM, a CQL filter or both: the survey boundary vectors (`50820`), say, to compare each surveyed
@@ -708,10 +709,10 @@ domus site edit move-w1.json --why "Measured from the boundary peg with a tape."
 
 where `move-w1.json` holds `{"kind": "move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5, 0]}`, or a list of
 intents applied as one edit. The kinds move features, set their vertices (`coords`) or a vertex's height (`level`), set
-and drop properties (`props`), add and delete features, set settings (`setting`), and change the house's IFC
-(`ifc-move`, `ifc-rotate`, `ifc-storey`, `ifc-attribute`, `ifc-property`, `ifc-add`, `ifc-delete`, on
-`data/house.ifc`'s elements by GlobalId or Domus id). Without `--apply` it says what
-would change and writes nothing; with it, each file is copied, written, read back and checked to have changed only as
+and drop properties (`props`), add and delete features, write a layer whole (`layer`) or a wall option's file
+(`option`), set settings (`setting`), and change the house's IFC (`ifc-move`, `ifc-rotate`, `ifc-storey`,
+`ifc-attribute`, `ifc-property`, `ifc-add`, `ifc-delete`, on `data/house.ifc`'s elements by GlobalId or Domus id).
+Without `--apply` it says what would change and writes nothing; with it, each file is copied, written, read back and checked to have changed only as
 asked, and the edit is recorded in `.domus/edits/` with who, when and why. `domus site edits` lists the edits, and
 `domus site undo N` puts one back, as long as nothing has changed its files since. From Python, `site.edit(intent, why)`
 and `site.undo(n)`, which the public API's promise covers, so a tool can build on them.
@@ -749,10 +750,10 @@ from a guess. Each option then has a materials list, what it takes to build, to 
 aggregate, pipe, paving and soil, with `[materials]` adding an allowance and densities. There are no costs.
 
 Then each scheme is a file in `options/`: copy `options/option.toml.example`, or sketch it in the viewer (**Design**,
-**Wall** and **Level area**, then **Make it an option**, which writes `options/sketch-<name>.toml`). Sketches saved in
-the viewer are in the server's store at `/api/db/sketches`. A scheme can be `based_on` another and restyled to compare
-the same layout in other walls. [docs/options.md](docs/options.md) has every key, including stairs, stepped tops and
-walls of a named block.
+**Wall** and **Level area**, then **Make it an option**, which writes `options/sketch-<name>.toml` as an edit, so
+`domus site undo` takes it away again). Sketches saved in the viewer are in the server's store at `/api/db/sketches`.
+A scheme can be `based_on` another and restyled to compare the same layout in other walls.
+[docs/options.md](docs/options.md) has every key, including stairs, stepped tops and walls of a named block.
 
 Options are designed on, and measured from, today's best ground: the ground as the build draws it, with the ground
 fixes and the existing walls' faces and tops in it, and the LiDAR only where nothing better is known. So the fixes

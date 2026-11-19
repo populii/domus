@@ -7,10 +7,12 @@ Every edit can be undone. A check's or a tool's findings come as **proposals**, 
 nothing applies itself.
 
 The files it changes are a site's layers (`data/site/*.geojson`), its settings (`data/site.toml` and
-`options/_site.toml`), and the house kept as an IFC file (`data/house.ifc`, [below](#the-houses-ifc)). The commands
-that bring public data in (`domus fetch`, `canopy`, `marks`, `title` and `points`), `domus scan`, `domus site upgrade`
-and the viewer's **Make it an option**, which writes a new option's file, write their own files, outside this route.
-The examples here are on the made-up demo (`domus demo`), but for the house's IFC, on the richer made-up site.
+`options/_site.toml`), its wall options' files (`options/<id>.toml`), and the house kept as an IFC file
+(`data/house.ifc`, [below](#the-houses-ifc)). `domus marks` and `domus title` write their layers on this route, and the
+viewer's **Make it an option** adds its option's file on it, so each is recorded and can be undone. The other commands
+that bring public data in (`domus fetch`, `canopy` and `points`), `domus scan` and `domus site upgrade` write their own
+files, outside this route. The examples here are on the made-up demo (`domus demo`), but for the house's IFC, on the
+richer made-up site.
 
 The route is part of the public API's promise ([api.md](api.md#every-change-one-way)): what it takes and records keeps
 working from one release to the next, so a site's tools and agents can build on it.
@@ -29,14 +31,16 @@ without `.geojson`, and a feature by its `id`.
 | `add` | Adds a feature, on the site's grid, at the end of its layer or at `at` in it. A layer that isn't there yet is started | `{"kind": "add", "layer": "ground-fixes", "feature": {"type": "Feature", "properties": {"id": "fix-1"}, "geometry": {"type": "Point", "coordinates": [1500010.0, 5500020.0, 41.5]}}}` |
 | `delete` | Deletes a feature | `{"kind": "delete", "layer": "features-demo", "id": "fence-west"}` |
 | `put` | Sets a feature whole, as given: how an undo puts one back as it was | `{"kind": "put", "layer": "walls-existing", "id": "W1", "feature": {...}}` |
+| `layer` | Writes a layer whole, as given: a GeoJSON FeatureCollection, each of its features with an id. A layer that isn't there yet is started. It's how `domus marks` and `domus title` write theirs, and how an undo puts one back as it was | `{"kind": "layer", "layer": "features-pegs", "collection": {"type": "FeatureCollection", "features": [...]}}` |
 | `setting` | Sets a setting, by its key as [site-format.md](site-format.md) names it, keeping the file's comments: in `data/site.toml`, or `"file": "options/_site.toml"`. `"drop": true` takes it out instead, and `toml` says how the value is written | `{"kind": "setting", "key": "house.fl_upper", "value": 43.45}` |
+| `option` | Writes a wall option's file whole, `options/<id>.toml`, as given, which has to be TOML; `"drop": true` takes the file away instead. It's how the viewer's **Make it an option** adds one | `{"kind": "option", "id": "sketch-low-wall", "toml": "name = \"Low wall\"\n..."}` |
 
 `move`, `coords` and `level` can also give a `basis`, a sentence added to the `basis` of each feature they change.
 
-Each is checked against the site before anything is written: its layer and features are there, a feature it names
-has an id no other has, its coordinates are numbers that make its geometry, and a setting is one Domus knows, given a
-value of the kind it holds. A site in an older format has its settings changed once `domus site upgrade` has written it
-up to date; its layers can be changed as they are.
+Each is checked against the site before anything is written: its layer and features are there, a feature it names has an
+id no other has, its coordinates are numbers that make its geometry, a setting is one Domus knows, given a value of the
+kind it holds, and an option's file is TOML, as is the one it writes over or takes away. A site in an older format has
+its settings changed once `domus site upgrade` has written it up to date; its layers can be changed as they are.
 
 ## Making a change
 
@@ -74,6 +78,12 @@ site's `.domus/edits/.lock` while it reads and writes.
 copies of the files as they were, as before; left out, the copies are kept beside the edit's record. The reason
 recorded is `--why`, else the spec's `basis`. [AGENTS.md](../AGENTS.md#86-change-layers-safely) has their specs.
 
+`domus marks` and `domus title` are edits on this route as well: each writes its layer whole, a `layer` intent,
+recorded with `--why` (else a reason of its own) and `--who`, so `domus site undo` puts back the layer as it was, or
+takes away one it started. `site.fetch_marks()` and `site.fetch_title()` take `why` and `who` too. So is the viewer's
+**Make it an option** ([below](#in-the-viewer)): it adds the option's file, an `option` intent, and undoing it takes
+the option away.
+
 ## The record
 
 Each edit is recorded in `.domus/edits/<sequence>-<kind>.json`, with the files as they were beside it in
@@ -100,7 +110,7 @@ Each edit is recorded in `.domus/edits/<sequence>-<kind>.json`, with the files a
 | `undoes` | For an undo, the edit it undoes |
 | `intents`, `summary` | What was asked, and a line for each, for people |
 | `files` | Each file it changed: its path, its SHA-256 before (`null` when the edit started it) and after, and its copy as it was |
-| `inverse` | The intents that put back exactly what it changed: each feature whole, where it was in its layer, each setting as the file wrote it, and the house's IFC as it was (`ifc-restore`, with its SHA-256, or `null` to take away one the edit started) |
+| `inverse` | The intents that put back exactly what it changed: each feature whole, where it was in its layer, a layer written whole as it was, each setting as the file wrote it, an option's file as it was (or `"drop": true` to take away one the edit added), and the house's IFC as it was (`ifc-restore`, with its SHA-256, or `null` to take away one the edit started) |
 | `rebuild` | What in the model is drawn from the files it changed |
 
 `domus site edits` lists them, oldest first, and `site.edits()` gives them, each with `in_effect` and, once undone,
@@ -178,16 +188,17 @@ It's checked against the site as it is, and kept in `.domus/proposals/<id>.json`
 | `domus site reject 1 --why "..."` | `site.reject(proposal, why, who=None)` | Marks it `rejected` with who, when and why; the site's data stays as it is |
 
 A proposal is accepted or rejected once. It's made against the site as it is then, and kept with what each of its
-intents rests on (`against`: a SHA-256 of each feature it names, and each setting's value). It's accepted only while
-those still hold: if one has changed since, accepting it is refused and it stays open, for a person to reject, and to
-propose again if it still holds.
+intents rests on (`against`: a SHA-256 of each feature it names and of each file it writes whole, and each setting's
+value). It's accepted only while those still hold: if one has changed since, accepting it is refused and it stays open,
+for a person to reject, and to propose again if it still holds.
 
 ## In the viewer
 
 Served by `domus serve`, the viewer's **Site** tab lists the proposals still open, each with **Accept** and **Reject**
 (which asks why), and the newest 50 edits, each in effect with **Undo**. Each runs as its command does, in a process of
 its own, one at a time and not while the model is being built; one that changes the data builds the model again, and
-the page reloads to show it. Behind a login proxy (`DOMUS_TRUST_PROXY=1`, [self-hosting.md](self-hosting.md)) the
+the page reloads to show it. A sketch saved with **Make it an option** is an edit too, listed with the others: its
+**Undo** takes the option away. Behind a login proxy (`DOMUS_TRUST_PROXY=1`, [self-hosting.md](self-hosting.md)) the
 record names who the proxy says it is, and otherwise "the viewer". A page published without the server shows none of
 it.
 

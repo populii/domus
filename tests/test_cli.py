@@ -57,6 +57,14 @@ def test_every_command_and_step_prints_its_usage_and_does_nothing_else(words, no
     assert not list(nowhere.iterdir())
 
 
+def test_the_help_says_what_fetch_gets_where(nowhere, capsys):
+    """domus --help lists what fetch gets and where from, as its own --help says: LINZ's LiDAR and photo in New
+    Zealand, the Copernicus ground model anywhere else."""
+    assert run(["--help"]) == 0
+    listed = " ".join(capsys.readouterr().out.split())
+    assert "fetch get LINZ's LiDAR and photo in New Zealand, the Copernicus ground model elsewhere" in listed
+
+
 @pytest.mark.parametrize("words", ["build", "fetch", "canopy", "marks", "title", "points --ground", "export model.glb",
                                    "scan walk.ply --tag walk --epsg 2193", "shots shots.json", "site upgrade", "site trust",
                                    "site shift spec.json backup", "video export", "prep canopy-plot"])

@@ -218,7 +218,8 @@ def test_a_format_4_sites_readings_and_comparisons_are_observations(made_up, tmp
 
 
 def test_the_export_writes_each_placements_cloud(observed):
-    """domus video export moves a placement's clouds as it says, into data/video/compare.npz."""
+    """domus video export moves a placement's clouds as it says, into data/video/compare.npz, and says how many clouds
+    it took: one cloud, or so many clouds."""
     s = api.open_site(observed)
     video = observed / "data" / "video"
     xyz = np.array([[X0 + 8 + 0.1 * k, Y0 + 24 + 0.05 * k, 42.0] for k in range(50)])
@@ -227,11 +228,18 @@ def test_the_export_writes_each_placements_cloud(observed):
     data["observations"].append({"id": "lawn-up", "kind": "placement", "name": "The lawn's scan, 0.25 m up",
                                  "source": {"clouds": ["lawn-scan"], "dz_m": 0.25}})
     (observed / "data" / "observations.json").write_text(json.dumps(data), encoding="utf-8")
-    s.video.export(say=quiet)
+    said = []
+    s.video.export(say=said.append)
     cp = np.load(video / "compare.npz")
     assert [str(i) for i in cp["ids"]] == ["lawn-up"]
     heights = cp["origin"][2] + cp["mm"][:, 2] / 1000.0
     assert len(heights) == 50 and np.allclose(heights, 42.25, atol=0.002)
+    assert said[1] == "wrote data/video/points.npz: 50 points from 1 cloud" and said[-1] == "wrote data/video/compare.npz: 1 set"
+    np.savez_compressed(video / "path-scan.npz", xyz=xyz + [0, 3, 0], rgb=np.full((50, 3), 90, np.uint8),
+                        nview=np.full(50, 3, np.uint8))
+    said.clear()
+    s.video.export(say=said.append)
+    assert "wrote data/video/points.npz: 100 points from 2 clouds" in said
 
 
 def test_the_commands_check_and_propose_them(observed, domus, capsys):

@@ -4,8 +4,9 @@
     domus new my-place --name "My place" --centre -43.5321,172.6362 --size 30
 
 The boundary is a GeoJSON polygon in longitude and latitude (what LINZ Data Service and geojson.io
-give you), or on another grid if its `crs` member says so. Without one, a square of --size metres
-stands in until you have the real line.
+give you), or on another grid if its `crs` member says so. One with no `crs` whose numbers can't be
+longitude and latitude is on a grid nothing names: it's refused, unless --epsg names that grid.
+Without a boundary, a square of --size metres stands in until you have the real line.
 
 A site is on a grid in metres. A boundary on one stays on it; one in longitude and latitude goes on
 NZTM2000 (EPSG:2193, with NZVD2016 heights: the LINZ data's own) in New Zealand and on its UTM zone
@@ -45,6 +46,11 @@ def metre_grid(epsg):
     return crs
 
 
+def label(epsg):
+    """The grid EPSG `epsg` as a site's settings name it, [crs] label in data/site.toml."""
+    return LABELS.get(epsg) or f"{metre_grid(epsg).name} (EPSG:{epsg})"
+
+
 def in_new_zealand(lon, lat):
     w, s, e, n = CRS.from_epsg(NZTM).area_of_use.bounds
     return w <= lon <= e and s <= lat <= n
@@ -63,8 +69,15 @@ def grid_for(lon, lat):
 
 def read_boundary(path, epsg=None):
     """A boundary GeoJSON's outer ring, closed, on the site's grid, and that grid's EPSG code: `epsg`, else the
-    boundary's own if it's in metres, else the grid for where it is (grid_for)."""
-    gj = json.loads(Path(path).read_text(encoding="utf-8"))
+    boundary's own if it's in metres, else the grid for where it is (grid_for). GeoJSON with no crs member is in
+    longitude and latitude, so a boundary with none whose numbers can't be is refused, unless `epsg` names the grid
+    they're on."""
+    try:
+        gj = json.loads(Path(path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise DomusError(f"There's no {path}") from None
+    except ValueError as e:     # not JSON, or not text
+        raise DomusError(f"{path} isn't JSON: {e}") from None
     feats = gj.get("features") or [gj]
     geom = feats[0].get("geometry") or feats[0]
     if geom["type"] == "MultiPolygon":
@@ -77,6 +90,14 @@ def read_boundary(path, epsg=None):
     m = re.search(r"EPSG:+(\d+)", name)
     src = int(m.group(1)) if m else 4326
     xy = [p[:2] for p in ring]
+    off = next(([x, y] for x, y in xy if not (-180 <= x <= 180 and -90 <= y <= 90)), None)
+    if "crs" not in gj and off:
+        if epsg is None:
+            raise DomusError(f"{path} has no crs member, so it's in longitude and latitude, and {float(off[0])}, "
+                             f"{float(off[1])} can't be: add the GeoJSON's crs, naming its grid, such as "
+                             '{"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::2193"}}, or give its '
+                             "grid with --epsg")
+        src = epsg      # the numbers are on the grid --epsg names
     if epsg is None:
         if in_metres(CRS.from_epsg(src)):
             epsg = src
@@ -85,6 +106,9 @@ def read_boundary(path, epsg=None):
             epsg = grid_for(lon, lat)
     metre_grid(epsg)
     xs, ys = zip(*xy) if src == epsg else Transformer.from_crs(src, epsg, always_xy=True).transform(*zip(*xy))
+    if not np.isfinite([xs, ys]).all():
+        raise DomusError(f"{path}: the boundary's corners don't all land on EPSG:{epsg}, so its crs isn't the grid its "
+                         "numbers are on")
     pts = [[round(x, 3), round(y, 3)] for x, y in zip(xs, ys)]
     return (pts if pts[0] == pts[-1] else [*pts, pts[0]]), epsg
 
@@ -128,32 +152,31 @@ def write_project(path, name, ring, note="", about="", epsg=NZTM, importer="manu
     root = Path(path)
     if (root / "data" / "site.toml").exists():
         raise DomusError(f"{root} already has a site project")
-    grid = metre_grid(epsg)
-    (root / "data" / "site").mkdir(parents=True, exist_ok=True)
-    (root / "options").mkdir(exist_ok=True)
-    ext = extent_of(ring)
+    ext = extent_of(ring)       # all of it is worked out before anything's written, so a refused site leaves nothing
     origin = [round((ext[0] + ext[2]) / 2), round((ext[1] + ext[3]) / 2)]
     nz = in_new_zealand(*Transformer.from_crs(epsg, 4326, always_xy=True).transform(*origin))
-    (root / "data" / "site.toml").write_text(
+    settings = (
         (TEMPLATES / "site.toml").read_text(encoding="utf-8")
         .replace("{{name}}", toml_str(name)).replace("{{extent}}", json.dumps(ext)).replace("{{origin}}", json.dumps(origin))
         .replace("{{about}}", toml_str(about)).replace("{{format}}", str(formats.FORMAT)).replace("{{importer}}", toml_str(importer))
         .replace("{{attribution}}", toml_str(attribution if attribution is not None else LINZ_CREDIT if nz else ""))
-        .replace("{{epsg}}", str(epsg)).replace("{{crs_label}}", toml_str(LABELS.get(epsg, f"{grid.name} (EPSG:{epsg})")))
-        .replace("{{vertical}}", toml_str(vertical if vertical is not None else NZ_VERTICAL if nz else "")),
-        encoding="utf-8", newline="\n")
-    (root / "data" / "site" / "boundary.geojson").write_text(json.dumps({
+        .replace("{{epsg}}", str(epsg)).replace("{{crs_label}}", toml_str(label(epsg)))
+        .replace("{{vertical}}", toml_str(vertical if vertical is not None else NZ_VERTICAL if nz else "")))
+    lot = json.dumps({
         "type": "FeatureCollection", "name": "boundary",
         "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{epsg}"}},
         "features": [{"type": "Feature",
                       "properties": {"id": "lot", "name": "Boundary", "source": note or "supplied boundary"},
-                      "geometry": {"type": "Polygon", "coordinates": [ring]}}]}, indent=1) + "\n",
-        encoding="utf-8", newline="\n")
+                      "geometry": {"type": "Polygon", "coordinates": [ring]}}]}, indent=1) + "\n"
     a, b = longest_edge(ring)
-    (root / "options" / "_site.toml").write_text(
+    shared = (
         (TEMPLATES / "options_site.toml").read_text(encoding="utf-8")
-        .replace("{{frame_origin}}", json.dumps(a)).replace("{{frame_toward}}", json.dumps(b)),
-        encoding="utf-8", newline="\n")
+        .replace("{{frame_origin}}", json.dumps(a)).replace("{{frame_toward}}", json.dumps(b)))
+    (root / "data" / "site").mkdir(parents=True, exist_ok=True)
+    (root / "options").mkdir(exist_ok=True)
+    (root / "data" / "site.toml").write_text(settings, encoding="utf-8", newline="\n")
+    (root / "data" / "site" / "boundary.geojson").write_text(lot, encoding="utf-8", newline="\n")
+    (root / "options" / "_site.toml").write_text(shared, encoding="utf-8", newline="\n")
     shutil.copy(TEMPLATES / "option.toml.example", root / "options" / "option.toml.example")
     if not (root / ".gitignore").exists():     # a folder's own stays: in a copy of Domus, site/ has one that ignores it all
         (root / ".gitignore").write_text((TEMPLATES / "gitignore").read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
@@ -172,7 +195,7 @@ def start(path, name, boundary=None, centre=None, size=30.0, epsg=None, say=prin
         lat, lon = centre
         (ring, epsg), note = square_boundary(lat, lon, size, epsg), "a stand-in square; replace it with the real boundary"
     root = write_project(path, name, ring, note, epsg=epsg)
-    say(f"Started {root} on {CRS.from_epsg(epsg).name} (EPSG:{epsg}).")
+    say(f"Started {root} on {label(epsg)}.")
     if epsg == NZTM:
         say(f"Next:\n  domus --site {root} fetch\n  domus --site {root} build\n  domus --site {root} serve")
     else:

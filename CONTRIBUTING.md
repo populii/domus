@@ -108,8 +108,9 @@ A few more rules the code keeps:
 - **The house is read one way:** through `domus.model.house_source` (`site.house()` in the public API), never from
   `house.geojson` or `[house]` directly, since with `[house] source = "ifc"` the house's IFC file is its one source.
 - **Changes to a site's data have one route** (`domus.project.changes`, [docs/changes.md](docs/changes.md)): the
-  viewer, `domus site` and the API's `site.edit()` make each change as an intent, checked, written the safe way,
-  recorded and undoable, and a check or a tool that finds something to change proposes it for a person to accept.
+  viewer, `domus site`, `domus marks`, `domus title` and the API's `site.edit()` make each change as an intent,
+  checked, written the safe way, recorded and undoable, and a check or a tool that finds something to change proposes
+  it for a person to accept. A new command that changes a site's layers, settings or options does it the same way.
 - **The viewer is one page and loads nothing from other hosts.** New libraries go in its `vendor` folder. Its
   `index.html` is a page body with no doctype or head: the server adds the skeleton. Scripts drive it through
   `window.siteViewer` (`setCamera` and `drawn`).

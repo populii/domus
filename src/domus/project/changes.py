@@ -1,6 +1,7 @@
 """One route for every change to a site's data (docs/changes.md).
 
-The viewer, agents, site tools and checks say what to change as intents (domus.project.intents, and
+The viewer, agents, site tools, checks and the commands that write a site's layers or options whole (domus marks,
+domus title, the viewer's Make it an option) say what to change as intents (domus.project.intents, and
 domus.project.ifc_intents for the house kept as an IFC file), such as "move wall W1 0.5 m east" or "set this level to
 42.10". Applying them, as one edit:
 
@@ -155,6 +156,7 @@ class _File:
         self.rel, self.path, self.raw = rel, path, raw
         self.text = self.data = self.before = self.restore_sha = None
         self.restore = self.whole = False         # the house's IFC put back as it was, or written whole
+        self.unmade = False                       # taken away by an undo, as the edit undone made it
         self.drawn_from = None                    # what the house's IFC is written whole from: house_source.fingerprint
         self.named = set()
         self.intents = []
@@ -170,6 +172,11 @@ class _File:
     @property
     def ifc(self):
         return self.rel.endswith(".ifc")
+
+    @property
+    def option(self):
+        """A wall option's file, written whole as its intent gives it (options/_site.toml is settings)."""
+        return self.rel.startswith("options/") and self.name != "_site.toml"
 
 
 def frame_of(site):
@@ -206,6 +213,14 @@ def _plan(site, intents, say):
                 # or, where there's none yet, taking away the one the edit starts.
                 inverse.insert(0, {"kind": "ifc-restore", "sha": hashlib.sha256(f.raw).hexdigest() if f.raw is not None
                                    else None})
+            elif f.option:
+                if f.raw is not None:           # what the edit's inverse puts back has to be an option's file too
+                    try:
+                        tomllib.loads(f.raw.decode("utf-8"))
+                    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+                        raise DomusError(f"{path} isn't TOML ({e}): put it right first") from None
+                elif i.get("drop"):
+                    raise DomusError(f"There's no {path}")
             elif not f.layer:
                 if f.raw is None:
                     raise DomusError(f"There's no {path}")
@@ -214,7 +229,7 @@ def _plan(site, intents, say):
 
                 f.data = tomlkit.parse(f.raw.decode("utf-8"))
             elif f.raw is None:
-                if i["kind"] != "add":
+                if i["kind"] not in ("add", "layer"):
                     raise DomusError(f"There's no {path}")
                 from ..geo import geojson
 
@@ -226,10 +241,18 @@ def _plan(site, intents, say):
                     raise DomusError(f"{path} isn't JSON: {e}") from None
                 if not isinstance(f.data, dict) or not isinstance(f.data.get("features"), list):
                     raise DomusError(f"{path} isn't a GeoJSON FeatureCollection")
-            if not f.ifc:
+            if not f.ifc and not f.option:
                 f.before = copy.deepcopy(f.data) if f.layer else tomllib.loads(f.raw.decode("utf-8"))
         f = files[rel]
         f.intents.append(i)
+        if f.option:
+            if len(f.intents) > 1:
+                raise DomusError(f"{rel}: an option's file is written whole, by one intent alone")
+            f.text = None if i.get("drop") else i["toml"]
+            say(f"   {rel}: " + ("taken away" if f.text is None else "written whole"))
+            back = {"toml": f.raw.decode("utf-8")} if f.raw is not None else {"drop": True}
+            inverse.insert(0, {"kind": "option", "id": i["id"], **back})
+            continue
         if f.ifc:
             if len(f.intents) > 1 and (f.restore or f.whole or i["kind"] in ("ifc-restore", "ifc-write")):
                 raise DomusError(f"{rel}: putting it back as it was, or writing it whole, goes alone")
@@ -248,6 +271,8 @@ def _plan(site, intents, say):
             f.named |= {x["id"] for x in back if x["kind"] in ("put", "delete")}      # each feature it changed, as named now
             f.named |= {x["feature"]["properties"]["id"] for x in back if x["kind"] == "add"}
             f.named |= {i["id"]} if "id" in i else set()
+            if i["kind"] == "layer":            # written whole: every feature it had or has
+                f.named |= set(_by_id(f.before)) | set(_by_id(f.data))
         else:
             back = kinds.apply_setting(f.data, i, say)
         last, then = (back[-1], inverse[0]) if back and inverse else (None, None)
@@ -258,6 +283,8 @@ def _plan(site, intents, say):
     for f in files.values():
         if f.ifc:
             f.text = ifc_intents.text(f.data) if f.data is not None else f.text
+        elif f.option:
+            pass                                # its text is as its intent gave it
         elif f.layer:
             f.text = dump(f.data, layout(f.raw) if f.raw is not None else NEW_LAYER)
         else:
@@ -265,9 +292,21 @@ def _plan(site, intents, say):
 
             f.text = tomlkit.dumps(f.data)
     gone = [f for f in files.values() if f.raw is None and f.restore and f.restore_sha is None]    # not there to take away
-    changed = [f for f in files.values() if f not in gone and
-               (f.raw is None or (f.text != f.raw if f.ifc else f.data != f.before if f.layer else f.text.encode("utf-8") != f.raw))]
+    changed = [f for f in files.values() if f not in gone and _differs(f)]
     return changed, inverse
+
+
+def _differs(f):
+    """Whether what an edit makes of a file differs from the file as it is."""
+    if f.raw is None:
+        return True
+    if f.ifc:
+        return f.text != f.raw
+    if f.option:
+        return f.text is None or f.text.encode("utf-8") != f.raw
+    if f.layer:
+        return f.data != f.before
+    return f.text.encode("utf-8") != f.raw
 
 
 def _unset(data, key):
@@ -296,6 +335,10 @@ def _by_id(fc):
 def _check(f, written):
     """Raises a DomusError unless the file as written (`written`, its text read back; the house's IFC's bytes) says
     what was asked of it, and nothing else changed."""
+    if f.option:
+        if written != (f.text if isinstance(f.text, bytes) else f.text.encode("utf-8")):
+            raise DomusError(f"{f.rel}: doesn't read back as written: not written")
+        return
     if f.ifc:
         if f.restore:
             if hashlib.sha256(written).hexdigest() != f.restore_sha:
@@ -358,6 +401,8 @@ def _same_as(f, old):
     file it puts back, by its SHA-256."""
     if f.ifc:
         return f.restore and f.restore_sha is not None and hashlib.sha256(old).hexdigest() == f.restore_sha
+    if f.option:
+        return f.text is not None and old == (f.text if isinstance(f.text, bytes) else f.text.encode("utf-8"))
     try:
         if f.layer:
             return json.loads(old) == json.loads(f.text)
@@ -392,7 +437,7 @@ def _write(site, plans, copies, given_backup, say, written):
             with open(tmp, "wb") as fh:
                 fh.write(f.text if isinstance(f.text, bytes) else f.text.encode("utf-8"))
             temps.append(tmp)
-            _check(f, tmp.read_bytes() if f.ifc else tmp.read_text(encoding="utf-8"))
+            _check(f, tmp.read_bytes() if f.ifc or f.option else tmp.read_text(encoding="utf-8"))
         for f in plans:
             if _sha(f.path) != (hashlib.sha256(f.raw).hexdigest() if f.raw is not None else None):
                 raise DomusError(f"{f.rel} changed while this change was being made: nothing written, try again")
@@ -420,8 +465,10 @@ def _write(site, plans, copies, given_backup, say, written):
     for f in plans:
         if written is not None:
             say(written(f.name, said.get(f.rel), json.loads(f.text) if f.layer and f.text is not None else None))
-        elif f.text is None:
+        elif f.text is None and f.unmade:
             say(f"{f.rel}: taken away, as it wasn't there before")
+        elif f.text is None:
+            say(f"{f.rel}: taken away" + (f"; the file as it was is in {said[f.rel]}" if f.rel in said else ""))
         else:
             say(f"{f.rel}: written" + (f"; the file as it was is in {said[f.rel]}" if f.rel in said else ""))
     return kept
@@ -431,6 +478,8 @@ def draws(rel):
     """What in the model the build draws from a site's file."""
     if rel in DRAWS:
         return DRAWS[rel]
+    if rel.startswith("options/"):
+        return "the wall options"
     layer = Path(rel).stem
     return DRAWS.get(layer) or ("the site features" if layer.startswith("features-") else f"what the build draws from {layer}")
 
@@ -455,7 +504,7 @@ def _apply(site, intents, why, who, *, kind=None, basis=None, undoes=None, backu
         if old is None:                 # the edit undone made the file: an undo leaves it as empty as it found it
             if f.layer and f.data["features"]:
                 raise DomusError(f"Undoing it would leave {f.rel} with features the edit didn't add: not written")
-            f.text = None
+            f.text, f.unmade = None, True
         elif not _same_as(f, old):
             raise DomusError(f"Undoing it doesn't give back {f.rel} as it was: not written. This is a fault in Domus: "
                              "please report it.")
@@ -592,7 +641,7 @@ def _against(site, intents):
     out, read = {}, {}
     for i in intents:
         rel = kinds.file_of(i)
-        if i["kind"] == "ifc-write":              # the house's IFC written whole rests on the file as it is
+        if i["kind"] in ("ifc-write", "layer", "option"):     # a file written whole rests on the file as it is
             out.setdefault((rel, "whole"), {"file": rel, "whole": True, "sha": _sha(site.path / rel)})
             continue
         if i["kind"].startswith("ifc-"):          # each element or storey of the house's IFC it names, as a SHA-256
@@ -666,7 +715,8 @@ def accept(site, proposal_id, who=None, say=print):
         intents = kinds.read(p["intents"])
         for was, now_ in zip(p.get("against", []), _against(site, intents), strict=False):
             if was != now_:
-                what = f"{was['file']}: {was.get('id') or was.get('key') or was.get('element') or was.get('storey')}"
+                what = was["file"] if was.get("whole") else \
+                    f"{was['file']}: {was.get('id') or was.get('key') or was.get('element') or was.get('storey')}"
                 raise DomusError(f"{what} has changed since proposal {p['id']} was made, so it may no longer say what was "
                                  "meant: reject it, and propose it again if it still holds")
         record = _apply(site, intents, p["why"], who, basis={"proposal": p["id"], "source": p["source"]}, say=say)

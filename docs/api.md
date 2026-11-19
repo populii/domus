@@ -38,7 +38,7 @@ Three functions start one, as the commands of the same names do, and give it ope
 | | What it does |
 |---|---|
 | `api.create(address, path=None)` | A site project for an address, from public data: its lot, buildings, ground and photo fetched, its house and trees drafted, and its model built, in `path` (a folder named from the address unless given). A folder already holding this address carries on with its build. An address that matches more than one place raises a `DomusError` whose message is `WHICH: ` and then JSON with the `places` to choose from |
-| `api.new(path, name, boundary=None, centre=None, size=30.0, epsg=None)` | A site project called `name` on the lot in `boundary`, a GeoJSON polygon's file, or while there's no boundary yet, on a stand-in square `size` metres across at `centre`, (latitude, longitude). `epsg` names its grid, in metres: by default the boundary's own, else NZTM2000 in New Zealand and the UTM zone elsewhere |
+| `api.new(path, name, boundary=None, centre=None, size=30.0, epsg=None)` | A site project called `name` on the lot in `boundary`, a GeoJSON polygon's file, or while there's no boundary yet, on a stand-in square `size` metres across at `centre`, (latitude, longitude). `epsg` names its grid, in metres: by default the boundary's own, else NZTM2000 in New Zealand and the UTM zone elsewhere. A boundary with no `crs` member whose numbers can't be longitude and latitude is on `epsg`, and refused without it |
 | `api.demo(path)` | The made-up demo site |
 
 A process can open several sites. Each `Site` reads its own folder, and what Domus reads of one (its settings, its
@@ -73,11 +73,11 @@ Everything is on the site's own grid (`[crs] epsg` in `data/site.toml`), with he
 
 ### Every change, one way
 
-A change to a site's data, its layers, its settings or the house's IFC, goes one way ([changes.md](changes.md)): it's
-said as an intent, such as `{"kind": "move", "layer": "walls-existing", "ids": ["W1"], "by": [0.5, 0]}`, checked
-against the site, applied to the file it changes the safe way, recorded in `.domus/edits/` with who, when and why,
-and undoable. A check's or a tool's findings are proposals a person accepts or rejects. The viewer's **Site** tab and
-agents work through these too.
+A change to a site's data, its layers, its settings, its wall options' files or the house's IFC, goes one way
+([changes.md](changes.md)): it's said as an intent, such as `{"kind": "move", "layer": "walls-existing", "ids": ["W1"],
+"by": [0.5, 0]}`, checked against the site, applied to the file it changes the safe way, recorded in `.domus/edits/`
+with who, when and why, and undoable. A check's or a tool's findings are proposals a person accepts or rejects. The
+viewer's **Site** tab and agents work through these too.
 
 | | What it does |
 |---|---|
@@ -93,15 +93,16 @@ agents work through these too.
 
 ### What the commands change
 
-Each of these does what the command does, and writes the site's files; the site reads them afresh afterwards. `shift`,
-`edit` and `regrade` are edits on the route above, recorded and undoable; the others write their own files.
+Each of these does what the command does, and writes the site's files; the site reads them afresh afterwards.
+`fetch_marks`, `fetch_title`, `shift`, `edit` and `regrade` are edits on the route above, recorded and undoable; the
+others write their own files.
 
 | | What it does |
 |---|---|
 | `site.fetch()` | Gets the site's rasters from the public source for where it is, as `domus fetch` does: LINZ's ground and surface models and aerial photo in New Zealand, the Copernicus ground model elsewhere |
 | `site.map_canopy()` | Maps candidate tree crowns from the LiDAR, as `domus canopy` does, for curating into `trees.geojson`, and gives the file it wrote |
-| `site.fetch_marks(height_mark=None)` | LINZ's survey marks around the lot, as `domus marks` does: the named boundary marks on its line as the `features-survey-marks` layer, with the height mark `height_mark` when one's named. Gives the layer's features. It needs `DOMUS_LINZ_KEY` |
-| `site.fetch_title()` | The lot's title and the easements on and near it, from LINZ, as `domus title` does, into `data/site/title.geojson`, and gives its features. It needs `DOMUS_LINZ_KEY` |
+| `site.fetch_marks(height_mark=None, why=None, who=None)` | LINZ's survey marks around the lot, as `domus marks` does: the named boundary marks on its line as the `features-survey-marks` layer, with the height mark `height_mark` when one's named, written as an edit recorded with `why` (a reason of its own unless given) and `who`. Gives the layer's features. It needs `DOMUS_LINZ_KEY` |
+| `site.fetch_title(why=None, who=None)` | The lot's title and the easements on and near it, from LINZ, as `domus title` does, into `data/site/title.geojson` as an edit recorded with `why` (a reason of its own unless given) and `who`, and gives its features. It needs `DOMUS_LINZ_KEY` |
 | `site.fetch_points(ground=False)` | The classified LiDAR point cloud over the site, as `domus points` does, into `data/lidar/points.laz`, and with `ground` a 0.5 m ground model from its ground points too. Gives `points`, `path` and `ground_share`. A site no point cloud covers raises a `DomusError` |
 | `site.scan(file, tag, control=None, epsg=None, up=None)` | Brings in a phone or tablet LiDAR scan, as `domus scan` does, placed on the grid by `control`, a CSV of points in both (with `up`, `"y"` or `"z"`, the scan's vertical axis taken as true), or by `epsg` for a file already on a grid. Gives the file it wrote, `data/video/<tag>-scan.npz` ([phone-lidar.md](phone-lidar.md)) |
 | `site.upgrade(dry_run=False)` | Writes the site's migrations into its own files, as `domus site upgrade` does, keeping the files as they were in `.domus/upgrade/`; with `dry_run`, only says what would change |

@@ -16,6 +16,8 @@ A site is on a grid in metres, and Domus picks it from the boundary. A boundary 
 `crs` member names, stays on it. One in longitude and latitude, as GeoJSON is without a `crs` member, goes on NZTM2000
 in New Zealand, the LINZ data's own grid, and on its UTM zone anywhere else.
 One on a grid in feet goes on the UTM zone too. `--epsg 27700`, say, puts the site on a grid of your choosing.
+GeoJSON names its grid in a `crs` member, and one without is in longitude and latitude, so `domus new` refuses a
+boundary with no `crs` whose numbers can't be: add its `crs`, or name the grid it's on with `--epsg`.
 
 This writes `site/data/site.toml`, the boundary, and `site/options/_site.toml`. In a copy of the Domus repo,
 git ignores everything you add to `site/`; anywhere else, use any folder you like. `[model] extent` is the

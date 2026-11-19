@@ -97,13 +97,14 @@ reference (`domus.options.preview`).
 
 ## Changes to a site's data
 
-A site's curated data, its layers, its settings and the house's IFC, changes one way (`domus.project.changes`,
-[docs/changes.md](docs/changes.md)). Each change is an intent (`domus.project.intents`, and `ifc_intents` for the
-house's IFC), checked against the site, each file it changes written the safe way, all of them or none, and recorded
-in `.domus/edits/` with who, when and why, each file's SHA-256 before and after, and the intents that undo it. The
-viewer's **Site** tab, `domus site`, a site's tools and agents (through `site.edit()`) all make changes that way. What
-a check or a tool finds to change is a proposal (`.domus/proposals/`), which a person accepts, as an edit, or rejects:
-nothing applies itself. The commands that bring public data in write their own files.
+A site's curated data, its layers, its settings, its wall options' files and the house's IFC, changes one way
+(`domus.project.changes`, [docs/changes.md](docs/changes.md)). Each change is an intent (`domus.project.intents`, and
+`ifc_intents` for the house's IFC), checked against the site, each file it changes written the safe way, all of them
+or none, and recorded in `.domus/edits/` with who, when and why, each file's SHA-256 before and after, and the intents
+that undo it. The viewer's **Site** tab and its **Make it an option**, `domus site`, `domus marks` and `domus title`, a site's tools and
+agents (through `site.edit()`) all make changes that way. What a check or a tool finds to change is a proposal
+(`.domus/proposals/`), which a person accepts, as an edit, or rejects: nothing applies itself. The other commands that
+bring public data in write their own files.
 
 Observations sit beside the model rather than in it ([docs/observations.md](docs/observations.md)): each is a reading,
 from a clip's picks or a placement, tied by an id to the element it checks. Every build reads both sides afresh, so

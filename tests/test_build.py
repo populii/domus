@@ -126,3 +126,22 @@ def test_a_site_s_own_layers_are_placed_as_they_are():
                       ({"id": "site-a", "type": "mesh", "positions": [[0, 0, 0]], "indices": [0, 1]}, "isn't drawn")]:
         with pytest.raises(DomusError, match=says):
             site_layer(bad, frame, "data/layers/a.json")
+
+
+def test_a_site_with_no_ground_model_says_how_to_get_one_before_building_anything(tmp_path, at_site):
+    """A site started with domus new has no ground model until domus fetch gets one or one is put in place: its build
+    stops before any work with a message naming the file and how to get it, the one site.ground() gives."""
+    import pytest
+
+    from domus import api, build
+    from domus.errors import DomusError
+    from domus.project import newsite
+
+    root = newsite.start(tmp_path / "p", "A place", centre=(-43.53, 172.63), say=lambda line: None)
+    said = r"has no ground model yet, data/lidar/dem\.tif: domus fetch gets one .* or put your own there \(docs/new-site\.md\)"
+    with pytest.raises(DomusError, match=said) as stopped:
+        build.main(at_site(root, tmp_path / "out"), say=lambda line: None)
+    assert not (tmp_path / "out").exists() and not (root / ".domus").exists()
+    with pytest.raises(DomusError) as asked:
+        api.open_site(root).ground()
+    assert str(asked.value) == str(stopped.value)

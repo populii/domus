@@ -164,6 +164,45 @@ def test_a_site_abroad_goes_on_a_grid_in_metres(tmp_path, domus):
     assert cfg["site"]["attribution"] == ""
 
 
+def test_a_boundary_on_a_grid_with_no_crs_is_refused_and_nothing_is_written(tmp_path, domus):
+    """GeoJSON without a crs member is longitude and latitude, so a boundary whose numbers can't be, such as the made-up
+    demo's lot on NZTM written without one, is refused with a message that says what to do, before anything is
+    written. Given --epsg, it's taken to be on that grid."""
+    from domus.project import newsite
+
+    lot = [[1500000.0, 5500000.0], [1500022.0, 5500000.0], [1500022.0, 5500030.0], [1500000.0, 5500030.0],
+           [1500000.0, 5500000.0]]
+    f = boundary(tmp_path / "lot.geojson", lot)
+    (tmp_path / "empty").mkdir()
+    for where in ("site", "empty"):
+        with pytest.raises(DomusError, match=r"has no crs member.*1500000\.0, 5500000\.0.*crs.*--epsg"):
+            newsite.start(tmp_path / where, "A place", boundary=f, say=lambda line: None)
+    assert not (tmp_path / "site").exists() and not list((tmp_path / "empty").iterdir())
+    with pytest.raises(SystemExit, match="has no crs member"):
+        domus("new", tmp_path / "site", "--name", "A place", "--boundary", f)
+    assert not (tmp_path / "site").exists()
+    with pytest.raises(DomusError, match="There's no"):
+        newsite.start(tmp_path / "site", "A place", boundary=tmp_path / "nowhere.geojson", say=lambda line: None)
+    assert not (tmp_path / "site").exists()
+    said = []
+    root = newsite.start(tmp_path / "site", "A place", boundary=f, epsg=2193, say=said.append)
+    written = json.loads((root / "data" / "site" / "boundary.geojson").read_text(encoding="utf-8"))
+    assert written["features"][0]["geometry"]["coordinates"] == [lot]
+    assert said[0] == f"Started {root} on NZGD2000 / New Zealand Transverse Mercator (EPSG:2193)."
+
+
+def test_a_new_site_says_its_grid_by_its_label(tmp_path):
+    """domus new names the grid as the site's settings do ([crs] label), not as pyproj names it."""
+    from domus.project import newsite
+
+    said = []
+    root = newsite.start(tmp_path / "nz", "A place", centre=(-43.53, 172.63), say=said.append)
+    assert said[0] == f"Started {root} on NZGD2000 / New Zealand Transverse Mercator (EPSG:2193)."
+    bng = [[100000.0, 100000.0], [100020.0, 100000.0], [100020.0, 100030.0], [100000.0, 100000.0]]
+    root = newsite.start(tmp_path / "gb", "Abroad", boundary=boundary(tmp_path / "b.geojson", bng, 27700), say=said.append)
+    assert said[2] == f"Started {root} on OSGB36 / British National Grid (EPSG:27700)."
+
+
 def test_a_grid_cell_is_cut_along_its_corners_closer_in_height():
     from domus.model.terrain import cut_cells
 

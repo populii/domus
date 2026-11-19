@@ -7,6 +7,8 @@ level ground behind it, `back` metres deep and `upstand` below its top. An area 
 """
 
 import json
+import re
+import unicodedata
 
 import numpy as np
 
@@ -84,6 +86,17 @@ def crossings(items):
                 out.append(f"The ground behind {wall['name']} crosses itself: move the wall's corners, or hold less "
                            "ground behind it.")
     return out
+
+
+def option_id(site, name):
+    """A new wall option's id for a sketch called `name`: sketch-<name> in letters, digits and dashes, never an earlier
+    option's."""
+    base = re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()).strip("-")[:40] or "option"
+    found, n = f"sketch-{base}", 1
+    while (site.path / "options" / f"{found}.toml").exists():
+        n += 1
+        found = f"sketch-{base}-{n}"
+    return found
 
 
 def to_option(site, items, name="Sketch"):

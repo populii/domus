@@ -3,7 +3,8 @@
     domus create "12 Example Street, Christchurch"              build a model from an address and public data
     domus new PATH --name "My place" --centre -43.53,172.63   start a site project
     domus demo PATH                                           write the made-up demo site
-    domus fetch                                               get its ground and aerial from LINZ
+    domus fetch                                               get LINZ's LiDAR and photo in New Zealand, the
+                                                              Copernicus ground model elsewhere
     domus canopy                                              map tree crowns from the LiDAR
     domus marks                                               add LINZ's survey marks around the lot
     domus title                                               add the lot's title and nearby easements from LINZ
@@ -78,22 +79,28 @@ def parser():
     sub.add_argument("--boundary", help="a GeoJSON polygon of the lot")
     sub.add_argument("--centre", help="latitude,longitude of the lot, when you have no boundary yet")
     sub.add_argument("--size", type=float, default=30.0, help="side of the stand-in square, metres")
-    sub.add_argument("--epsg", type=int, help="the site's grid, in metres (default: the boundary's own, else one for where it is)")
+    sub.add_argument("--epsg", type=int, help="the site's grid, in metres (default: the boundary's own, else one for where "
+                     "it is); a boundary with no crs whose numbers aren't longitude and latitude is on it")
 
     sub = command(commands, "demo", _demo, "Write the made-up demo site.", "write the made-up demo site")
     sub.add_argument("path")
 
     command(commands, "fetch", _fetch, "Get the site's ground, surface and aerial photo from the public source for where "
-            "it is: LINZ in New Zealand, the Copernicus ground model elsewhere.", "get its ground and aerial from LINZ")
+            "it is: LINZ in New Zealand, the Copernicus ground model elsewhere.",
+            "get LINZ's LiDAR and photo in New Zealand, the Copernicus ground model elsewhere")
     command(commands, "canopy", _canopy, "Map candidate tree crowns from the LiDAR, for curating into "
             "data/site/trees.geojson.", "map tree crowns from the LiDAR")
 
-    sub = command(commands, "marks", _marks, "LINZ's survey marks around the lot, as a site layer.",
-                  "add LINZ's survey marks around the lot")
+    sub = command(commands, "marks", _marks, "LINZ's survey marks around the lot, as a site layer: an edit domus site undo "
+                  "can undo.", "add LINZ's survey marks around the lot")
     sub.add_argument("--height-mark", help="add this height mark to the layer, by its name as printed")
+    sub.add_argument("--why", help="why: recorded with the change (default: that it's LINZ's marks)")
+    sub.add_argument("--who", help="who's making it, recorded with it (default: this computer's user)")
 
-    command(commands, "title", _title, "The lot's title and the easements around it, from LINZ.",
-            "add the lot's title and nearby easements from LINZ")
+    sub = command(commands, "title", _title, "The lot's title and the easements around it, from LINZ, as a site layer: an "
+                  "edit domus site undo can undo.", "add the lot's title and nearby easements from LINZ")
+    sub.add_argument("--why", help="why: recorded with the change (default: that it's LINZ's title)")
+    sub.add_argument("--who", help="who's making it, recorded with it (default: this computer's user)")
 
     sub = command(commands, "points", _points, "The LiDAR point cloud over the site, classified.",
                   "get the classified LiDAR point cloud over the site")
@@ -196,8 +203,9 @@ def parser():
 
     command(commands, "sketch-worker", _sketch_worker, "For the server: a sketch from the viewer per line on stdin, and "
             "what it comes to on the site per line on stdout, as JSON.")
-    command(commands, "sketch-option", _sketch_option, "For the server: a sketch from the viewer and its name on stdin, "
-            "as JSON, and the wall option's TOML on stdout, as JSON.")
+    command(commands, "sketch-option", _sketch_option, "For the server: a sketch from the viewer, its name and who's saving "
+            "it on stdin, as JSON, saved as a wall option by an edit on the change route, and the option's file and the "
+            "edit's number on stdout, as JSON.")
     return ap
 
 
@@ -282,11 +290,11 @@ def _canopy(args, site, named):
 
 
 def _marks(args, site, named):
-    opened(site).fetch_marks(args.height_mark)
+    opened(site).fetch_marks(args.height_mark, why=args.why, who=args.who)
 
 
 def _title(args, site, named):
-    opened(site).fetch_title()
+    opened(site).fetch_title(why=args.why, who=args.who)
 
 
 def _points(args, site, named):
@@ -420,13 +428,15 @@ def _sketch_worker(args, site, named):
 
 
 def _sketch_option(args, site, named):
-    """For the server: {"name", "items"}, a sketch from the viewer, on stdin, and on stdout {"toml": the wall option's
-    file} or, when the site's settings or data need putting right, {"error": what}."""
+    """For the server: {"name", "items", "who"}, a sketch from the viewer, on stdin, saved as a wall option,
+    options/sketch-<name>.toml, by an edit on the change route recorded with "who"; and on stdout {"file", "edit"}, the
+    option's file in the site's folder and the edit's number, or, when the site's settings or data need putting right,
+    {"error": what}."""
     from ..errors import DomusError
 
     asked = json.load(sys.stdin)
     try:
-        answer = {"toml": opened(site)._sketch_option(asked["items"], asked["name"])}
+        answer = opened(site)._save_sketch(asked["items"], asked["name"], asked.get("who"))
     except DomusError as e:
         answer = {"error": str(e)}
     sys.stdout.write(json.dumps(answer))

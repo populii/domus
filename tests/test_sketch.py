@@ -158,8 +158,15 @@ def call(port, method, path, body=None):
     return out
 
 
-def test_the_server_works_a_sketch_out_and_saves_it_as_an_option(site, monkeypatch):
+def test_the_server_works_a_sketch_out_and_saves_it_as_an_option(site, tmp_path, monkeypatch):
+    """Make it an option is an edit on the change route: recorded with who the login proxy says, else the viewer, and
+    undone with domus site undo, which takes the option away. On a copy of the demo, so the edits stay there."""
+    from domus import api
+
     monkeypatch.delenv("DOMUS_OUTPUT", raising=False)
+    root = tmp_path / "demo"
+    shutil.copytree(site, root, ignore=shutil.ignore_patterns("viewer", ".domus"))
+    site = root.resolve()
     built = []
     monkeypatch.setattr(serve.BuildJob, "start", lambda self: built.append(self.root))
     httpd = serve.make_server("127.0.0.1", 0, [site / "viewer" / "data"], site / ".domus" / "viewer.db", root=site)
@@ -183,9 +190,15 @@ def test_the_server_works_a_sketch_out_and_saves_it_as_an_option(site, monkeypat
         httpd.handler_class_worker().stop()
         httpd.shutdown()
         httpd.server_close()
-        for f in (site / "options").glob("sketch-*.toml"):
-            f.unlink()
     time.sleep(0)
+    s = api.open_site(site)
+    assert [(r["kind"], r["who"], r["files"][0]["path"], r["files"][0]["before"]) for r in s.edits()] == [
+        ("option", "the viewer", "options/sketch-my-own-option.toml", None),
+        ("option", "the viewer", "options/sketch-my-own-option-2.toml", None)]
+    assert s.edits()[0]["why"] == "Made an option from the sketch 'My Own! Option' in the viewer."
+    s.undo(2, say=lambda line: None)
+    s.undo(1, say=lambda line: None)
+    assert not list((site / "options").glob("sketch-*.toml"))
 
 
 AT = np.array([1500000.0, 5500000.0])       # on a grid as large as New Zealand's

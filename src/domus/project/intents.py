@@ -22,6 +22,8 @@ An intent on a layer names it by `layer`, its file's name in data/site/ without 
     {"kind": "delete", "layer": "features-demo", "id": "old-fence"}
     {"kind": "put", "layer": "walls-existing", "id": "W1", "feature": {...}}
         sets a feature whole, as given: what an undo does to put one back as it was
+    {"kind": "layer", "layer": "title", "collection": {"type": "FeatureCollection", "features": [...], ...}}
+        writes a layer whole, as given: what domus marks and domus title do; a layer that isn't there yet is started
 
 `move`, `coords` and `level` can also give a "basis": a sentence added to each feature they change's own basis.
 
@@ -35,20 +37,27 @@ An intent on a setting names its key as docs/site-format.md does:
         sets a setting in data/site.toml ("file": "options/_site.toml" for the options' shared settings), keeping
         the file's comments; "drop": true takes it out instead, and "toml" says how the value is written
 
+An intent on a wall option names it by `id`, its file's name in options/ without .toml, and writes its file whole:
+
+    {"kind": "option", "id": "sketch-two-walls", "toml": "name = ..."}
+        writes options/<id>.toml as given, which has to be TOML: what the viewer's Make it an option does; "drop": true
+        takes the file away instead
+
 Each intent's inverse, which applying it works out, puts back exactly what it changed: the features as they were, whole
-and where they were in their layer, and a setting's value as the file wrote it.
+and where they were in their layer, a layer or an option's file as it was, and a setting's value as the file wrote it.
 """
 
 import copy
 import json
 import math
 import re
+import tomllib
 from pathlib import Path
 
 from ..errors import DomusError
 from . import ifc_intents, schema
 
-KINDS = ("move", "coords", "level", "props", "add", "delete", "put", "setting", *ifc_intents.KINDS)
+KINDS = ("move", "coords", "level", "props", "add", "delete", "put", "layer", "setting", "option", *ifc_intents.KINDS)
 LAYER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 SETTINGS = {"data/site.toml": schema.SITE, "options/_site.toml": schema.OPTIONS_SITE}
 COORDS = ("so", "soz", "en", "enz", "geometry")
@@ -139,6 +148,23 @@ def checked(intent):
         if "toml" in i and not isinstance(i["toml"], str):
             raise DomusError(f"setting {i['key']}: toml is the value as TOML writes it, as text")
         return i
+    if kind == "option":
+        if isinstance(i.get("id"), str):
+            i["id"] = i["id"].removesuffix(".toml")
+        if not isinstance(i.get("id"), str) or not LAYER.fullmatch(i["id"]):
+            raise DomusError(f"{what}: id names the option, its file's name in options/ without .toml, such as "
+                             "b-two-tiers")
+        if i.get("drop"):
+            if "toml" in i:
+                raise DomusError(f"option {i['id']}: give its toml or drop it, not both")
+            return i
+        if not isinstance(i.get("toml"), str):
+            raise DomusError(f"option {i['id']}: toml is the option's file, as text, or drop: true takes it away")
+        try:
+            tomllib.loads(i["toml"])
+        except tomllib.TOMLDecodeError as e:
+            raise DomusError(f"option {i['id']}: its toml isn't TOML: {e}") from None
+        return i
     layer = i.get("layer")
     if isinstance(layer, str):
         layer = i["layer"] = layer.removesuffix(".geojson")
@@ -146,6 +172,13 @@ def checked(intent):
         raise DomusError(f"{what}: {layer!r} isn't a layer's name: give its file's name in data/site/, such as walls-existing")
     if "basis" in i and (kind not in ("move", "coords", "level") or not isinstance(i["basis"], str)):
         raise DomusError(f"{what}: basis is a sentence, for move, coords and level")
+    if kind == "layer":
+        fc = i.get("collection")
+        if not (isinstance(fc, dict) and fc.get("type") == "FeatureCollection" and isinstance(fc.get("features"), list)
+                and all(_feature_ok(f) for f in fc["features"])):
+            raise DomusError(f"{what} for {layer}: collection is a GeoJSON FeatureCollection, each of its features with "
+                             "an id in its properties and a geometry")
+        return i
     if kind == "move":
         ids, by = i.get("ids"), i.get("by")
         if ids != "*" and not (isinstance(ids, list) and ids and all(isinstance(x, str) for x in ids)):
@@ -195,6 +228,8 @@ def file_of(intent):
     """The file an intent changes, as a path relative to the site's folder (with / between its parts)."""
     if intent["kind"] in ifc_intents.KINDS:
         return ifc_intents.FILE
+    if intent["kind"] == "option":
+        return f"options/{intent['id']}.toml"
     return intent["file"] if intent["kind"] == "setting" else f"data/site/{intent['layer']}.geojson"
 
 
@@ -287,6 +322,12 @@ def apply(data, intent, name, frame=None, say=print):
     feats = data["features"]
     if kind == "move":
         return _move(data, intent, name, say)
+    if kind == "layer":
+        before = copy.deepcopy(data)
+        data.clear()
+        data.update(copy.deepcopy(intent["collection"]))
+        say(f"   {name}: written whole, {len(before['features'])} features -> {len(data['features'])}")
+        return [{"kind": "layer", "layer": layer, "collection": before}]
     if kind == "add":
         f = copy.deepcopy(intent["feature"])
         fid = f["properties"]["id"]
@@ -511,7 +552,12 @@ def describe(intent):
         return ifc_intents.describe(intent)
     if kind == "setting":
         return f"{intent['file']}: {intent['key']} " + ("dropped" if intent.get("drop") else f"= {intent['value']!r}")
+    if kind == "option":
+        return f"options/{intent['id']}.toml: " + ("taken away" if intent.get("drop") else "written whole")
     layer = intent["layer"]
+    if kind == "layer":
+        n = len(intent["collection"]["features"])
+        return f"{layer}: written whole, {n} feature{'s' if n != 1 else ''}"
     if kind == "move":
         ids = "every feature" if intent["ids"] == "*" else ", ".join(intent["ids"])
         by = ", ".join(f"{v:+.3f}" for v in intent["by"])

@@ -56,6 +56,25 @@ def restyled(cfg, path):
     return {**base, "stairs": stairs, **own, "walls": walls}
 
 
+def restyle_warnings(site):
+    """A warning for each wall or steps that a `restyle` or `restyle_stairs` entry of the site's options names and the
+    option it's based on doesn't have. The entry restyles nothing there, as a mistyped id leaves it, and the option is
+    drawn all the same, so the build warns of it rather than refusing it."""
+    out = []
+    for path in sorted(options_dir(site).glob("*.toml")):
+        cfg = {} if path.name.startswith("_") else tomllib.loads(path.read_text(encoding="utf-8"))
+        if "based_on" not in cfg:
+            continue
+        base = tomllib.loads(path.with_name(f"{cfg['based_on']}.toml").read_text(encoding="utf-8"))
+        for key, part, one, many in (("restyle", "walls", "wall", "walls"), ("restyle_stairs", "stairs", "steps", "steps")):
+            have = [x["id"] for x in base.get(part, [])]
+            out += [f"Warning: options/{path.name}: [[{key}]] names {one} {name}, which {cfg['based_on']}.toml doesn't "
+                    "have, so it restyles nothing there. "
+                    + (f"Its {many} are {', '.join(have)}." if have else f"It has no {many}.")
+                    for rule in cfg.get(key, []) for name in rule.get(part, []) if name not in have]
+    return out
+
+
 def current(site, cfg):
     """An option of the site's as loaded, at this Domus's format: an older site's are migrated in memory
     (domus.project.formats)."""

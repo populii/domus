@@ -72,7 +72,8 @@ def new(path, name, boundary=None, centre=None, size=30.0, epsg=None, say=print)
     """Starts a site project, as `domus new` does: in the folder `path`, called `name`, on the lot in `boundary`, a
     GeoJSON polygon's file, or while there's no boundary yet, on a stand-in square `size` metres across at `centre`,
     (latitude, longitude). `epsg` names its grid, in metres: by default the boundary's own, else NZTM2000 in New
-    Zealand and the UTM zone elsewhere. Gives the site, opened; what to do next goes to `say`."""
+    Zealand and the UTM zone elsewhere. A boundary with no crs member whose numbers can't be longitude and latitude
+    is on `epsg`, and refused without it. Gives the site, opened; what to do next goes to `say`."""
     from .project import newsite
 
     return open_site(newsite.start(path, name, boundary, centre, size, epsg, say))
@@ -168,10 +169,7 @@ class Site:
         from .model import terrain
         from .project import rasters
 
-        dem = rasters.path(self._project, "dem")
-        if not dem.exists():
-            raise DomusError(f"{self.path} has no ground model yet: domus fetch gets one from LINZ, or put your own "
-                             f"at {dem}")
+        rasters.need_ground(self._project)
         model = terrain.existing(self._project)
 
         def heights(e, n):
@@ -253,22 +251,25 @@ class Site:
         with self._writing():
             return canopy.map_site(self._project, say)
 
-    def fetch_marks(self, height_mark=None, say=print):
+    def fetch_marks(self, height_mark=None, say=print, why=None, who=None):
         """Adds LINZ's survey marks around the lot, as domus marks does: the named boundary marks on its line, as the
         layer features-survey-marks, with the height mark `height_mark` (its name as `say` gets it) when one's named.
-        The nearest height marks go to `say`. Returns the layer's features. It needs DOMUS_LINZ_KEY."""
+        The layer is written as an edit on the change route, recorded with `why` (a reason of its own unless given) and
+        `who`, and undone with undo(). The nearest height marks go to `say`. Returns the layer's features. It needs
+        DOMUS_LINZ_KEY."""
         from .importers.nz import marks
 
         with self._writing():
-            return marks.fetch(self._project, height_mark, say)
+            return marks.fetch(self._project, height_mark, say, why, who)
 
-    def fetch_title(self, say=print):
+    def fetch_title(self, say=print, why=None, who=None):
         """The lot's record of title and the easements on and near it, from LINZ, as domus title does: written to
-        data/site/title.geojson, and returned as its features. It needs DOMUS_LINZ_KEY."""
+        data/site/title.geojson as an edit on the change route, recorded with `why` (a reason of its own unless given)
+        and `who`, and undone with undo(); and returned as its features. It needs DOMUS_LINZ_KEY."""
         from .importers.nz import title
 
         with self._writing():
-            return title.update(self._project, say)
+            return title.update(self._project, say, why, who)
 
     def fetch_points(self, ground=False, say=print):
         """The classified LiDAR point cloud over the site, as domus points does: from LINZ (with a DOMUS_LINZ_KEY that
@@ -469,6 +470,20 @@ class Site:
         if crossed:
             raise DomusError(" ".join(crossed))
         return sketch.to_toml(sketch.to_option(self._project, items, name))
+
+    def _save_sketch(self, items, name, who=None):
+        """For the server: a sketch from the viewer saved as a wall option, options/sketch-<name>.toml (never over an
+        earlier one), as an edit on the change route recorded with `who`, so undo() takes it away again. Gives its
+        `file`, in the site's folder, and its `edit`'s number. Not in the promise."""
+        from .options import sketch
+        from .project import changes, intents
+
+        toml = self._sketch_option(items, name)
+        option = sketch.option_id(self._project, name)
+        with self._writing():
+            record = changes.apply(self._project, intents.read({"kind": "option", "id": option, "toml": toml}),
+                                   f"Made an option from the sketch {name!r} in the viewer.", who, say=lambda line: None)
+        return {"file": f"options/{option}.toml", "edit": record["id"]}
 
     def _writing(self):
         return _writes(self._project)

@@ -86,7 +86,7 @@ def export(site):
     mm = np.round((pts[sel] - origin) * 1000).astype(np.int32)
     np.savez_compressed(site.path / "data" / "video" / "points.npz", mm=mm, rgb=cols[sel].astype(np.uint8),
                         source=src[sel], tags=np.array(tags), origin=origin)
-    print(f"wrote data/video/points.npz: {len(sel)} points from {len(tags)} reconstructions")
+    print(f"wrote data/video/points.npz: {len(sel)} points from {len(tags)} cloud{'s' if len(tags) != 1 else ''}")
 
     entries = [{"id": o["id"], **o["source"]} for o in observations.read(site) if o["kind"] == "placement"]
     if not entries:
@@ -104,4 +104,4 @@ def export(site):
         print(f"{entry['id']}: {len(sel)} points")
     np.savez_compressed(site.path / "data" / "video" / "compare.npz", mm=np.concatenate(mms), rgb=np.concatenate(rgbs),
                         set=np.concatenate(sets), ids=np.array([e["id"] for e in entries]), origin=origin)
-    print(f"wrote data/video/compare.npz: {len(entries)} sets")
+    print(f"wrote data/video/compare.npz: {len(entries)} set{'s' if len(entries) != 1 else ''}")

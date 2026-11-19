@@ -2,12 +2,13 @@
 
 Writes data/site/features-survey-marks.geojson (kind mark: labels in the viewer's hidden Survey layer, and wall options flag
 footings near them) with each named boundary mark on the lot's line, and prints the nearest height marks. A height mark goes in the
-layer only when you name it with --height-mark, since it's usually some way off and its position is approximate. Needs DOMUS_LINZ_KEY.
+layer only when you name it with --height-mark, since it's usually some way off and its position is approximate. The layer is
+written whole as an edit on the change route (domus.project.changes), so domus site undo puts back what was there. Needs
+DOMUS_LINZ_KEY.
 
 NZ Survey Boundary Marks and NZ Geodetic Vertical Marks, LINZ, CC BY 4.0.
 """
 
-import json
 import os
 
 from shapely.geometry import Point, Polygon
@@ -21,6 +22,7 @@ ON_LINE_M = 1.5
 BOUNDARY_SEARCH_M = 60
 HEIGHT_SEARCH_M = 1000
 HEIGHT_MARKS_SHOWN = 5
+WHY = "LINZ's survey marks on the lot's line, as domus marks found them."      # the reason recorded unless one's given
 
 
 def lot_on_nztm(site):
@@ -66,10 +68,13 @@ def height_feature(row, grid):
                            "condition": p.get("mark_condition"), "order": p.get("order")}}
 
 
-def fetch(site, height_mark=None, say=print):
+def fetch(site, height_mark=None, say=print, why=None, who=None):
     """`domus marks`: the named boundary marks on the site's lot's line, written as its features-survey-marks layer,
-    with the height mark `height_mark` too when it's named. Says the nearest height marks. Gives the features written.
-    Needs DOMUS_LINZ_KEY."""
+    with the height mark `height_mark` too when it's named. The layer is written whole as an edit on the change route,
+    recorded with `why` (WHY unless given) and `who`, and undone with domus site undo. Says the nearest height marks.
+    Gives the features written. Needs DOMUS_LINZ_KEY."""
+    from ...project import changes, intents
+
     key = os.environ.get("DOMUS_LINZ_KEY")
     if not key:
         raise DomusError("This needs DOMUS_LINZ_KEY: a free key from data.linz.govt.nz.")
@@ -90,8 +95,8 @@ def fetch(site, height_mark=None, say=print):
             raise DomusError(f"No height mark called {height_mark!r} within {HEIGHT_SEARCH_M} m.")
         feats.append(height_feature(match[0], site.grid))
     out = site.path / "data" / "site" / "features-survey-marks.geojson"
-    out.write_text(json.dumps({"type": "FeatureCollection", "name": "features-survey-marks",
-                               "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{site.grid.epsg}"}},
-                               "features": feats}, indent=1) + "\n", encoding="utf-8", newline="\n")
-    say(f"{len(feats)} marks -> {out}. Run domus build, then turn on the Survey layer.")
+    layer = geojson.collection(feats, "features-survey-marks", epsg=site.grid.epsg)
+    changes.apply(site, intents.read({"kind": "layer", "layer": "features-survey-marks", "collection": layer}), why or WHY,
+                  who, say=say, lines=False)
+    say(f"{len(feats)} marks -> {out}. Once it's built, turn on the Survey layer.")
     return feats

@@ -7,6 +7,7 @@ import sys
 
 import pytest
 
+from domus import api
 from domus.errors import DomusError
 from domus.geo.crs import Grid
 from domus.importers.nz import marks, publicdata
@@ -56,11 +57,21 @@ def test_height_marks_come_nearest_first_and_join_the_layer_only_by_name(nztm_si
     assert asked == ["layer-50774", "layer-50784"]
     assert printed.index("NEAR") < printed.index("FAR")
     assert len(json.loads(out_file.read_text(encoding="utf-8"))["features"]) == 1
-    domus("--site", tmp_path, "marks", "--height-mark", "NEAR")
+    first = out_file.read_bytes()
+    domus("--site", tmp_path, "marks", "--height-mark", "NEAR", "--why", "The plan's datum.", "--who", "sam")
     last = json.loads(out_file.read_text(encoding="utf-8"))["features"][-1]["properties"]
     assert last["id"] == "linz-height-mark" and last["name"] == "NEAR (35.3 m)"
     with pytest.raises(SystemExit, match="No height mark"):
         domus("--site", tmp_path, "marks", "--height-mark", "NOPE")
+    # Each is an edit on the change route, recorded and undone like any other.
+    s = api.open_site(tmp_path)
+    assert [(r["kind"], r["files"][0]["path"], r["files"][0]["before"] is None) for r in s.edits()] == [
+        ("layer", "data/site/features-survey-marks.geojson", True), ("layer", "data/site/features-survey-marks.geojson", False)]
+    assert s.edits()[0]["why"] == marks.WHY and s.edits()[1]["why"] == "The plan's datum." and s.edits()[1]["who"] == "sam"
+    domus("--site", tmp_path, "site", "undo", "2")
+    assert out_file.read_bytes() == first
+    domus("--site", tmp_path, "site", "undo", "1")
+    assert not out_file.exists()
 
 
 def test_marks_and_title_search_round_the_main_lot_not_the_first(nztm_site, monkeypatch, tmp_path, at_site):

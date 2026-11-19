@@ -1,6 +1,7 @@
 """The lot's record of title and the easements on and around it, from LINZ: `domus title`.
 
-Writes data/site/title.geojson. The title's outline (kind `title`) carries its number, estate (fee simple, cross lease,
+Writes data/site/title.geojson, whole, as an edit on the change route (domus.project.changes), so domus site undo puts
+back what was there. The title's outline (kind `title`) carries its number, estate (fee simple, cross lease,
 unit title and so on) and type. Each easement or covenant within EASEMENT_SEARCH_M of the lot (kind `easement`) carries
 its legal description and intent; a line with no width is an easement drawn along a line. The build draws them in the
 Boundaries group, and wall options flag a wall that runs into an easement. Needs DOMUS_LINZ_KEY.
@@ -21,6 +22,7 @@ from . import marks, publicdata
 TITLES, EASEMENTS, LINEAR_EASEMENTS = "layer-50804", "layer-50782", "layer-50783"
 EASEMENT_SEARCH_M = 10.0
 ON_LOT_M2, ON_LOT_M = 1.0, 0.3
+WHY = "The lot's title and the easements near it, as domus title found them on LINZ."     # recorded unless one's given
 def title_path(site):
     """The site's lot's title and easements, data/site/title.geojson."""
     return site.path / "data" / "site" / "title.geojson"
@@ -94,9 +96,12 @@ def easements(site):
     return [f for f in read(site) if f["properties"].get("kind") == "easement"]
 
 
-def update(site, say=print):
-    """`domus title`: the site's lot's title and the easements near it, from LINZ, written to data/site/title.geojson.
-    Gives the features written. Needs DOMUS_LINZ_KEY."""
+def update(site, say=print, why=None, who=None):
+    """`domus title`: the site's lot's title and the easements near it, from LINZ, written to data/site/title.geojson
+    whole as an edit on the change route, recorded with `why` (WHY unless given) and `who`, and undone with domus site
+    undo. Gives the features written. Needs DOMUS_LINZ_KEY."""
+    from ...project import changes, intents
+
     key = os.environ.get("DOMUS_LINZ_KEY")
     if not key:
         raise DomusError("This needs DOMUS_LINZ_KEY: a free key from data.linz.govt.nz.")
@@ -107,7 +112,10 @@ def update(site, say=print):
             say(f"{p['name']}: {p['estate']}, {p['type']}")
         else:
             say(f"{p['name']} ({p['intent']}){', on the lot' if p['on_lot'] else ', nearby'}")
-    geojson.write(title_path(site), geojson.collection(feats, "title", "The lot's title and nearby easements, from LINZ (CC BY 4.0)",
-                                               epsg=site.grid.epsg))
-    say(f"{len(feats)} features -> {title_path(site)}. Run domus build, then look in the Boundaries group.")
+    for f in feats:
+        f["geometry"]["coordinates"] = geojson.round_coords(f["geometry"]["coordinates"])
+    layer = geojson.collection(feats, "title", "The lot's title and nearby easements, from LINZ (CC BY 4.0)", epsg=site.grid.epsg)
+    changes.apply(site, intents.read({"kind": "layer", "layer": "title", "collection": layer}), why or WHY, who, say=say,
+                  lines=False)
+    say(f"{len(feats)} features -> {title_path(site)}. Once it's built, look in the Boundaries group.")
     return feats

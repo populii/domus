@@ -132,6 +132,11 @@ def test_a_proposal_accepted_changes_the_data_and_one_rejected_doesnt(demo):
     ({"kind": "setting", "key": "house.colour_of_the_door", "value": "red"}, "isn't a setting Domus knows"),
     ({"kind": "setting", "key": "house.fl_upper", "value": "high"}, "is a number, not a str"),
     ({"kind": "setting", "key": "house", "value": 1}, "is a table of settings"),
+    ({"kind": "layer", "layer": "trees", "collection": {"type": "FeatureCollection", "features": [{"type": "Feature"}]}},
+     "collection is a GeoJSON FeatureCollection"),
+    ({"kind": "option", "id": "_site", "toml": "x = 1"}, "id names the option"),
+    ({"kind": "option", "id": "a-one-wall", "toml": "name = "}, "its toml isn't TOML"),
+    ({"kind": "option", "id": "no-such-option", "drop": True}, "There's no"),
 ])
 def test_an_intent_is_checked_against_the_site_and_nothing_is_written(demo, intent, message):
     s = api.open_site(demo)
@@ -277,6 +282,10 @@ def test_each_intent_says_what_it_does():
         "data/site.toml: house.fl_upper = 45.0"
     assert intents.describe({"kind": "level", "layer": "ground-fixes", "id": "p", "vertex": 0, "z": 42.1}) == \
         "ground-fixes: p's vertex 0 at 42.1"
+    assert intents.describe({"kind": "layer", "layer": "features-pegs", "collection": PEGS}) == \
+        "features-pegs: written whole, 1 feature"
+    assert intents.describe({"kind": "option", "id": "sketch-a", "toml": "x = 1"}) == "options/sketch-a.toml: written whole"
+    assert intents.describe({"kind": "option", "id": "sketch-a", "drop": True}) == "options/sketch-a.toml: taken away"
 
 
 def test_a_proposal_is_accepted_only_while_what_it_rests_on_holds(demo):
@@ -307,3 +316,70 @@ def test_one_vertex_is_set_where_it_is_and_comes_back(demo):
     assert walls.read_bytes() == raw
     with pytest.raises(DomusError, match="not 2"):
         s.edit({"kind": "coords", "layer": "walls-existing", "id": "W1", "vertex": 2, "en": [1.0, 2.0]}, "No.", say=quiet)
+
+
+PEGS = {"type": "FeatureCollection", "name": "features-pegs",
+        "features": [{"type": "Feature", "properties": {"id": "peg-1", "kind": "mark", "name": "Peg 1 (made up)"},
+                      "geometry": {"type": "Point", "coordinates": [1500010.0, 5500020.0]}}]}
+
+
+def test_a_layer_is_written_whole_as_one_intent_and_undone(demo):
+    """A whole layer written as one intent, as domus marks and domus title write theirs: undone, a layer it started is
+    taken away, and one it wrote over comes back byte for byte."""
+    s = api.open_site(demo)
+    pegs = demo / "data" / "site" / "features-pegs.geojson"
+    said = []
+    record = s.edit({"kind": "layer", "layer": "features-pegs", "collection": PEGS}, "Pegs found on site.", "sam",
+                    say=said.append)
+    assert json.loads(pegs.read_text(encoding="utf-8")) == PEGS and pegs.read_bytes().endswith(b"]\n}\n")
+    assert record["kind"] == "layer" and record["summary"] == ["features-pegs: written whole, 1 feature"]
+    assert record["files"] == [{"path": "data/site/features-pegs.geojson", "before": None, "after": sha(pegs), "copy": None}]
+    assert [i["kind"] for i in record["inverse"]] == ["layer"] and record["inverse"][0]["collection"]["features"] == []
+    assert said[-2] == "Recorded as edit 0001 (.domus/edits/0001-layer.json): domus site undo 1 undoes it."
+    trees = demo / "data" / "site" / "trees.geojson"
+    raw = trees.read_bytes()
+    first = {**json.loads(raw), "features": json.loads(raw)["features"][:1]}
+    s.edit({"kind": "layer", "layer": "trees", "collection": first}, "Only the first tree.", say=quiet)
+    assert json.loads(trees.read_text(encoding="utf-8")) == first
+    assert s.edit({"kind": "layer", "layer": "trees", "collection": first}, "Again.", say=quiet) is None    # nothing to change
+    s.undo(2, say=quiet)
+    assert trees.read_bytes() == raw
+    s.undo(1, say=quiet)
+    assert not pegs.exists()
+    p = s.propose({"kind": "layer", "layer": "features-pegs", "collection": PEGS}, "LINZ has a peg here.", "a tool", say=quiet)
+    assert p["against"] == [{"file": "data/site/features-pegs.geojson", "whole": True, "sha": None}]
+    s.edit({"kind": "layer", "layer": "features-pegs", "collection": {**PEGS, "features": []}}, "None found.", say=quiet)
+    with pytest.raises(DomusError, match="^data/site/features-pegs.geojson has changed since proposal 0001 was made"):
+        s.accept(p["id"], say=quiet)
+
+
+def test_an_option_file_is_added_written_over_and_taken_away_as_edits(demo):
+    """An option's file, options/<id>.toml, written whole as one intent, as the viewer's Make it an option adds one:
+    undone, an option it added is taken away, and one it wrote over or took away comes back byte for byte."""
+    s = api.open_site(demo)
+    toml = 'name = "Sketched (made up)"\n\n[[walls]]\nid = "S1"\nline_so = [[2.0, 3.0], [6.0, 3.0]]\n'
+    option = demo / "options" / "sketch-a.toml"
+    said = []
+    record = s.edit({"kind": "option", "id": "sketch-a", "toml": toml}, "Sketched in the viewer.", "sam", say=said.append)
+    assert option.read_bytes() == toml.encode("utf-8") and record["kind"] == "option"
+    assert record["files"] == [{"path": "options/sketch-a.toml", "before": None, "after": sha(option), "copy": None}]
+    assert record["inverse"] == [{"kind": "option", "id": "sketch-a", "drop": True}]
+    assert record["rebuild"] == ["the wall options"] and "sketch-a" in [o["id"] for o in s.options()]
+    assert said[-2] == "Recorded as edit 0001 (.domus/edits/0001-option.json): domus site undo 1 undoes it."
+    a = demo / "options" / "a-one-wall.toml"
+    raw = a.read_bytes()
+    said.clear()
+    s.edit({"kind": "option", "id": "a-one-wall", "drop": True}, "Not this one.", say=said.append)
+    kept = ".domus/edits/0002-option/options/a-one-wall.toml"
+    assert not a.exists() and said[:2] == ["   options/a-one-wall.toml: taken away",
+                                           f"options/a-one-wall.toml: taken away; the file as it was is in {kept}"]
+    s.undo(2, say=quiet)
+    assert a.read_bytes() == raw
+    s.edit({"kind": "option", "id": "a-one-wall", "toml": toml}, "Over it.", say=quiet)
+    s.undo(4, say=quiet)
+    assert a.read_bytes() == raw
+    s.undo(1, say=quiet)
+    assert not option.exists() and [o["id"] for o in s.options()] == ["a-one-wall", "b-two-tiers"]
+    a.write_text("name = ", encoding="utf-8")       # a file that isn't TOML is put right by hand first
+    with pytest.raises(DomusError, match="a-one-wall.toml isn't TOML"):
+        s.edit({"kind": "option", "id": "a-one-wall", "toml": toml}, "Over it.", say=quiet)

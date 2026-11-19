@@ -168,6 +168,31 @@ def test_an_option_can_take_a_site_feature_out(tmp_path):
     assert gone and all(x["hide_with"] == ["a-one-wall"] and "West fence" in x["info"]["features"] for x in gone)
 
 
+def test_a_restyle_naming_a_wall_its_base_lacks_is_built_with_a_warning(site, at_site, tmp_path):
+    """A restyle entry that names a wall, or steps, the option it's based on doesn't have restyles nothing there, as a
+    mistyped id leaves it. The option is drawn all the same, so the build warns of it, as it does of a terrace whose
+    outline crosses itself."""
+    import shutil
+
+    from domus import build
+
+    root = tmp_path / "demo"
+    shutil.copytree(site, root, ignore=shutil.ignore_patterns("viewer", ".domus"))
+    (root / "options" / "b-gabion.toml").write_text('name = "B. In gabion"\nbased_on = "b-two-tiers"\n\n[[restyle]]\n'
+                                                    'walls = ["B2", "B9"]\nmaterial = "gabion"\n\n[[restyle_stairs]]\n'
+                                                    'stairs = ["S1"]\nmaterial = "sleepers"\n', encoding="utf-8")
+    said = []
+    build.main(at_site(root, tmp_path / "out"), say=said.append)
+    assert [line for line in said if line.startswith("Warning: options/b-gabion.toml")] == [
+        ("Warning: options/b-gabion.toml: [[restyle]] names wall B9, which b-two-tiers.toml doesn't have, so it restyles "
+         "nothing there. Its walls are B1, B2."),
+        ("Warning: options/b-gabion.toml: [[restyle_stairs]] names steps S1, which b-two-tiers.toml doesn't have, so it "
+         "restyles nothing there. It has no steps.")]
+    built = json.loads((tmp_path / "out" / "model.json").read_text(encoding="utf-8"))
+    gabion = next(o for o in built["summary"]["options"] if o["id"] == "b-gabion")
+    assert [(w["id"], w["material"]) for w in gabion["walls"]] == [("B1", "block"), ("B2", "gabion")]
+
+
 def stepped_wall(low):
     return {"walls": [{"id": "W", "material": "timber", "line_so": [[10.0, 6.0], [10.0, 9.0], [10.0, 12.6]],
                        "retained_side": "left", "tops": [low + 0.9, low + 0.6]}]}

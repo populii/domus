@@ -1,6 +1,7 @@
 """A site's rasters: the files its settings name, [rasters] in data/site.toml, each read once and kept on the site,
 and sampled at points on its grid (domus.geo.raster)."""
 
+from ..errors import DomusError
 from ..geo.raster import Raster
 from .site import cached
 
@@ -12,6 +13,16 @@ def path(site, key):
     """The file of the site's raster `key` (dem, dsm, aerial or nir): [rasters] <key> in data/site.toml, in its folder,
     since a site's settings can name its own files."""
     return site.path / site.settings().get("rasters", {}).get(key, FILES[key])
+
+
+def need_ground(site):
+    """Stops with a DomusError, saying how to get one, when the site has no ground model: the file `[rasters] dem`
+    names (data/lidar/dem.tif unless it names another) isn't there. A build and site.ground() ask before any work."""
+    dem = path(site, "dem")
+    if not dem.exists():
+        shown = dem.relative_to(site.path).as_posix() if dem.is_relative_to(site.path) else dem
+        raise DomusError(f"{site.path} has no ground model yet, {shown}: domus fetch gets one (LINZ's LiDAR in New "
+                         "Zealand, the Copernicus ground model elsewhere), or put your own there (docs/new-site.md)")
 
 
 def shift(site, key):

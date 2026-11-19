@@ -943,7 +943,7 @@ def add_options(b):
     # Each option worked out on the grid first: its terraces reach the lawns, and an option taken from the last build
     # needs no more. One drawn afresh is worked out again with its soil measured as solids.
     found = [(opt, design.evaluate(b.site, opt, segments=0)) for opt in options.load_all(b.site)]
-    for line in crossing_warnings(found):
+    for line in [*crossing_warnings(found), *options.restyle_warnings(b.site)]:
         b.say(line)
     # Each lawn that is there has a plain picture, its grass without its bare patches: the options draw the lawn
     # with it where they keep it, and the new lawns beside it, which it reaches.
@@ -1339,6 +1339,7 @@ def main(site, fresh=False, say=print):
     `fresh` draws everything again, taking nothing from the last build."""
     from ..project import extensions
 
+    rasters.need_ground(site)       # a site with no ground model yet is told how to get one, before any work
     cfg = site.settings()
     checked = extensions.check(site.path, cfg)       # a site's own code runs only where it's trusted, or nothing is built
     extent = cfg["model"]["extent"]

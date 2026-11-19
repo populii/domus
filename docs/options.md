@@ -6,7 +6,7 @@ with levels, lawns, beds and paving, and a row in the viewer's options table (`s
 `_site.toml` holds what they share: the site frame and `[regrade]`, the part of the lot options may regrade
 (the whole lot unless `s_max` or `polygon_so` narrows it).
 
-The quickest way to make one is to sketch it in the viewer: draw the wall, set which side it retains, and press **Make it an option**. That writes `options/sketch-<name>.toml`, which you can then edit. Or copy a file, rename it, change a few numbers, rebuild, and pick it in the viewer.
+The quickest way to make one is to sketch it in the viewer: draw the wall, set which side it retains, and press **Make it an option**. That writes `options/sketch-<name>.toml`, which you can then edit. It's recorded as a change to the site ([changes.md](changes.md)), so `domus site undo` takes it away again. Or copy a file, rename it, change a few numbers, rebuild, and pick it in the viewer.
 
 A sketched area's outline, and the ground a sketched wall holds (its line and the line behind it), can't cross themselves. The viewer won't close an outline that would, keeps a dragged or typed corner where the outline last didn't, and undoes a change to a wall's side or depth that would, each time saying why; the server won't save such a sketch as an option, with the same message.
 
@@ -253,8 +253,9 @@ entries win. One that changes `material` drops the block the base named (`unit_m
 built (`depth_m`, `cap_depth_m`, `cap_overhang_m`, `embed_m`, `embed_per_m`, `embed_courses`, `bedding_m`,
 `base_m`, `trench_m`, `seal_m`, `cut_min_m`, and for its materials `pins_per_unit`, `pins_per_box`, `core_void_m3`, `pipe_m`,
 `outlet_spacing_m`, `geotextile`, `post_spacing_m`). A
-`restyle_stairs` entry does the same for the steps. Change the scheme itself in the file it is based on, and every
-style of it follows.
+`restyle_stairs` entry does the same for the steps. One that names a wall or steps the base doesn't have restyles
+nothing there, and the build warns of it, naming the ones the base has. Change the scheme itself in the file it is
+based on, and every style of it follows.
 
 Each material is drawn with a picture of it: the site's own in `data/walls/` where
 `domus prep wall-textures` has cut one from its photos (timber, block and stone), and otherwise one the

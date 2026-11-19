@@ -474,22 +474,12 @@ class SketchWorker:
             return json.loads(line)
 
 
-def option_file(root, name):
-    """A new path in options/ for a sketch's name, never over an earlier one."""
-    base = re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()).strip("-")[:40] or "option"
-    folder, n = Path(root) / "options", 1
-    path = folder / f"sketch-{base}.toml"
-    while path.exists():
-        n += 1
-        path = folder / f"sketch-{base}-{n}.toml"
-    return path
-
-
-def save_option(root, name, items, own_output):
-    """Write the option through `domus sketch-option`, in a process of its own on the site its environment names,
-    which reads its settings."""
-    path = option_file(root, name)
-    out = subprocess.run([sys.executable, "-m", "domus.app.cli", "sketch-option"], input=json.dumps({"name": name, "items": items}),
+def save_option(root, name, items, own_output, who=None):
+    """Save a sketch as a wall option through `domus sketch-option`, in a process of its own on the site its environment
+    names, which reads its settings and writes options/sketch-<name>.toml, never over an earlier one, by an edit on the
+    change route recorded with `who`. Gives the file."""
+    out = subprocess.run([sys.executable, "-m", "domus.app.cli", "sketch-option"],
+                         input=json.dumps({"name": name, "items": items, "who": who}),
                          capture_output=True, text=True, encoding="utf-8", env=job_env(root, own_output), check=False,
                          timeout=WORKER_TIMEOUT_S)
     if out.returncode:
@@ -498,8 +488,7 @@ def save_option(root, name, items, own_output):
     answer = json.loads(out.stdout)
     if "error" in answer:                       # the site's settings or data need putting right: the message says what
         raise DomusError(answer["error"])
-    path.write_text(answer["toml"], encoding="utf-8", newline="\n")
-    return path
+    return Path(root) / answer["file"]
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -767,7 +756,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if self.building():
                 return self.send_json({"error": "A build is already running."}, 409)
             try:
-                saved = save_option(self.build_job.root, name.strip(), items, self.build_job.own_output)
+                saved = save_option(self.build_job.root, name.strip(), items, self.build_job.own_output,
+                                    (self.user() or "the viewer")[:80])
             except DomusError as e:
                 return self.send_json({"error": str(e)}, 400)
             self.build_job.start()

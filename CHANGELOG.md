@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** `domus marks`, `domus title` and the viewer's **Make it an option** change a site's data
+  through the one route for changes: each is an edit recorded in `.domus/edits/` with who, when and why, and
+  `domus site undo` (or the **Site** tab's **Undo**) puts back the layer as it was, or takes away a layer or an option
+  it started. Before, they wrote their files outside the route, with nothing recorded and no undo. `domus marks` and
+  `domus title` take `--why` and `--who`; in `domus.api`, `site.fetch_marks()` and `site.fetch_title()` take `why=None`
+  and `who=None`, new keyword arguments at the end, and nothing else in their calls changes. `domus create` writes the
+  title the same way. The route has two new kinds of intent for this: `layer`, a layer written whole, and `option`, a
+  wall option's file written whole or taken away ([docs/changes.md](docs/changes.md)).
+- **For site projects:** a `[[restyle]]` entry naming a wall, or a `[[restyle_stairs]]` entry naming steps, that the
+  option it's based on doesn't have still restyles nothing there, and now the build warns of it, naming the walls or
+  steps the base has, as it warns of a terrace whose outline crosses itself: the option is drawn all the same
+  ([docs/options.md](docs/options.md#the-same-scheme-in-another-style)).
+- **For site projects:** `domus build` on a site with no ground model (`data/lidar/dem.tif`, or the file
+  `[rasters] dem` names) stops before any work and says how to get one: `domus fetch` (LINZ's LiDAR in New Zealand,
+  the Copernicus ground model elsewhere), or your own, as [docs/new-site.md](docs/new-site.md) says. `site.ground()`
+  says the same. Before, the build stopped on the raster library's error, after starting its output folder.
+- `domus new --boundary` refuses a GeoJSON with no `crs` member whose numbers can't be longitude and latitude, and says
+  to add its `crs` or give its grid with `--epsg`, which then names the grid the boundary is on. Before, such a
+  boundary was taken as longitude and latitude: `domus new` said there was no UTM zone there, and with `--epsg` it
+  stopped on an error part way, leaving folders behind. It checks all it's given before writing anything, so a
+  refused `domus new` leaves nothing behind, and a boundary file that isn't there or isn't JSON is a plain error too.
+  It names the site's grid as the site's settings do (`[crs] label`), not as the projection library does.
+- `domus --help` says what `domus fetch` gets and where from: LINZ's LiDAR and photo in New Zealand, the Copernicus
+  ground model elsewhere.
+- `domus video export` counts in the singular too: "from 1 cloud" and "1 set", not "1 reconstructions" and "1 sets".
+
 ## 2026.11.65
 
 - **For site projects:** an option's ground is back to about the size it had before it was drawn from its solids
