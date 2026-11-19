@@ -363,9 +363,10 @@ def test_a_walls_plan_with_corners_a_hair_apart_is_cut_from_the_ground(shape, pr
     m = ww["mesh"]
     pts, _, chain, toe, top = walls_mod.wall_levels(ww["def"])
     standing = solids.standing(m.vertices, m.faces, pts, chain, toe, top, getattr(m, "soil_over", ()), getattr(m, "soil_over_m", 0.0))
-    plan, _, parts = standing
+    plan, _, _ = standing
     refused = []
-    for poly in (x for part, _ in parts for x in shapely.get_parts(part) if x.geom_type == "Polygon"):
+    buried = solids.footprint(m.vertices, np.asarray(m.faces, np.int64).reshape(-1, 3)[np.asarray(m.soil_over, np.int64)])
+    for poly in (x for x in shapely.get_parts(plan.difference(buried)) if x.geom_type == "Polygon"):   # standing's part
         hairs, spikes, shortest = ring_defects(poly.exterior)
         try:
             shapely.constrained_delaunay_triangles(shapely.segmentize(poly, 0.05))
@@ -590,3 +591,36 @@ def test_a_cut_batter_ending_under_the_ground_leaves_a_sheet_the_build_leaves_ou
     [left] = json.loads((s.output / "model.json").read_text(encoding="utf-8"))["summary"]["options"][0]["left_out"]
     assert left["layer"] == "ground" and left["most_m"] > 5.0
     assert [(c, lv, where) for c, lv, where, _ in findings] == [("through", "warn", "deep/ground")]
+
+
+def test_a_lawn_over_a_walls_lower_bay_is_drawn_right_up_to_its_step(site, project, tmp_path, at_site):
+    """A gabion wall in two level bays holds a lawn 0.1 m over its lower bay's top and under its higher bay's: over the
+    lower bay the lawn's edge shows, from the bay's top up, right up to the step. The walls' cut is read at its corners
+    and taken as flat between, so with one head over both bays it ramped up to the higher bay's top over the last
+    corners before the step, and the lawn's edge under that ramp was taken for the wall's own and left out: a gap at the
+    step one saw through, where a stepped gabion wall steps (solids.standing gives each bay its own part and head now)."""
+    s = at_site(site, output=tmp_path)
+    low = round(ground_at(project, 8.0, 10.0), 2)
+    lawn = round(low + 0.6, 2)
+    opt = made_up("steps", walls=[{"id": "G", "material": "gabion", "thickness_m": 0.5, "line_so": [[10.0, 4.0], [10.0, 10.0], [10.0, 16.0]],
+                                   "retained_side": "left", "tops": [round(lawn - 0.1, 2), round(lawn + 0.25, 2)]}],
+                  terraces=[{"id": "lower", "kind": "lawn", "level": low, "at_so": [8.0, 10.0], "polygon_so": [[4, 2], [10, 2], [10, 18], [4, 18]]},
+                            {"id": "upper", "kind": "lawn", "level": lawn, "at_so": [13.0, 10.0], "polygon_so": [[10, 2], [16, 2], [16, 18], [10, 18]]}])
+    layers, frame, findings = through(s, opt)
+    assert failures(findings) == []
+    fr = design.frame(project)
+    v, f = drawn_ground(layers, "steps", frame)
+    so = fr.so(v[:, :2])
+    c = np.column_stack([so, v[:, 2]])[f]                       # each face's corners: s, o, height
+    n = np.cross(c[:, 1] - c[:, 0], c[:, 2] - c[:, 0])
+    back = (np.abs(c[:, :, 0] - 10.5) < 0.002).all(axis=1) & (np.abs(n[:, 2]) <= 1e-3 * np.linalg.norm(n, axis=1))
+    edge = c[back][:, :, 1:]                                    # the edge's faces on the wall's back, as (o, height)
+    missed = 0
+    for o in np.linspace(9.9, 9.995, 20):                       # the last 10 cm of the lower bay, up to its step at o 10
+        for z in np.linspace(lawn - 0.095, lawn - 0.005, 10):  # from just over the bay's top to just under the lawn's
+            a, b, cc = edge[:, 0], edge[:, 1], edge[:, 2]
+            m = np.stack([b - a, cc - a], axis=-1)
+            ok = np.abs(np.linalg.det(m)) > 1e-12
+            uv = np.linalg.solve(m[ok], (np.array([o, z]) - a[ok])[..., None])[..., 0]
+            missed += not ((uv >= -1e-6).all(axis=1) & (uv.sum(axis=1) <= 1 + 1e-6)).any()
+    assert missed == 0

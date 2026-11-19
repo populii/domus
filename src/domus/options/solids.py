@@ -62,6 +62,7 @@ import numpy as np
 import shapely
 from shapely.errors import GEOSException
 from shapely.geometry import Polygon, box
+from shapely.ops import split as split_by_lines
 
 from ..geo.mesh import Surface, offset_behind
 from ..model import walls as walls_mod
@@ -727,12 +728,16 @@ def _highest(t, n):
 def standing(vertices, faces, line, chain, toe, top, soil_over=(), soil_over_m=0.0):
     """A wall as the ground with an option meets it, from its drawn mesh and its levels as walls.wall_levels gives
     them: (its drawn plan, as footprint gives it; its head, the top of its mesh as it's drawn, its capping course and
-    posts included; the parts of its plan, each with its floor), the head and each floor a height at points (e, n) on
-    the site's grid. surface takes the plan and the head, walls_cut the head and the parts. A part's floor is the
+    posts included; the parts of its plan, each with its floor and its own head), the head and each floor a height at
+    points (e, n) on the site's grid. surface takes the plan and the head, walls_cut the parts. A part's floor is the
     lower of the wall's toe and its top at the nearest point of its line, but where the soil covers the wall as it's
-    built
-    (`soil_over`, the faces it covers, and `soil_over_m`, how far over them it comes: the body's top behind a
-    shallower capping course, walls.unit_mesh), it's that far over them: the ground stays there."""
+    built (`soil_over`, the faces it covers, and `soil_over_m`, how far over them it comes: the body's top behind a
+    shallower capping course, walls.unit_mesh), it's that far over them: the ground stays there. Where the wall's top
+    steps, between level bays (where wall_levels gives a point twice), each bay's part of the plan is a part of its
+    own, its head that bay's top, reaching EDGE_M into the next across the step (_bays): walls_cut reads a part's
+    heights at its corners and takes them as flat between, so one head over both bays would have ramped from the lower
+    bay's top up to the higher's over the last corners before the step, and taken the ground's edge standing over the
+    lower bay there for the wall's own, a gap at the step one saw through."""
     line = shapely.LineString(np.asarray(line, float)[:, :2])
     chain, top = np.asarray(chain, float), np.asarray(top, float)
     low = np.minimum(np.asarray(toe, float), top)
@@ -754,15 +759,55 @@ def standing(vertices, faces, line, chain, toe, top, soil_over=(), soil_over_m=0
         return along(low, e, n_)
     plan = footprint(vertices, f)
     if not covered.any():
-        return plan, head, [(plan, floor)]
-    tc, nc = _not_upright(vertices, f[covered])
-    soil = _highest(tc, nc)
+        parts = [(plan, floor)]
+    else:
+        tc, nc = _not_upright(vertices, f[covered])
+        soil = _highest(tc, nc)
 
-    def under_soil(e, n_):
-        z = soil(e, n_)
-        return np.where(np.isfinite(z), z, along(top, e, n_) - soil_over_m) + soil_over_m
-    buried = footprint(vertices, f[covered])
-    return plan, head, [(plan.difference(buried), floor), (buried, under_soil)]
+        def under_soil(e, n_):
+            z = soil(e, n_)
+            return np.where(np.isfinite(z), z, along(top, e, n_) - soil_over_m) + soil_over_m
+        buried = footprint(vertices, f[covered])
+        parts = [(plan.difference(buried), floor), (buried, under_soil)]
+    return plan, head, _bays(parts, line, chain, top, t[keep], n[keep], head)
+
+
+def _bays(parts, line, chain, top, t, n, head):
+    """A wall's parts of its plan (standing's, each with its floor) as (part, floor, head): with one head, the wall's
+    (`head`), where its top doesn't step; where it does (walls.wall_levels gives the point there twice, once at each
+    level), each part cut across the wall at each step, along the bisector of the line's corner there as the wall's
+    mesh turns its end, each piece reaching EDGE_M into the next across the cut and taking as its head the top of its
+    own bay alone: the highest of the wall's faces (`t`, not upright, and their normals `n`) whose middle is in that
+    bay, by the nearest point of the line."""
+    steps = np.flatnonzero((np.diff(chain) < 1e-9) & (np.abs(np.diff(top)) > 1e-9))
+    if not len(steps):
+        return [(part, floor, head) for part, floor in parts]
+    pts = np.asarray(line.coords)
+    cuts = []
+    for i in steps:
+        before, after = pts[i] - pts[max(i - 1, 0)], pts[min(i + 2, len(pts) - 1)] - pts[i + 1]
+        mean = before / max(np.linalg.norm(before), 1e-12) + after / max(np.linalg.norm(after), 1e-12)
+        across = np.array([-mean[1], mean[0]]) / max(np.linalg.norm(mean), 1e-12)
+        cuts.append(shapely.LineString([pts[i] - 50.0 * across, pts[i] + 50.0 * across]))
+    marks = chain[steps]
+    mid = t.mean(axis=1)
+    bay_of = np.searchsorted(marks, shapely.line_locate_point(line, shapely.points(mid[:, 0], mid[:, 1])))
+    heads = []
+    for k in range(len(marks) + 1):
+        highest = _highest(t[bay_of == k], n[bay_of == k]) if (bay_of == k).any() else None
+
+        def bay_head(e, n_, highest=highest):
+            z = highest(e, n_) if highest is not None else np.full(np.shape(e), np.nan)
+            return np.where(np.isfinite(z), z, head(e, n_))
+        heads.append(bay_head)
+    out = []
+    for part, floor in parts:
+        for piece in shapely.get_parts(split_by_lines(part, shapely.MultiLineString(cuts))) if not part.is_empty else ():
+            if piece.geom_type != "Polygon" or piece.area < 1e-9:
+                continue
+            k = int(np.searchsorted(marks, line.project(piece.representative_point())))
+            out.append((piece.buffer(EDGE_M, join_style="mitre").intersection(part), floor, heads[k]))
+    return out
 
 
 def walls_cut(walls, stairs, origin, ceiling):
@@ -770,13 +815,13 @@ def walls_cut(walls, stairs, origin, ceiling):
     part of each wall's drawn plan (`walls`, as standing gives them), everything above the part's floor, so nothing of
     the ground stands over a wall, its capping course and its posts included, while under a capping course standing
     out from its face the ground stays at the toe, and where the soil covers the wall as it's built it stays. It's
-    taken in two parts, up to the wall's head, the top of it as it's drawn, and above it, so the faces it cuts in the
-    ground stop there: under it they lie in the wall's faces (surface leaves them out), and over it they're the
-    ground's own, where that stands over the wall beside it. Over each flight (`stairs`, the design's), everything
-    above the ramp just under its treads, inside the regrade area or out of it."""
+    taken in two parts, up to the part's head, the top of the wall as it's drawn there, and above it, so the faces it
+    cuts in the ground stop there: under it they lie in the wall's faces (surface leaves them out), and over it
+    they're the ground's own, where that stands over the wall beside it. Over each flight (`stairs`, the design's),
+    everything above the ramp just under its treads, inside the regrade area or out of it."""
     parts = []
-    for _, head, pieces in walls:
-        for plan, floor in pieces:
+    for _, _, pieces in walls:
+        for plan, floor, head in pieces:
             def split(e, n, head=head, floor=floor):
                 return np.maximum(head(e, n), floor(e, n) + CUT_SLAB_M)
             parts += over(plan, origin, [floor, split, ceiling])

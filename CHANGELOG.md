@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **For site projects:** an option's wall whose top steps between level bays, holding ground that stands over a lower
+  bay's top, no longer leaves a gap one sees through at each step. Over the lower bay the ground's edge shows from the
+  bay's top up, as it should, but right by the step it was left out: the walls' cut is read at its corners, every 5
+  cm, and taken as flat between, so with one head over both bays it ramped up to the higher bay's top over the last 5
+  cm before the step, and the ground's edge under that ramp was taken for the wall's own. Each bay is now a part of
+  the cut of its own, with its own top. Cut, fill and the materials don't change: the cut only draws the ground.
+
 ## 2026.11.66
 
 - **For site projects:** `domus marks`, `domus title` and the viewer's **Make it an option** change a site's data
